@@ -11,7 +11,24 @@ A website for ranking student-made projects at UF.
 
 ## Installation
 
-<TODO>
+### Backend
+
+1. Sync dependencies with [uv](https://docs.astral.sh/uv/getting-started/installation/):
+
+   ```bash
+   cd backend
+   uv sync
+   ```
+
+2. Run the FastAPI server:
+
+   ```bash
+   uv run uvicorn main:app --reload
+   ```
+
+   The backend server will be available at `http://localhost:8000`
+
+   API documentation (Swagger UI) is available at `http://localhost:8000/docs`
 
 ## Contributing
 
