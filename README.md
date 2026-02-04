@@ -7,6 +7,7 @@ A website for ranking student-made projects at UF.
 - [Installation](#installation)
   - [Backend](#backend)
   - [Frontend](#frontend)
+- [Tech Stack](#tech-stack)
 - [Contributing](#contributing)
   - [Branching Strategy](#branching-strategy)
   - [Workflow](#workflow)
@@ -22,7 +23,13 @@ A website for ranking student-made projects at UF.
    uv sync
    ```
 
-2. Run the FastAPI server:
+2. Select the Python interpreter in VS Code:
+
+   - Press `Cmd+Shift+P` or `Ctrl+Shift+P`
+   - Type "Python: Select Interpreter"
+   - Choose `./backend/.venv/bin/python3`
+
+3. Run the FastAPI server:
 
    ```bash
    uv run uvicorn main:app --reload
@@ -48,6 +55,25 @@ A website for ranking student-made projects at UF.
    ```
 
    The frontend will be available at `http://localhost:3000`
+
+## Tech Stack
+
+Backend:
+
+- Python 3.12+
+- FastAPI
+- Pydantic
+- SQLAlchemy
+- Supabase
+- uv
+
+Frontend:
+
+- TypeScript
+- Next.js 16
+- Tailwind CSS
+- Chakra UI
+- Bun
 
 ## Contributing
 
