@@ -39,10 +39,18 @@ version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
     { name = "fastapi", extra = ["standard"] },
+    { name = "pydantic" },
+    { name = "pydantic-settings" },
+    { name = "python-dotenv" },
 ]
 
 [package.metadata]
-requires-dist = [{ name = "fastapi", extras = ["standard"], specifier = ">=0.128.0" }]
+requires-dist = [
+    { name = "fastapi", extras = ["standard"], specifier = ">=0.128.0" },
+    { name = "pydantic", specifier = ">=2.12.5" },
+    { name = "pydantic-settings", specifier = ">=2.12.0" },
+    { name = "python-dotenv", specifier = ">=1.2.1" },
+]
 
 [[package]]
 name = "certifi"
