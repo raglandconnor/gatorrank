@@ -4,13 +4,33 @@ A website for ranking student-made projects at UF.
 
 ## Table of Contents
 
+- [Tech Stack](#tech-stack)
 - [Installation](#installation)
   - [Backend](#backend)
   - [Frontend](#frontend)
-- [Tech Stack](#tech-stack)
 - [Contributing](#contributing)
-  - [Branching Strategy](#branching-strategy)
   - [Workflow](#workflow)
+  - [Pre-commit Hooks](#pre-commit-hooks)
+  - [Branching Strategy](#branching-strategy)
+
+## Tech Stack
+
+Backend:
+
+- Python 3.12+
+- FastAPI
+- Pydantic
+- SQLAlchemy
+- Supabase
+- uv
+
+Frontend:
+
+- TypeScript
+- Next.js 16
+- Tailwind CSS
+- Chakra UI
+- Bun
 
 ## Installation
 
@@ -56,26 +76,29 @@ A website for ranking student-made projects at UF.
 
    The frontend will be available at `http://localhost:3000`
 
-## Tech Stack
-
-Backend:
-
-- Python 3.12+
-- FastAPI
-- Pydantic
-- SQLAlchemy
-- Supabase
-- uv
-
-Frontend:
-
-- TypeScript
-- Next.js 16
-- Tailwind CSS
-- Chakra UI
-- Bun
-
 ## Contributing
+
+### Workflow
+
+1. Create a feature branch from `main`
+2. Make your changes
+3. Open a pull request to `main`
+4. Get review approval before merging
+
+### Pre-commit Hooks
+
+Install the pre-commit runner once:
+
+```bash
+uv tool install pre-commit
+```
+
+Then enable the hooks for this repo:
+
+```bash
+pre-commit install
+pre-commit run --all-files
+```
 
 ### Branching Strategy
 
@@ -87,10 +110,3 @@ Frontend:
 - `docs/*` - Documentation updates
 - `test/*` - Test additions or updates
 - `style/*` - Code style changes
-
-### Workflow
-
-1. Create a feature branch from `main`
-2. Make your changes
-3. Open a pull request to `main`
-4. Get review approval before merging
