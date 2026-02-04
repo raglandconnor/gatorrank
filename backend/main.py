@@ -1,10 +1,11 @@
 import logging
-from typing import Union
+from datetime import datetime
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from config import settings
+from schemas import HealthResponse
 
 logging.basicConfig(
     level=logging.INFO,
@@ -43,20 +44,20 @@ def read_root():
 
 
 @app.get(
-    "/items/{item_id}",
-    summary="Get item by ID",
-    description="Retrieve an item by its ID with an optional query parameter",
-    response_description="Item details including ID and optional query parameter",
+    "/health",
+    summary="Health check",
+    description="Check if the API is running and healthy",
+    response_model=HealthResponse,
 )
-def read_item(item_id: int, q: Union[str, None] = None):
+def health_check() -> HealthResponse:
     """
-    Get an item by its ID.
-
-    Args:
-        item_id: The unique identifier of the item
-        q: Optional query string parameter
+    Health check endpoint.
 
     Returns:
-        dict: A dictionary containing the item_id and optional query parameter q
+        HealthResponse: Service status, message, and timestamp
     """
-    return {"item_id": item_id, "q": q}
+    return HealthResponse(
+        status="healthy",
+        message="API is running",
+        timestamp=datetime.now(),
+    )
