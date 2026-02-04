@@ -5,6 +5,8 @@ A website for ranking student-made projects at UF.
 ## Table of Contents
 
 - [Installation](#installation)
+  - [Backend](#backend)
+  - [Frontend](#frontend)
 - [Contributing](#contributing)
   - [Branching Strategy](#branching-strategy)
   - [Workflow](#workflow)
@@ -29,6 +31,23 @@ A website for ranking student-made projects at UF.
    The backend server will be available at `http://localhost:8000`
 
    API documentation (Swagger UI) is available at `http://localhost:8000/docs`
+
+### Frontend
+
+1. Install dependencies with [bun](https://bun.sh):
+
+   ```bash
+   cd frontend
+   bun install
+   ```
+
+2. Run the Next.js development server:
+
+   ```bash
+   bun dev
+   ```
+
+   The frontend will be available at `http://localhost:3000`
 
 ## Contributing
 
