@@ -8,9 +8,10 @@ A website for ranking student-made projects at UF.
 - [Installation](#installation)
   - [Backend](#backend)
   - [Frontend](#frontend)
+  - [Pre-commit Hooks](#pre-commit-hooks)
 - [Contributing](#contributing)
   - [Workflow](#workflow)
-  - [Pre-commit Hooks](#pre-commit-hooks)
+  - [CI](#ci)
   - [Branching Strategy](#branching-strategy)
 
 ## Tech Stack
@@ -87,6 +88,7 @@ uv tool install pre-commit
 Then enable the hooks for this repo:
 
 ```bash
+# in the project root
 pre-commit install
 pre-commit run --all-files
 ```
@@ -99,6 +101,10 @@ pre-commit run --all-files
 2. Make your changes
 3. Open a pull request to `main`
 4. Get review approval before merging
+
+### CI
+
+GitHub Actions automatically runs `pre-commit run --all-files` on every pull request and whenever commits are pushed to or merged into `main`.
 
 ### Branching Strategy
 
