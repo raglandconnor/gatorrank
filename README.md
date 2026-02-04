@@ -76,15 +76,6 @@ Frontend:
 
    The frontend will be available at `http://localhost:3000`
 
-## Contributing
-
-### Workflow
-
-1. Create a feature branch from `main`
-2. Make your changes
-3. Open a pull request to `main`
-4. Get review approval before merging
-
 ### Pre-commit Hooks
 
 Install the pre-commit runner once:
@@ -99,6 +90,15 @@ Then enable the hooks for this repo:
 pre-commit install
 pre-commit run --all-files
 ```
+
+## Contributing
+
+### Workflow
+
+1. Create a feature branch from `main`
+2. Make your changes
+3. Open a pull request to `main`
+4. Get review approval before merging
 
 ### Branching Strategy
 
