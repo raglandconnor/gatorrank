@@ -1,0 +1,30 @@
+name: Pre-commit Checks
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  pre-commit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: astral-sh/setup-uv@v5
+
+      - uses: oven-sh/setup-bun@v2
+
+      - name: Install pre-commit
+        run: uv tool install pre-commit
+
+      - name: Install frontend deps
+        run: bun install
+        working-directory: frontend
+
+      - name: Run pre-commit
+        run: pre-commit run --all-files
