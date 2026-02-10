@@ -45,7 +45,6 @@ Frontend:
    ```
 
 2. Select the Python interpreter in VS Code:
-
    - Press `Cmd+Shift+P` or `Ctrl+Shift+P`
    - Type "Python: Select Interpreter"
    - Choose `./backend/.venv/bin/python3`
@@ -79,6 +78,11 @@ Frontend:
 
 ### Pre-commit Hooks
 
+Pre-commit runs a small set of automated checks before commits. In this repo it:
+- trims trailing whitespace and ensures files end with a newline
+- runs `ruff` + `ruff format` for backend Python files
+- runs `prettier` for frontend TypeScript/JavaScript/CSS/JSON/YAML/Markdown files
+
 Install the pre-commit runner once:
 
 ```bash
@@ -92,6 +96,10 @@ Then enable the hooks for this repo:
 pre-commit install
 pre-commit run --all-files
 ```
+
+> **Note:**
+> If a pre-commit hook auto-fixes files during `git commit`, pre-commit will stop the commit so you can review the changes.
+> Re-stage the modified files (e.g., `git add <files>`) and run `git commit` again.
 
 ## Contributing
 
