@@ -52,12 +52,18 @@ Frontend:
 3. Run the FastAPI server:
 
    ```bash
-   uv run uvicorn main:app --reload
+   uv run uvicorn app.main:app --reload
    ```
 
    The backend server will be available at `http://localhost:8000`
 
    API documentation (Swagger UI) is available at `http://localhost:8000/docs`
+
+4. To run backend tests:
+
+   ```bash
+   uv run pytest
+   ```
 
 ### Frontend
 
@@ -79,6 +85,7 @@ Frontend:
 ### Pre-commit Hooks
 
 Pre-commit runs a small set of automated checks before commits. In this repo it:
+
 - trims trailing whitespace and ensures files end with a newline
 - runs `ruff` + `ruff format` for backend Python files
 - runs `pyright` for backend type checking

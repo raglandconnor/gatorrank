@@ -1,11 +1,11 @@
 import logging
-from datetime import datetime
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from config import settings
-from schemas import HealthResponse
+from app.api.v1.health import router as health_router
+from app.core.config import settings
 
 logging.basicConfig(
     level=logging.INFO,
@@ -14,12 +14,14 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-app = FastAPI()
 
-
-@app.on_event("startup")
-async def startup_event():
+@asynccontextmanager
+async def lifespan(_: FastAPI):
     logger.info(f"CORS allowed origins: {settings.cors_origins_list}")
+    yield
+
+
+app = FastAPI(lifespan=lifespan)
 
 
 # CORS middleware
@@ -43,21 +45,4 @@ def read_root():
     return {"Hello": "World"}
 
 
-@app.get(
-    "/health",
-    summary="Health check",
-    description="Check if the API is running and healthy",
-    response_model=HealthResponse,
-)
-def health_check() -> HealthResponse:
-    """
-    Health check endpoint.
-
-    Returns:
-        HealthResponse: Service status, message, and timestamp
-    """
-    return HealthResponse(
-        status="healthy",
-        message="API is running",
-        timestamp=datetime.now(),
-    )
+app.include_router(health_router, prefix="/api/v1", tags=["health"])
