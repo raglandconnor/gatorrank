@@ -81,6 +81,8 @@ Frontend:
 Pre-commit runs a small set of automated checks before commits. In this repo it:
 - trims trailing whitespace and ensures files end with a newline
 - runs `ruff` + `ruff format` for backend Python files
+- runs `pyright` for backend type checking
+- runs `eslint` and `tsc --noEmit` for frontend linting and type checking
 - runs `prettier` for frontend TypeScript/JavaScript/CSS/JSON/YAML/Markdown files
 
 Install the pre-commit runner once:

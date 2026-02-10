@@ -16,6 +16,21 @@ repos:
 
   - repo: local
     hooks:
+      - id: frontend-lint
+        name: frontend lint
+        entry: bash -c 'cd frontend && bun run lint'
+        language: system
+        pass_filenames: false
+      - id: frontend-typecheck
+        name: frontend typecheck
+        entry: bash -c 'cd frontend && bunx tsc --noEmit'
+        language: system
+        pass_filenames: false
+      - id: backend-typecheck
+        name: backend typecheck
+        entry: bash -c 'cd backend && uv run pyright'
+        language: system
+        pass_filenames: false
       - id: prettier
         name: prettier
         entry: bash -c 'cd frontend && bunx prettier --write "${@/#frontend\//}"' --

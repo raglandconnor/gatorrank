@@ -26,5 +26,17 @@ jobs:
         run: bun install
         working-directory: frontend
 
+      - name: Frontend lint
+        run: bun run lint
+        working-directory: frontend
+
+      - name: Frontend typecheck
+        run: bunx tsc --noEmit
+        working-directory: frontend
+
+      - name: Backend typecheck
+        run: uv run pyright
+        working-directory: backend
+
       - name: Run pre-commit
         run: pre-commit run --all-files
