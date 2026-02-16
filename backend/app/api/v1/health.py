@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel.ext.asyncio.session import AsyncSession
 
@@ -6,6 +8,7 @@ from app.services.health import get_health_response, get_db_health_response
 from app.db.database import get_db
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 @router.get(
@@ -39,5 +42,6 @@ async def db_health_check(db: AsyncSession = Depends(get_db)) -> HealthResponse:
     """
     try:
         return await get_db_health_response(db)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Database unreachable ({e})")
+    except Exception:
+        logger.exception("Database health check failed")
+        raise HTTPException(status_code=503, detail="Database unavailable")

@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy import text
 from sqlmodel.ext.asyncio.session import AsyncSession
 
@@ -9,7 +9,7 @@ def get_health_response() -> HealthResponse:
     return HealthResponse(
         status="healthy",
         message="API is running",
-        timestamp=datetime.now(),
+        timestamp=datetime.now(timezone.utc),
     )
 
 

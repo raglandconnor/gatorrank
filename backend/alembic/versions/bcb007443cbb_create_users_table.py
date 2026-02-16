@@ -33,10 +33,8 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("email"),
     )
-    op.create_index(op.f("ix_users_email"), "users", ["email"], unique=False)
 
 
 def downgrade() -> None:
     """Downgrade schema."""
-    op.drop_index(op.f("ix_users_email"), table_name="users")
     op.drop_table("users")
