@@ -1,0 +1,87 @@
+@startuml UF_Product_Hunt_Component_Diagram
+
+!define ICONURL https://raw.githubusercontent.com/tupadr3/plantuml-icon-font-sprites/v2.4.0
+
+skinparam componentStyle rectangle
+
+package "Client Layer" {
+    component "Next.js Frontend" as frontend {
+        component "UI Components" as ui
+        component "State Management" as state
+        component "API Client" as apiclient
+    }
+}
+
+package "API Layer" {
+    component "FastAPI Backend" as backend {
+        component "Authentication\nMiddleware" as authmw
+        component "Project Service" as projectsvc
+        component "Vote Service" as votesvc
+        component "Search Service" as searchsvc
+        component "Media Service" as mediasvc
+        component "Group Service" as groupsvc
+    }
+}
+
+package "Data Layer" {
+    component "Supabase Auth" as supabaseauth
+    database "PostgreSQL Database" as postgres
+    component "SQLModel ORM" as sqlmodel
+    component "Alembic\nMigration Runner" as alembic
+}
+
+package "Storage Layer" {
+    storage "AWS S3" as s3
+}
+
+' Frontend dependencies
+ui -down-> state
+state -down-> apiclient
+apiclient -down-> backend : REST API\n(HTTPS)
+frontend -down-> supabaseauth : Authentication
+
+' Backend dependencies
+backend -down-> authmw
+authmw -down-> supabaseauth : Verify JWT
+projectsvc -down-> sqlmodel
+votesvc -down-> sqlmodel
+searchsvc -down-> sqlmodel
+groupsvc -down-> sqlmodel
+mediasvc -down-> s3 : S3 API
+
+' Data layer
+sqlmodel -down-> postgres : SQL Queries
+backend -down-> alembic : Manage schema versions
+alembic -down-> postgres : DDL migrations
+
+note right of frontend
+  Responsibilities:
+  - User interface rendering
+  - Form handling
+  - Client-side validation
+  - Route management
+end note
+
+note right of backend
+  Responsibilities:
+  - Business logic
+  - Data validation
+  - API endpoints
+  - Role-based access
+  - Group invitations
+  - Access control
+end note
+
+note bottom of postgres
+  Schema:
+  - Users (@ufl.edu emails)
+  - Projects (with metadata)
+  - Categories & Tags
+  - Votes (upvoting system)
+  - Groups (private/invite-only)
+  - Group memberships
+  - Group invitations
+  - Many-to-many relationships
+end note
+
+@enduml

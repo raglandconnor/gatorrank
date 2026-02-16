@@ -1,0 +1,70 @@
+@startuml UF_Product_Hunt_Deployment_Diagram
+
+!define ICONURL https://raw.githubusercontent.com/tupadr3/plantuml-icon-font-sprites/v2.4.0
+
+skinparam componentStyle rectangle
+
+' Define nodes (deployment environments)
+node "Vercel Cloud" as vercel {
+    artifact "Next.js Frontend\n(TypeScript)" as nextjs
+}
+
+node "Render Cloud" as render {
+    artifact "FastAPI Backend\n(Python + SQLModel)" as fastapi
+    artifact "Alembic Migration Runner" as migration
+}
+
+node "Supabase Cloud" as supabase {
+    artifact "Supabase Auth\nService" as auth
+    database "PostgreSQL\nDatabase" as db
+}
+
+node "AWS Cloud" as aws {
+    storage "S3 Bucket\n(Media Storage)" as s3
+}
+
+' Define communication paths
+nextjs -down-> fastapi : <<HTTPS>>\nREST API
+nextjs -down-> auth : <<HTTPS>>\nAuth Flow
+fastapi -right-> auth : <<HTTPS>>\nJWT Verification
+fastapi -down-> db : <<PostgreSQL>>\nSQL Queries
+fastapi -down-> s3 : <<HTTPS>>\nS3 API
+migration -down-> db : <<PostgreSQL>>\nSchema migrations
+auth -down-> db : <<PostgreSQL>>\nUser Sessions
+
+note right of nextjs
+  - User Interface
+  - Client-side routing
+  - Form validation
+  - State management
+end note
+
+note left of fastapi
+  - Business logic
+  - Data validation
+  - CRUD operations
+  - Search/filter endpoints
+  - Vote management
+  - SQLModel ORM
+  - Alembic revision management
+end note
+
+note bottom of db
+  Tables:
+  - users
+  - projects
+  - categories
+  - tags
+  - votes
+  - project_categories
+  - project_tags
+end note
+
+note right of s3
+  Stores:
+  - Project images
+  - Demo videos
+  - Attachments
+end note
+
+@enduml

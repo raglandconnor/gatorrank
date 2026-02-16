@@ -1,0 +1,220 @@
+@startuml UF_Product_Hunt_Database_Schema_With_Groups
+
+!define ICONURL https://raw.githubusercontent.com/tupadr3/plantuml-icon-font-sprites/v2.4.0
+
+skinparam classAttributeIconSize 0
+
+class User {
+    +UUID id <<PK>>
+    +String email
+    +String role
+    +String full_name
+    +String profile_picture_url
+    +DateTime created_at
+    +DateTime updated_at
+    --
+    +verifyUFLEmail()
+}
+
+class Group {
+    +UUID id <<PK>>
+    +UUID owner_id <<FK>>
+    +String name
+    +Text description
+    +String group_type
+    +String course_code
+    +String semester
+    +Boolean is_private
+    +DateTime created_at
+    +DateTime updated_at
+    --
+    +inviteMember()
+    +removeMember()
+}
+
+class GroupMember {
+    +UUID id <<PK>>
+    +UUID group_id <<FK>>
+    +UUID user_id <<FK>>
+    +String role
+    +DateTime joined_at
+}
+
+class GroupInvitation {
+    +UUID id <<PK>>
+    +UUID group_id <<FK>>
+    +UUID inviter_id <<FK>>
+    +UUID invitee_id <<FK>>
+    +String status
+    +DateTime invited_at
+    +DateTime responded_at
+    --
+    +accept()
+    +decline()
+}
+
+class Project {
+    +UUID id <<PK>>
+    +UUID created_by_id <<FK>>
+    +UUID group_id <<FK>>
+    +String title
+    +Text description
+    +String demo_url
+    +String github_url
+    +String video_url
+    +Integer vote_count
+    +Boolean is_group_project
+    +DateTime created_at
+    +DateTime updated_at
+    --
+    +incrementVotes()
+    +decrementVotes()
+}
+
+class ProjectMember {
+    +UUID id <<PK>>
+    +UUID project_id <<FK>>
+    +UUID user_id <<FK>>
+    +String role
+    +DateTime added_at
+}
+
+class Category {
+    +UUID id <<PK>>
+    +String name
+    +Text description
+    +DateTime created_at
+}
+
+class Tag {
+    +UUID id <<PK>>
+    +String name
+    +DateTime created_at
+}
+
+class TechStack {
+    +UUID id <<PK>>
+    +String name
+    +String category
+    +DateTime created_at
+}
+
+class Vote {
+    +UUID id <<PK>>
+    +UUID user_id <<FK>>
+    +UUID project_id <<FK>>
+    +DateTime created_at
+}
+
+class ProjectCategory {
+    +UUID project_id <<FK>>
+    +UUID category_id <<FK>>
+}
+
+class ProjectTag {
+    +UUID project_id <<FK>>
+    +UUID tag_id <<FK>>
+}
+
+class ProjectTechStack {
+    +UUID project_id <<FK>>
+    +UUID tech_stack_id <<FK>>
+}
+
+class ProjectMedia {
+    +UUID id <<PK>>
+    +UUID project_id <<FK>>
+    +String media_url
+    +String media_type
+    +Integer order
+    +DateTime created_at
+}
+
+' User relationships
+User "1" -- "0..*" Project : creates >
+User "1" -- "0..*" Vote : casts >
+User "1" -- "0..*" Group : owns >
+User "1" -- "0..*" ProjectMember : contributes >
+
+' Group relationships
+Group "1" -- "0..*" GroupMember : has >
+Group "1" -- "0..*" GroupInvitation : sends >
+Group "1" -- "0..*" Project : contains >
+
+' GroupMember relationships
+User "1" -- "0..*" GroupMember : joins >
+GroupMember "0..*" -- "1" Group
+
+' GroupInvitation relationships
+User "1" -- "0..*" GroupInvitation : invites >
+User "1" -- "0..*" GroupInvitation : receives >
+
+' Project relationships
+Project "1" -- "0..*" Vote : receives >
+Project "1" -- "0..*" ProjectMedia : has >
+Project "1" -- "0..*" ProjectMember : includes >
+
+' ProjectMember relationships
+ProjectMember "0..*" -- "1" Project
+ProjectMember "0..*" -- "1" User
+
+' Many-to-many relationships
+Project "0..*" -- "0..*" Category
+(Project, Category) .. ProjectCategory
+
+Project "0..*" -- "0..*" Tag
+(Project, Tag) .. ProjectTag
+
+Project "0..*" -- "0..*" TechStack
+(Project, TechStack) .. ProjectTechStack
+
+note right of User
+  Email must be @ufl.edu
+  Roles: student, professor,
+  recruiter, admin
+end note
+
+note right of Group
+  Private groups for courses
+  Owner (professor/TA) invites students
+  group_type: course, club, team
+  Only members can view group projects
+  course_code: e.g., "COP4600"
+  semester: e.g., "Spring 2026"
+end note
+
+note bottom of GroupMember
+  role: owner, admin, member
+  Tracks who belongs to which group
+end note
+
+note right of GroupInvitation
+  status: pending, accepted, declined
+  Only invited users can join private groups
+  Invitation expires after X days
+end note
+
+note right of Project
+  Can be individual or group project
+  If group_id is set, only group
+  members can view (if group is private)
+  Public projects visible to all
+  created_by_id stores the owner/submitter
+  collaborators are linked via ProjectMember
+end note
+
+note bottom of ProjectMember
+  role: owner, maintainer, contributor
+  Supports many users per project
+  Unique constraint on
+  (project_id, user_id)
+end note
+
+note bottom of Vote
+  One user can only vote
+  once per project
+  Unique constraint on
+  (user_id, project_id)
+end note
+
+@enduml
