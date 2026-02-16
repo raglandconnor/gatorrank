@@ -1,13 +1,10 @@
 import ssl
+from collections.abc import AsyncGenerator
 
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
-from sqlalchemy.orm import DeclarativeBase
+from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.core.config import settings
-
-database_url = settings.DATABASE_URL
-if database_url.startswith("postgresql://"):
-    database_url = database_url.replace("postgresql://", "postgresql+asyncpg://", 1)
 
 connect_args: dict[str, object] = {
     "timeout": settings.DATABASE_CONNECT_TIMEOUT,
@@ -22,24 +19,24 @@ if settings.DATABASE_SSL:
 
 # create engine
 engine = create_async_engine(
-    database_url,
+    settings.async_database_url,
     pool_pre_ping=True,
     connect_args=connect_args,
 )
 
 # create session factory
 AsyncSessionLocal = async_sessionmaker(
-    bind=engine, autoflush=False, autocommit=False, expire_on_commit=False
+    bind=engine,
+    class_=AsyncSession,
+    autoflush=False,
+    autocommit=False,
+    expire_on_commit=False,
 )
-
-
-class Base(DeclarativeBase):
-    pass
 
 
 # dependency to get db session
 
 
-async def get_db():
+async def get_db() -> AsyncGenerator[AsyncSession, None]:
     async with AsyncSessionLocal() as session:
         yield session

@@ -1,6 +1,6 @@
 from datetime import datetime
 from sqlalchemy import text
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.schemas.health import HealthResponse
 
