@@ -3,6 +3,10 @@ import json
 
 
 class Settings(BaseSettings):
+    DATABASE_URL: str
+    DATABASE_SSL: bool = False
+    DATABASE_SSL_VERIFY: bool = True
+    DATABASE_CONNECT_TIMEOUT: int = 10
     cors_origins: str = "http://localhost:3000"
 
     model_config = SettingsConfigDict(
@@ -29,4 +33,4 @@ class Settings(BaseSettings):
         return [origin.strip() for origin in value.split(",") if origin.strip()]
 
 
-settings = Settings()
+settings = Settings()  # pyright: ignore[reportCallIssue]
