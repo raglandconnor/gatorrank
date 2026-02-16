@@ -1,6 +1,7 @@
-from datetime import datetime, timezone
+from datetime import datetime
 from uuid import UUID, uuid4
 
+import sqlalchemy as sa
 from sqlalchemy import UniqueConstraint
 from sqlmodel import Field, SQLModel
 
@@ -17,8 +18,19 @@ class Project(SQLModel, table=True):
     video_url: str | None = Field(default=None, max_length=2048)
     vote_count: int = Field(default=0, nullable=False)
     is_group_project: bool = Field(default=False, nullable=False)
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = Field(
+        sa_column=sa.Column(
+            sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()
+        )
+    )
+    updated_at: datetime = Field(
+        sa_column=sa.Column(
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.func.now(),
+            onupdate=sa.func.now(),
+        )
+    )
 
 
 class ProjectMember(SQLModel, table=True):
@@ -33,7 +45,11 @@ class ProjectMember(SQLModel, table=True):
     project_id: UUID = Field(foreign_key="projects.id", nullable=False, index=True)
     user_id: UUID = Field(foreign_key="users.id", nullable=False, index=True)
     role: str = Field(default="contributor", nullable=False, max_length=32)
-    added_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    added_at: datetime = Field(
+        sa_column=sa.Column(
+            sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()
+        )
+    )
 
 
 class Vote(SQLModel, table=True):
@@ -45,4 +61,8 @@ class Vote(SQLModel, table=True):
     id: UUID = Field(default_factory=uuid4, primary_key=True, nullable=False)
     user_id: UUID = Field(foreign_key="users.id", nullable=False, index=True)
     project_id: UUID = Field(foreign_key="projects.id", nullable=False, index=True)
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = Field(
+        sa_column=sa.Column(
+            sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()
+        )
+    )
