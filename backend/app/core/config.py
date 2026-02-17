@@ -3,6 +3,10 @@ import json
 
 
 class Settings(BaseSettings):
+    DATABASE_URL: str
+    DATABASE_SSL: bool = False
+    DATABASE_SSL_VERIFY: bool = True
+    DATABASE_CONNECT_TIMEOUT: int = 10
     cors_origins: str = "http://localhost:3000"
 
     model_config = SettingsConfigDict(
@@ -28,5 +32,23 @@ class Settings(BaseSettings):
                 pass
         return [origin.strip() for origin in value.split(",") if origin.strip()]
 
+    @property
+    def async_database_url(self) -> str:
+        """Return DATABASE_URL normalized for async SQLAlchemy runtime."""
+        value = self.DATABASE_URL.strip()
+        if value.startswith("postgresql://"):
+            return value.replace("postgresql://", "postgresql+asyncpg://", 1)
+        return value
 
-settings = Settings()
+    @property
+    def sync_database_url(self) -> str:
+        """Return DATABASE_URL normalized for sync migration tooling."""
+        value = self.DATABASE_URL.strip()
+        if value.startswith("postgresql+asyncpg://"):
+            return value.replace("postgresql+asyncpg://", "postgresql+psycopg://", 1)
+        if value.startswith("postgresql://"):
+            return value.replace("postgresql://", "postgresql+psycopg://", 1)
+        return value
+
+
+settings = Settings()  # pyright: ignore[reportCallIssue]
