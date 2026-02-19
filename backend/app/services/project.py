@@ -111,7 +111,6 @@ class ProjectService:
                     user_id=user.id,
                     role=member.role,
                     full_name=user.full_name,
-                    email=user.email,
                     profile_picture_url=user.profile_picture_url,
                 )
             )
@@ -225,7 +224,6 @@ class ProjectService:
                     user_id=user.id,
                     role=member.role,
                     full_name=user.full_name,
-                    email=user.email,
                     profile_picture_url=user.profile_picture_url,
                 )
             )
@@ -258,10 +256,6 @@ class ProjectService:
     def _decode_cursor(self, cursor: str, sort: ProjectSort) -> dict[str, str | int]:
         payload = decode_cursor_payload(cursor)
 
-        cursor_sort = payload.get("sort")
-        if cursor_sort != sort:
-            raise CursorError("Cursor sort does not match requested sort")
-
         if sort == "new":
             required = {"sort", "id", "created_at"}
         else:
@@ -269,6 +263,17 @@ class ProjectService:
 
         if set(payload.keys()) != required:
             raise CursorError("Invalid cursor")
+
+        if payload["sort"] != sort:
+            raise CursorError("Cursor sort does not match requested sort")
+
+        try:
+            UUID(str(payload["id"]))
+            self._parse_datetime(payload["created_at"])
+            if sort == "top":
+                int(payload["vote_count"])
+        except (TypeError, ValueError) as exc:
+            raise CursorError("Invalid cursor") from exc
 
         return payload
 

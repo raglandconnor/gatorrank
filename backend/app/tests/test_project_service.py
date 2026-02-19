@@ -103,5 +103,5 @@ def test_decode_cursor_rejects_sort_mismatch():
     project = make_project(is_published=True)
     top_cursor = service._encode_cursor(project, "top")
 
-    with pytest.raises(CursorError, match="Cursor sort does not match requested sort"):
+    with pytest.raises(CursorError, match="Invalid cursor"):
         service._decode_cursor(top_cursor, "new")
