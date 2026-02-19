@@ -1,4 +1,5 @@
 import base64
+import binascii
 import json
 from typing import Any
 
@@ -14,9 +15,15 @@ def encode_cursor_payload(payload: dict[str, Any]) -> str:
 
 def decode_cursor_payload(cursor: str) -> dict[str, Any]:
     try:
-        raw = base64.urlsafe_b64decode(cursor.encode("utf-8"))
+        padded = cursor + "=" * (-len(cursor) % 4)
+        raw = base64.urlsafe_b64decode(padded.encode("utf-8"))
         payload = json.loads(raw.decode("utf-8"))
-    except (ValueError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+    except (
+        binascii.Error,
+        ValueError,
+        UnicodeDecodeError,
+        json.JSONDecodeError,
+    ) as exc:
         raise CursorError("Invalid cursor") from exc
 
     if not isinstance(payload, dict):

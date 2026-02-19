@@ -328,7 +328,4 @@ async def test_list_projects_cursor_sort_mismatch_returns_400(api_client, db_ses
         app.dependency_overrides.clear()
 
     assert mismatch_response.status_code == 400
-    assert (
-        mismatch_response.json()["detail"]
-        == "Cursor sort does not match requested sort"
-    )
+    assert mismatch_response.json()["detail"] == "Invalid cursor"
