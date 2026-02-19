@@ -20,7 +20,7 @@ depends_on: Union[str, Sequence[str], None] = None
 
 def upgrade() -> None:
     """Upgrade schema."""
-    op.drop_index(op.f("ix_users_email"), table_name="users")
+    op.drop_index(op.f("ix_users_email"), table_name="users", if_exists=True)
 
 
 def downgrade() -> None:
