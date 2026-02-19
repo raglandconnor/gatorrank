@@ -2,8 +2,9 @@ from datetime import datetime, timezone
 from typing import cast
 from uuid import uuid4
 
+import pytest
 from app.models.project import Project
-from app.services.project import ProjectService
+from app.services.project import CursorError, ProjectService
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 
@@ -88,3 +89,19 @@ def test_can_edit_project_rejects_contributor():
         project, current_user_id=uuid4(), member_role="contributor"
     )
     assert can_edit is False
+
+
+def test_decode_cursor_rejects_malformed_cursor():
+    service = ProjectService(cast(AsyncSession, DummySession()))
+
+    with pytest.raises(CursorError, match="Invalid cursor"):
+        service._decode_cursor("not-a-valid-cursor", "top")
+
+
+def test_decode_cursor_rejects_sort_mismatch():
+    service = ProjectService(cast(AsyncSession, DummySession()))
+    project = make_project(is_published=True)
+    top_cursor = service._encode_cursor(project, "top")
+
+    with pytest.raises(CursorError, match="Cursor sort does not match requested sort"):
+        service._decode_cursor(top_cursor, "new")
