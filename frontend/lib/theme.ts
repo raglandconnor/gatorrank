@@ -4,8 +4,8 @@ const config = defineConfig({
   theme: {
     tokens: {
       fonts: {
-        body: { value: "'Mona Sans', system-ui, sans-serif" },
-        heading: { value: "'Mona Sans', system-ui, sans-serif" },
+        body: { value: 'var(--font-mona-sans), system-ui, sans-serif' },
+        heading: { value: 'var(--font-mona-sans), system-ui, sans-serif' },
       },
     },
   },

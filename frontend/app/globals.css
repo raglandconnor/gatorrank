@@ -6,14 +6,5 @@
 
 body {
   margin: 0;
-  font-family: 'Mona Sans', system-ui, sans-serif;
-}
-
-/* optional helper class */
-.mona-sans-uid {
-  font-family: 'Mona Sans', sans-serif;
-  font-optical-sizing: auto;
-  font-weight: 400;
-  font-style: normal;
-  font-variation-settings: 'wdth' 100;
+  font-family: var(--font-mona-sans), system-ui, sans-serif;
 }

@@ -1,6 +1,13 @@
 import type { Metadata } from 'next';
+import { Mona_Sans } from 'next/font/google';
 import { Provider } from '@/components/ui/provider';
 import './globals.css';
+
+const monaSans = Mona_Sans({
+  subsets: ['latin'],
+  variable: '--font-mona-sans',
+  display: 'swap',
+});
 
 export const metadata: Metadata = {
   title: 'GatorRank',
@@ -13,19 +20,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" suppressHydrationWarning>
-      <head>
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link
-          rel="preconnect"
-          href="https://fonts.gstatic.com"
-          crossOrigin="anonymous"
-        />
-        <link
-          href="https://fonts.googleapis.com/css2?family=Mona+Sans:ital,wght@0,200..900;1,200..900&display=swap"
-          rel="stylesheet"
-        />
-      </head>
+    <html lang="en" className={monaSans.variable} suppressHydrationWarning>
       <body>
         <Provider forcedTheme="light">{children}</Provider>
       </body>
