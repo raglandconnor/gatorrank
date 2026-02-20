@@ -12,7 +12,7 @@ export function Navbar() {
       h="95px"
       borderBottom="0.8px solid"
       borderColor="black"
-      px="{40}"
+      px={40}
     >
       <Flex h="100%" align="center" justify="space-between">
         {/* Left side: logo + nav links */}
