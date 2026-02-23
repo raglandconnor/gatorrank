@@ -22,15 +22,15 @@ function GatorRankLogo() {
   return (
     <Box
       position="relative"
-      width={{ base: '140px', sm: '170px', md: '200px' }}
-      height={{ base: '140px', sm: '170px', md: '200px' }}
+      width={{ base: '100px', sm: '120px', md: '140px' }}
+      height={{ base: '100px', sm: '120px', md: '140px' }}
       flexShrink={0}
     >
       <Image
-        src="/gatorrank-logo.png"
+        src="/logo.svg"
         alt="GatorRank"
         fill
-        sizes="(max-width: 640px) 140px, (max-width: 768px) 170px, 200px"
+        sizes="(max-width: 640px) 100px, (max-width: 768px) 120px, 140px"
         style={{ objectFit: 'contain' }}
         priority
       />
@@ -48,7 +48,7 @@ export default function LoginPage() {
       direction="column"
       align="center"
       justify="flex-start"
-      pt={{ base: 6, sm: 10 }}
+      pt={{ base: 12, sm: 16 }}
       px={{ base: 4, sm: 6 }}
     >
       <Stack
