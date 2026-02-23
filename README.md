@@ -9,6 +9,7 @@ A website for ranking student-made projects at UF.
   - [Backend](#backend)
   - [Database Migrations (Alembic)](#database-migrations-alembic)
   - [Frontend](#frontend)
+  - [Docker](#docker)
   - [Pre-commit Hooks](#pre-commit-hooks)
 - [Contributing](#contributing)
   - [Workflow](#workflow)
@@ -105,6 +106,34 @@ Notes:
    bun dev
   ```
    The frontend will be available at `http://localhost:3000`
+
+### Docker
+
+Docker Compose lets you run both the backend and frontend with a single command instead of starting each server separately. Requires [Docker Desktop](https://www.docker.com/products/docker-desktop/).
+
+1. Copy the environment files and fill in your values:
+  ```bash
+  cp backend/.env.example backend/.env
+  cp frontend/.env.example frontend/.env
+  ```
+  Key values to set:
+  - `backend/.env`: `DATABASE_URL` (your Supabase connection string), `CORS_ORIGINS=http://localhost:3000`
+  - `frontend/.env`: `NEXT_PUBLIC_API_BASE_URL=http://localhost:8000`
+
+2. Build and start both services:
+  ```bash
+  docker compose up --build
+  ```
+  - Frontend: `http://localhost:3000`
+  - Backend: `http://localhost:8000`
+  - API docs (Swagger UI): `http://localhost:8000/docs`
+
+3. Stop all services:
+  ```bash
+  docker compose down
+  ```
+
+> **Note:** The `--build` flag rebuilds images when Dockerfile or dependency files change. You can omit it on subsequent runs if nothing has changed.
 
 ### Pre-commit Hooks
 
