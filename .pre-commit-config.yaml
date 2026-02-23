@@ -18,22 +18,22 @@ repos:
     hooks:
       - id: frontend-lint
         name: frontend lint
-        entry: powershell -NoProfile -Command "Set-Location frontend; bun run lint"
+        entry: sh -c 'cd frontend && bun run lint'
         language: system
         pass_filenames: false
       - id: frontend-typecheck
         name: frontend typecheck
-        entry: powershell -NoProfile -Command "Set-Location frontend; bunx tsc --noEmit"
+        entry: sh -c 'cd frontend && bunx tsc --noEmit'
         language: system
         pass_filenames: false
       - id: backend-typecheck
         name: backend typecheck
-        entry: powershell -NoProfile -Command "Set-Location backend; uv run pyright"
+        entry: sh -c 'cd backend && uv run pyright'
         language: system
         pass_filenames: false
       - id: prettier
         name: prettier
-        entry: powershell -NoProfile -Command "Set-Location frontend; bunx prettier --write '**/*.{ts,tsx,js,jsx,css,md,json,yml,yaml}'"
+        entry: sh -c 'cd frontend && bunx prettier --write "**/*.{ts,tsx,js,jsx,css,md,json,yml,yaml}"'
         language: system
         pass_filenames: false
         files: ^frontend/.*\.(ts|tsx|js|jsx|css|md|json|yml|yaml)$
