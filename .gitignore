@@ -4,3 +4,6 @@ Thumbs.db
 
 # Ruff
 .ruff_cache/
+
+# Avoid pushing Powershell modification of .pre-commit
+.pre-commit-config.yaml
