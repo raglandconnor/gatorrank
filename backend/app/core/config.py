@@ -1,5 +1,6 @@
-from pydantic_settings import BaseSettings, SettingsConfigDict
 import json
+
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
@@ -7,7 +8,10 @@ class Settings(BaseSettings):
     DATABASE_SSL: bool = False
     DATABASE_SSL_VERIFY: bool = True
     DATABASE_CONNECT_TIMEOUT: int = 10
+
     cors_origins: str = "http://localhost:3000"
+    supabase_url: str
+    supabase_jwt_secret: str
 
     model_config = SettingsConfigDict(
         env_file=".env",
