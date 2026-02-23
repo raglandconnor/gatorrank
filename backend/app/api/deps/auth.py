@@ -50,11 +50,12 @@ async def get_current_user(
     request.state.current_user_email = email
 
     # Ticket B2: Upsert user on first authenticated request
-    result = await db.execute(sa.select(User).where(User.id == user_id))
+    result = await db.execute(sa.select(User).where(User.id == user_id))  # pyright: ignore[reportArgumentType]
+
     user = result.scalar_one_or_none()
 
     if not user:
-        user = User(id=user_id, email=email)
+        user = User(id=user_id, email=email)  # pyright: ignore[reportCallIssue]
         db.add(user)
         await db.commit()
         await db.refresh(user)
