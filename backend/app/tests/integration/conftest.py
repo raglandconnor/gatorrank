@@ -11,7 +11,6 @@ from sqlalchemy.pool import NullPool
 from sqlmodel.ext.asyncio.session import AsyncSession
 from testcontainers.postgres import PostgresContainer
 
-
 BACKEND_ROOT = Path(__file__).resolve().parents[3]
 
 
