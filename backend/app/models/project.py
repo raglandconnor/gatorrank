@@ -12,12 +12,21 @@ class Project(SQLModel, table=True):
     id: UUID = Field(default_factory=uuid4, primary_key=True, nullable=False)
     created_by_id: UUID = Field(foreign_key="users.id", nullable=False, index=True)
     title: str = Field(nullable=False, max_length=255)
-    description: str | None = Field(default=None)
+    description: str | None = Field(
+        default=None, sa_column=sa.Column(sa.Text(), nullable=True)
+    )
     demo_url: str | None = Field(default=None, max_length=2048)
     github_url: str | None = Field(default=None, max_length=2048)
     video_url: str | None = Field(default=None, max_length=2048)
     vote_count: int = Field(default=0, nullable=False)
     is_group_project: bool = Field(default=False, nullable=False)
+    is_published: bool = Field(
+        default=False,
+        sa_column=sa.Column(sa.Boolean(), nullable=False, server_default=sa.false()),
+    )
+    published_at: datetime | None = Field(
+        default=None, sa_column=sa.Column(sa.DateTime(timezone=True), nullable=True)
+    )
     created_at: datetime = Field(
         sa_column=sa.Column(
             sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()
