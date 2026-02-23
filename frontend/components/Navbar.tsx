@@ -2,9 +2,12 @@
 
 import { Box, HStack, Text, Button, Flex } from '@chakra-ui/react';
 import Image from 'next/image';
+import { useRouter } from 'next/navigation';
 import { LuChevronDown } from 'react-icons/lu';
 
 export function Navbar() {
+  const router = useRouter();
+
   return (
     <Box
       as="nav"
@@ -83,6 +86,7 @@ export function Navbar() {
             fontWeight="normal"
             _hover={{ bg: 'orange.500' }}
             transition="background 0.15s"
+            onClick={() => router.push('/login')}
           >
             Log In
           </Button>
