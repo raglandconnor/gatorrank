@@ -1,10 +1,10 @@
 from uuid import UUID
 
 import jwt
-import sqlalchemy as sa
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlmodel import select
+from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.core.config import settings
 from app.db.database import get_db
@@ -22,7 +22,7 @@ async def get_current_user(
     try:
         payload = jwt.decode(
             token,
-            settings.supabase_jwt_secret,
+            settings.DATABASE_JWT_SECRET,
             algorithms=["HS256"],
             audience="authenticated",
         )
@@ -44,15 +44,19 @@ async def get_current_user(
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token"
         )
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token payload"
+        )
 
     # Shared Contract: Set auth context in backend request state
     request.state.current_user_id = user_id
     request.state.current_user_email = email
 
-    # Ticket B2: Upsert user on first authenticated request
-    result = await db.execute(sa.select(User).where(User.id == user_id))  # pyright: ignore[reportArgumentType]
+    # Upsert user on first authenticated request
+    result = await db.exec(select(User).where(User.id == user_id))
 
-    user = result.scalar_one_or_none()
+    user = result.one_or_none()
 
     if not user:
         user = User(id=user_id, email=email)  # pyright: ignore[reportCallIssue]
