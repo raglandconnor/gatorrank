@@ -70,7 +70,6 @@ def _build_create_project_payload(**overrides):
         "title": " New Project ",
         "description": "  A project description  ",
         "github_url": "https://github.com/example/repo",
-        "is_group_project": False,
     }
     payload.update(overrides)
     return payload
