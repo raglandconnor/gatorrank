@@ -1,10 +1,13 @@
 from datetime import datetime, timedelta, timezone
+from unittest.mock import AsyncMock
 from uuid import UUID
 
 import pytest
+from sqlmodel import select
 
 from app.models.project import Project, ProjectMember
 from app.models.user import User
+from app.schemas.project import ProjectCreateRequest
 from app.services.project import ProjectAccessForbiddenError, ProjectService
 
 
@@ -282,3 +285,127 @@ async def test_members_included_and_ordered_for_list_and_detail(db_session):
     listed = next((item for item in listing.items if item.id == project.id), None)
     assert listed is not None
     assert [m.user_id for m in listed.members] == [member_a.id, member_b.id]
+
+
+@pytest.mark.asyncio
+async def test_create_project_creates_draft_and_owner_membership_and_returns_detail(
+    db_session,
+):
+    creator = await _seed_user(db_session, "creator@ufl.edu", "Creator")
+    service = ProjectService(db_session)
+    payload = ProjectCreateRequest(
+        title="  Build GatorRank  ",
+        description="  A project for ranking UF projects  ",
+        github_url="https://github.com/example/gatorrank",
+    )
+
+    created = await service.create_project(created_by_id=creator.id, payload=payload)
+
+    assert created.created_by_id == creator.id
+    assert created.title == "Build GatorRank"
+    assert created.description == "A project for ranking UF projects"
+    assert created.is_published is False
+    assert created.published_at is None
+    assert created.vote_count == 0
+    assert created.members
+    assert created.members[0].user_id == creator.id
+    assert created.members[0].role == "owner"
+
+    project_result = await db_session.exec(
+        select(Project).where(Project.id == created.id)
+    )
+    project = project_result.one()
+    assert project.created_by_id == creator.id
+    assert project.is_published is False
+    assert project.published_at is None
+    assert project.vote_count == 0
+
+    member_result = await db_session.exec(
+        select(ProjectMember).where(
+            ProjectMember.project_id == created.id,
+            ProjectMember.user_id == creator.id,
+        )
+    )
+    owner_member = member_result.one()
+    assert owner_member.role == "owner"
+
+
+@pytest.mark.asyncio
+async def test_create_project_defaults_group_flag_and_persists_optional_urls(
+    db_session,
+):
+    creator = await _seed_user(db_session, "creator2@ufl.edu", "Creator Two")
+    service = ProjectService(db_session)
+    payload = ProjectCreateRequest(
+        title="Project URLs",
+        description="Testing URL persistence",
+        demo_url="https://example.com/demo",
+        video_url="http://example.com/video",
+    )
+
+    created = await service.create_project(created_by_id=creator.id, payload=payload)
+
+    assert created.is_group_project is False
+    assert created.demo_url == "https://example.com/demo"
+    assert created.github_url is None
+    assert created.video_url == "http://example.com/video"
+
+    project_result = await db_session.exec(
+        select(Project).where(Project.id == created.id)
+    )
+    project = project_result.one()
+    assert project.is_group_project is False
+    assert project.demo_url == "https://example.com/demo"
+    assert project.github_url is None
+    assert project.video_url == "http://example.com/video"
+
+
+@pytest.mark.asyncio
+async def test_create_project_normalizes_empty_optional_urls_to_none(db_session):
+    creator = await _seed_user(db_session, "creator3@ufl.edu", "Creator Three")
+    service = ProjectService(db_session)
+    payload = ProjectCreateRequest(
+        title="Project Normalize",
+        description="Normalization coverage",
+        demo_url="   ",
+        github_url="https://github.com/example/normalized",
+        video_url="",
+    )
+
+    created = await service.create_project(created_by_id=creator.id, payload=payload)
+
+    assert created.demo_url is None
+    assert created.github_url == "https://github.com/example/normalized"
+    assert created.video_url is None
+
+    project_result = await db_session.exec(
+        select(Project).where(Project.id == created.id)
+    )
+    project = project_result.one()
+    assert project.demo_url is None
+    assert project.github_url == "https://github.com/example/normalized"
+    assert project.video_url is None
+
+
+@pytest.mark.asyncio
+async def test_create_project_rolls_back_when_commit_fails(db_session, monkeypatch):
+    creator = await _seed_user(db_session, "creator4@ufl.edu", "Creator Four")
+    service = ProjectService(db_session)
+    payload = ProjectCreateRequest(
+        title="Rollback Project",
+        description="Rollback coverage",
+        github_url="https://github.com/example/rollback",
+    )
+
+    rollback_spy = AsyncMock(return_value=None)
+
+    async def failing_commit():
+        raise RuntimeError("db commit failed")
+
+    monkeypatch.setattr(db_session, "commit", failing_commit)
+    monkeypatch.setattr(db_session, "rollback", rollback_spy)
+
+    with pytest.raises(RuntimeError, match="db commit failed"):
+        await service.create_project(created_by_id=creator.id, payload=payload)
+
+    assert rollback_spy.await_count == 1
