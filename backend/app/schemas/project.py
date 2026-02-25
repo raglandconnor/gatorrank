@@ -13,12 +13,46 @@ class ProjectMemberInfo(BaseModel):
 
 
 class ProjectCreateRequest(BaseModel):
-    title: str = Field(min_length=1, max_length=255)
-    description: str = Field(min_length=1, max_length=5000)
-    demo_url: str | None = Field(default=None, max_length=2048)
-    github_url: str | None = Field(default=None, max_length=2048)
-    video_url: str | None = Field(default=None, max_length=2048)
-    is_group_project: bool = False
+    title: str = Field(
+        min_length=1,
+        max_length=255,
+        description="Project title. Leading/trailing whitespace is trimmed.",
+    )
+    description: str = Field(
+        min_length=1,
+        max_length=5000,
+        description=(
+            "Project description. Required for draft creation and trimmed before validation."
+        ),
+    )
+    demo_url: str | None = Field(
+        default=None,
+        max_length=2048,
+        description=(
+            "Optional demo URL (`http` or `https`). At least one of demo_url, "
+            "github_url, or video_url must be provided."
+        ),
+    )
+    github_url: str | None = Field(
+        default=None,
+        max_length=2048,
+        description=(
+            "Optional repository URL (`http` or `https`). At least one of demo_url, "
+            "github_url, or video_url must be provided."
+        ),
+    )
+    video_url: str | None = Field(
+        default=None,
+        max_length=2048,
+        description=(
+            "Optional video URL (`http` or `https`). At least one of demo_url, "
+            "github_url, or video_url must be provided."
+        ),
+    )
+    is_group_project: bool = Field(
+        default=False,
+        description="Whether this is a group project. Defaults to false.",
+    )
 
     @field_validator("title", "description", mode="before")
     @classmethod
