@@ -2,13 +2,17 @@ from datetime import date
 from typing import Literal
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from app.api.deps.auth import get_current_user_optional
+from app.api.deps.auth import get_current_user, get_current_user_optional
 from app.db.database import get_db
 from app.models.user import User
-from app.schemas.project import ProjectDetailResponse, ProjectListResponse
+from app.schemas.project import (
+    ProjectCreateRequest,
+    ProjectDetailResponse,
+    ProjectListResponse,
+)
 from app.services.project import (
     CursorError,
     ProjectAccessForbiddenError,
@@ -16,6 +20,22 @@ from app.services.project import (
 )
 
 router = APIRouter()
+
+
+@router.post(
+    "/projects",
+    summary="Create project draft",
+    response_model=ProjectDetailResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_project(
+    payload: ProjectCreateRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> ProjectDetailResponse:
+    """Create a draft project and add the creator as the owner member."""
+    service = ProjectService(db)
+    return await service.create_project(created_by_id=current_user.id, payload=payload)
 
 
 @router.get(
