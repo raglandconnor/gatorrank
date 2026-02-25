@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import UTC, date, datetime, time, timedelta
 from typing import Literal
 from uuid import UUID
 
@@ -20,6 +20,10 @@ from app.utils.pagination import (
 )
 
 ProjectSort = Literal["top", "new"]
+
+
+class ProjectAccessForbiddenError(PermissionError):
+    """Raised when an authenticated user cannot access an existing project."""
 
 
 class ProjectService:
@@ -85,6 +89,8 @@ class ProjectService:
             member_role = await self.get_member_role(project.id, current_user_id)
 
         if not self.can_view_project(project, current_user_id, member_role):
+            if current_user_id is not None:
+                raise ProjectAccessForbiddenError("Project access forbidden")
             return None
 
         members = await self.get_project_members(project.id)
@@ -122,15 +128,41 @@ class ProjectService:
         sort: ProjectSort = "top",
         limit: int = 20,
         cursor: str | None = None,
+        published_from: date | None = None,
+        published_to: date | None = None,
     ) -> ProjectListResponse:
         limit = max(1, min(limit, 100))
 
         project_cols = getattr(Project, "__table__").c
         statement = self._base_published_projects_query()
+        if (
+            sort == "top"
+            and cursor is not None
+            and published_from is None
+            and published_to is None
+        ):
+            cursor_range = self._extract_top_range_from_cursor(cursor)
+            if cursor_range is not None:
+                published_from, published_to = cursor_range
+        top_range = self._resolve_top_date_range(
+            sort=sort,
+            published_from=published_from,
+            published_to=published_to,
+        )
+
+        if sort == "top":
+            if top_range is None:
+                raise CursorError("Invalid date range")
+            range_start_dt, range_end_exclusive_dt = self._top_range_bounds(top_range)
+            statement = statement.where(
+                project_cols.published_at.is_not(None),
+                project_cols.published_at >= range_start_dt,
+                project_cols.published_at < range_end_exclusive_dt,
+            )
 
         cursor_payload: dict[str, str | int] | None = None
         if cursor is not None:
-            cursor_payload = self._decode_cursor(cursor, sort)
+            cursor_payload = self._decode_cursor(cursor, sort, top_range=top_range)
 
         if sort == "new":
             if cursor_payload is not None:
@@ -188,7 +220,7 @@ class ProjectService:
 
         next_cursor: str | None = None
         if has_more and projects:
-            next_cursor = self._encode_cursor(projects[-1], sort)
+            next_cursor = self._encode_cursor(projects[-1], sort, top_range=top_range)
 
         return ProjectListResponse(items=items, next_cursor=next_cursor)
 
@@ -236,7 +268,13 @@ class ProjectService:
     ) -> ProjectListItemResponse:
         return ProjectListItemResponse(**project.model_dump(), members=members)
 
-    def _encode_cursor(self, project: Project, sort: ProjectSort) -> str:
+    def _encode_cursor(
+        self,
+        project: Project,
+        sort: ProjectSort,
+        *,
+        top_range: tuple[date, date] | None = None,
+    ) -> str:
         if sort == "new":
             payload: dict[str, str | int] = {
                 "sort": "new",
@@ -244,22 +282,39 @@ class ProjectService:
                 "created_at": project.created_at.isoformat(),
             }
         else:
+            if top_range is None:
+                raise CursorError("Invalid cursor")
             payload = {
                 "sort": "top",
                 "id": str(project.id),
                 "vote_count": project.vote_count,
                 "created_at": project.created_at.isoformat(),
+                "published_from": top_range[0].isoformat(),
+                "published_to": top_range[1].isoformat(),
             }
 
         return encode_cursor_payload(payload)
 
-    def _decode_cursor(self, cursor: str, sort: ProjectSort) -> dict[str, str | int]:
+    def _decode_cursor(
+        self,
+        cursor: str,
+        sort: ProjectSort,
+        *,
+        top_range: tuple[date, date] | None = None,
+    ) -> dict[str, str | int]:
         payload = decode_cursor_payload(cursor)
 
         if sort == "new":
             required = {"sort", "id", "created_at"}
         else:
-            required = {"sort", "id", "vote_count", "created_at"}
+            required = {
+                "sort",
+                "id",
+                "vote_count",
+                "created_at",
+                "published_from",
+                "published_to",
+            }
 
         if set(payload.keys()) != required:
             raise CursorError("Invalid cursor")
@@ -272,6 +327,12 @@ class ProjectService:
             self._parse_datetime(payload["created_at"])
             if sort == "top":
                 int(payload["vote_count"])
+                payload_from = self._parse_date(payload["published_from"])
+                payload_to = self._parse_date(payload["published_to"])
+                if top_range is None:
+                    raise CursorError("Invalid cursor")
+                if (payload_from, payload_to) != top_range:
+                    raise CursorError("Invalid cursor")
         except (TypeError, ValueError) as exc:
             raise CursorError("Invalid cursor") from exc
 
@@ -285,3 +346,52 @@ class ProjectService:
             return datetime.fromisoformat(value)
         except ValueError as exc:
             raise CursorError("Invalid cursor") from exc
+
+    @staticmethod
+    def _parse_date(value: str | int) -> date:
+        if not isinstance(value, str):
+            raise CursorError("Invalid cursor")
+        try:
+            return date.fromisoformat(value)
+        except ValueError as exc:
+            raise CursorError("Invalid cursor") from exc
+
+    @staticmethod
+    def _resolve_top_date_range(
+        *,
+        sort: ProjectSort,
+        published_from: date | None,
+        published_to: date | None,
+    ) -> tuple[date, date] | None:
+        if sort != "top":
+            return None
+
+        end_date = published_to or datetime.now(UTC).date()
+        start_date = published_from or (end_date - timedelta(days=90))
+        if start_date > end_date:
+            raise CursorError("Invalid date range")
+        return (start_date, end_date)
+
+    @staticmethod
+    def _top_range_bounds(top_range: tuple[date, date]) -> tuple[datetime, datetime]:
+        start_date, end_date = top_range
+        start_dt = datetime.combine(start_date, time.min, tzinfo=UTC)
+        end_exclusive_dt = datetime.combine(
+            end_date + timedelta(days=1),
+            time.min,
+            tzinfo=UTC,
+        )
+        return start_dt, end_exclusive_dt
+
+    def _extract_top_range_from_cursor(self, cursor: str) -> tuple[date, date] | None:
+        try:
+            payload = decode_cursor_payload(cursor)
+        except CursorError:
+            return None
+
+        raw_from = payload.get("published_from")
+        raw_to = payload.get("published_to")
+        if raw_from is None or raw_to is None:
+            return None
+
+        return (self._parse_date(raw_from), self._parse_date(raw_to))
