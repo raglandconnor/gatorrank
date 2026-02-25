@@ -11,14 +11,15 @@ from app.db.database import get_db
 from app.models.user import User
 
 security = HTTPBearer()
+optional_security = HTTPBearer(auto_error=False)
 
 
-async def get_current_user(
+async def _resolve_authenticated_user(
     request: Request,
-    credentials: HTTPAuthorizationCredentials = Depends(security),
-    db: AsyncSession = Depends(get_db),
+    token: str,
+    db: AsyncSession,
 ) -> User:
-    token = credentials.credentials
+    """Validate a bearer token, sync request auth state, and return/upsert the user."""
     try:
         payload = jwt.decode(
             token,
@@ -67,8 +68,32 @@ async def get_current_user(
     return user
 
 
+async def get_current_user(
+    request: Request,
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    db: AsyncSession = Depends(get_db),
+) -> User:
+    """Require a valid bearer token and return the authenticated user."""
+    return await _resolve_authenticated_user(request, credentials.credentials, db)
+
+
+async def get_current_user_optional(
+    request: Request,
+    credentials: HTTPAuthorizationCredentials | None = Depends(optional_security),
+    db: AsyncSession = Depends(get_db),
+) -> User | None:
+    # Missing auth is allowed here; malformed/expired tokens still fail.
+    if credentials is None:
+        if request.headers.get("Authorization"):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated"
+            )
+        return None
+    return await _resolve_authenticated_user(request, credentials.credentials, db)
+
+
 def get_current_user_id_optional(request: Request) -> UUID | None:
-    """Return the current user id when auth middleware sets request.state."""
+    """Read optional auth context from request.state without performing token validation."""
     raw_user_id = getattr(request.state, "current_user_id", None)
     if raw_user_id is None:
         return None
