@@ -153,6 +153,37 @@ async def test_get_project_detail_unpublished_visible_to_member(api_client, db_s
 
 
 @pytest.mark.asyncio
+async def test_get_project_detail_unpublished_forbidden_to_authenticated_non_member(
+    api_client, db_session
+):
+    owner = await _seed_user(
+        db_session, f"owner_api_forbid_{uuid4().hex[:8]}@ufl.edu", "Owner API Forbid"
+    )
+    stranger = await _seed_user(
+        db_session, f"stranger_api_{uuid4().hex[:8]}@ufl.edu", "Stranger API"
+    )
+    project = await _seed_project(
+        db_session,
+        created_by_id=owner.id,
+        title="Forbidden Draft API Project",
+        is_published=False,
+    )
+
+    async def override_get_db():
+        yield db_session
+
+    app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_current_user_optional] = lambda: stranger
+    try:
+        response = await api_client.get(f"/api/v1/projects/{project.id}")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 403
+    assert response.json()["detail"] == "Project access forbidden"
+
+
+@pytest.mark.asyncio
 async def test_list_projects_returns_only_published(api_client, db_session):
     owner = await _seed_user(db_session, "owner_api_list_pub@ufl.edu", "Owner List")
     published = await _seed_project(
@@ -291,6 +322,85 @@ async def test_list_projects_limit_is_clamped(api_client, db_session):
 
     assert response_high.status_code == 200
     assert len(response_high.json()["items"]) == 100
+
+
+@pytest.mark.asyncio
+async def test_list_projects_top_default_window_excludes_old_projects(
+    api_client, db_session
+):
+    owner = await _seed_user(db_session, "owner_api_top_window@ufl.edu", "Owner Top")
+    now = datetime.now(timezone.utc)
+
+    recent = await _seed_project(
+        db_session,
+        created_by_id=owner.id,
+        title="Recent API Top Project",
+        is_published=True,
+    )
+    recent.created_at = now - timedelta(days=7)
+    recent.updated_at = recent.created_at
+    recent.published_at = recent.created_at
+
+    old = await _seed_project(
+        db_session,
+        created_by_id=owner.id,
+        title="Old API Top Project",
+        is_published=True,
+    )
+    old.created_at = now - timedelta(days=140)
+    old.updated_at = old.created_at
+    old.published_at = old.created_at
+    old.vote_count = 999
+    await db_session.flush()
+
+    async def override_get_db():
+        yield db_session
+
+    app.dependency_overrides[get_db] = override_get_db
+    try:
+        response = await api_client.get("/api/v1/projects?sort=top")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert [item["id"] for item in payload["items"]] == [str(recent.id)]
+
+
+@pytest.mark.asyncio
+async def test_list_projects_top_cursor_range_mismatch_returns_400(
+    api_client, db_session
+):
+    owner = await _seed_user(
+        db_session, "owner_api_range_mismatch@ufl.edu", "Owner Range Mismatch"
+    )
+    for title in ("Range Project A", "Range Project B"):
+        await _seed_project(
+            db_session,
+            created_by_id=owner.id,
+            title=title,
+            is_published=True,
+        )
+
+    async def override_get_db():
+        yield db_session
+
+    app.dependency_overrides[get_db] = override_get_db
+    try:
+        page_one = await api_client.get("/api/v1/projects?sort=top&limit=1")
+        assert page_one.status_code == 200
+        next_cursor = page_one.json()["next_cursor"]
+        assert next_cursor is not None
+
+        mismatch_response = await api_client.get(
+            "/api/v1/projects?sort=top&limit=1"
+            f"&published_from=2020-01-01&published_to=2020-12-31&cursor={next_cursor}"
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert mismatch_response.status_code == 400
+    assert mismatch_response.json()["detail"] == "Invalid cursor"
 
 
 @pytest.mark.asyncio

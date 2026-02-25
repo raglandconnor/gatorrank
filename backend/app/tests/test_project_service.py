@@ -101,7 +101,11 @@ def test_decode_cursor_rejects_malformed_cursor():
 def test_decode_cursor_rejects_sort_mismatch():
     service = ProjectService(cast(AsyncSession, DummySession()))
     project = make_project(is_published=True)
-    top_cursor = service._encode_cursor(project, "top")
+    top_cursor = service._encode_cursor(
+        project,
+        "top",
+        top_range=(project.created_at.date(), project.created_at.date()),
+    )
 
     with pytest.raises(CursorError, match="Invalid cursor"):
         service._decode_cursor(top_cursor, "new")

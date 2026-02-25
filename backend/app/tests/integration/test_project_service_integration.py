@@ -5,7 +5,7 @@ import pytest
 
 from app.models.project import Project, ProjectMember
 from app.models.user import User
-from app.services.project import ProjectService
+from app.services.project import ProjectAccessForbiddenError, ProjectService
 
 
 async def _seed_user(db_session, email: str, name: str) -> User:
@@ -93,7 +93,8 @@ async def test_get_project_detail_visibility(db_session):
     member_view = await service.get_project_detail(unpublished.id, member.id)
     assert member_view is not None
     assert [m.user_id for m in member_view.members] == [member.id]
-    assert await service.get_project_detail(unpublished.id, stranger.id) is None
+    with pytest.raises(ProjectAccessForbiddenError):
+        await service.get_project_detail(unpublished.id, stranger.id)
 
 
 @pytest.mark.asyncio
@@ -130,6 +131,36 @@ async def test_list_projects_top_sort_and_published_filter(db_session):
     result = await service.list_projects(sort="top", limit=10)
 
     assert [item.id for item in result.items] == [p1.id, p2.id]
+
+
+@pytest.mark.asyncio
+async def test_list_projects_top_default_window_excludes_old_published_projects(
+    db_session,
+):
+    now = datetime.now(timezone.utc)
+    owner = await _seed_user(db_session, "owner-window@ufl.edu", "Owner Window")
+
+    recent = await _seed_project(
+        db_session,
+        created_by_id=owner.id,
+        title="Recent Top",
+        vote_count=10,
+        is_published=True,
+        created_at=now - timedelta(days=10),
+    )
+    _old = await _seed_project(
+        db_session,
+        created_by_id=owner.id,
+        title="Old Top",
+        vote_count=999,
+        is_published=True,
+        created_at=now - timedelta(days=150),
+    )
+
+    service = ProjectService(db_session)
+    result = await service.list_projects(sort="top", limit=10)
+
+    assert [item.id for item in result.items] == [recent.id]
 
 
 @pytest.mark.asyncio
