@@ -1,13 +1,18 @@
-from pydantic_settings import BaseSettings, SettingsConfigDict
 import json
+
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
+    # Environment variables:
+    # Database (Supabase)
     DATABASE_URL: str
     DATABASE_SSL: bool = False
     DATABASE_SSL_VERIFY: bool = True
+    DATABASE_JWT_SECRET: str
     DATABASE_CONNECT_TIMEOUT: int = 10
-    cors_origins: str = "http://localhost:3000"
+    # CORS
+    CORS_ORIGINS: str = "http://localhost:3000"
 
     model_config = SettingsConfigDict(
         env_file=".env",
@@ -18,7 +23,7 @@ class Settings(BaseSettings):
     @property
     def cors_origins_list(self) -> list[str]:
         """Return CORS origins as a list."""
-        value = self.cors_origins.strip()
+        value = self.CORS_ORIGINS.strip()
         if not value:
             return []
         if value.startswith("["):
