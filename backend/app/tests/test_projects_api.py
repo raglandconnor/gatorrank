@@ -13,7 +13,7 @@ from app.schemas.project import (
     ProjectListItemResponse,
     ProjectListResponse,
 )
-from app.services.project import CursorError
+from app.services.project import CursorError, ProjectAccessForbiddenError
 
 
 client = TestClient(app)
@@ -170,6 +170,29 @@ def test_get_project_detail_not_found_returns_404():
     assert response.json()["detail"] == "Project not found"
 
 
+def test_get_project_detail_forbidden_returns_403():
+    project_id = uuid4()
+    stranger_id = uuid4()
+
+    app.dependency_overrides[get_db] = _override_get_db
+    app.dependency_overrides[get_current_user_optional] = lambda: SimpleNamespace(
+        id=stranger_id
+    )
+    try:
+        with patch(
+            "app.api.v1.projects.ProjectService.get_project_detail",
+            new=AsyncMock(
+                side_effect=ProjectAccessForbiddenError("Project access forbidden")
+            ),
+        ):
+            response = client.get(f"/api/v1/projects/{project_id}")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 403
+    assert response.json()["detail"] == "Project access forbidden"
+
+
 def test_list_projects_default_sort_top():
     response_model = _build_project_list_response()
 
@@ -194,6 +217,8 @@ def test_list_projects_default_sort_top():
     assert kwargs["sort"] == "top"
     assert kwargs["limit"] == 20
     assert kwargs["cursor"] is None
+    assert kwargs["published_from"] is None
+    assert kwargs["published_to"] is None
 
 
 def test_list_projects_passes_sort_limit_and_cursor():
@@ -217,6 +242,31 @@ def test_list_projects_passes_sort_limit_and_cursor():
     assert kwargs["sort"] == "new"
     assert kwargs["limit"] == 5
     assert kwargs["cursor"] == cursor
+    assert kwargs["published_from"] is None
+    assert kwargs["published_to"] is None
+
+
+def test_list_projects_passes_top_date_range():
+    response_model = _build_project_list_response()
+
+    app.dependency_overrides[get_db] = _override_get_db
+    try:
+        with patch(
+            "app.api.v1.projects.ProjectService.list_projects",
+            new=AsyncMock(return_value=response_model),
+        ) as mock_list_projects:
+            response = client.get(
+                "/api/v1/projects?sort=top&published_from=2025-01-01&published_to=2025-03-31"
+            )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    await_args = mock_list_projects.await_args
+    assert await_args is not None
+    kwargs = await_args.kwargs
+    assert str(kwargs["published_from"]) == "2025-01-01"
+    assert str(kwargs["published_to"]) == "2025-03-31"
 
 
 def test_list_projects_invalid_cursor_returns_400():
