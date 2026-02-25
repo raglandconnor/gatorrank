@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { motion } from 'framer-motion';
 import Image from 'next/image';
 import NextLink from 'next/link';
 import {
@@ -60,7 +61,15 @@ export default function SignupPage() {
         textAlign="center"
       >
         <Stack gap={0} align="center">
-          <GatorRankLogo />
+          <Link as={NextLink} href="/" display="block">
+            <motion.div
+              whileHover={{ scale: 1.08 }}
+              transition={{ duration: 0.2 }}
+              style={{ display: 'inline-block' }}
+            >
+              <GatorRankLogo />
+            </motion.div>
+          </Link>
           <Stack gap={1}>
             <Heading
               size={{ base: 'xl', sm: '2xl' }}
