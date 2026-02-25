@@ -44,8 +44,7 @@ async def create_project(
 ) -> ProjectDetailResponse:
     """Create a draft project and add the creator as the owner member.
 
-    This endpoint always creates a draft (`is_published=false`). Publishing is a
-    separate step handled by `POST /projects/{project_id}/publish`.
+    This endpoint always creates a draft (`is_published=false`).
     """
     service = ProjectService(db)
     return await service.create_project(created_by_id=current_user.id, payload=payload)
