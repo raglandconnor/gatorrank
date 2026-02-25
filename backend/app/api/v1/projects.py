@@ -4,8 +4,9 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from app.api.deps.auth import get_current_user_id_optional
+from app.api.deps.auth import get_current_user_optional
 from app.db.database import get_db
+from app.models.user import User
 from app.schemas.project import ProjectDetailResponse, ProjectListResponse
 from app.services.project import CursorError, ProjectService
 
@@ -21,9 +22,10 @@ router = APIRouter()
 async def get_project_detail(
     project_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user_id: UUID | None = Depends(get_current_user_id_optional),
+    current_user: User | None = Depends(get_current_user_optional),
 ) -> ProjectDetailResponse:
     service = ProjectService(db)
+    current_user_id = current_user.id if current_user else None
     project = await service.get_project_detail(project_id, current_user_id)
     if project is None:
         raise HTTPException(status_code=404, detail="Project not found")

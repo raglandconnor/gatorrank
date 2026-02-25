@@ -5,7 +5,7 @@ import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 
-from app.api.deps.auth import get_current_user_id_optional
+from app.api.deps.auth import get_current_user_optional
 from app.db.database import get_db
 from app.main import app
 from app.models.project import Project, ProjectMember
@@ -77,7 +77,7 @@ async def test_get_project_detail_published_visible_anonymous(api_client, db_ses
         yield db_session
 
     app.dependency_overrides[get_db] = override_get_db
-    app.dependency_overrides[get_current_user_id_optional] = lambda: None
+    app.dependency_overrides[get_current_user_optional] = lambda: None
     try:
         response = await api_client.get(f"/api/v1/projects/{project.id}")
     finally:
@@ -105,7 +105,7 @@ async def test_get_project_detail_unpublished_hidden_anonymous(api_client, db_se
         yield db_session
 
     app.dependency_overrides[get_db] = override_get_db
-    app.dependency_overrides[get_current_user_id_optional] = lambda: None
+    app.dependency_overrides[get_current_user_optional] = lambda: None
     try:
         response = await api_client.get(f"/api/v1/projects/{project.id}")
     finally:
@@ -140,7 +140,7 @@ async def test_get_project_detail_unpublished_visible_to_member(api_client, db_s
         yield db_session
 
     app.dependency_overrides[get_db] = override_get_db
-    app.dependency_overrides[get_current_user_id_optional] = lambda: member.id
+    app.dependency_overrides[get_current_user_optional] = lambda: member
     try:
         response = await api_client.get(f"/api/v1/projects/{project.id}")
     finally:
