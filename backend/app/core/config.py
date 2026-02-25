@@ -1,5 +1,7 @@
 import json
+from functools import lru_cache
 
+from pydantic import ValidationError
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -56,4 +58,30 @@ class Settings(BaseSettings):
         return value
 
 
-settings = Settings()  # pyright: ignore[reportCallIssue]
+@lru_cache
+def get_settings() -> Settings:
+    return Settings()  # pyright: ignore[reportCallIssue]
+
+
+def load_settings_or_exit() -> Settings:
+    try:
+        return get_settings()
+    except ValidationError as exc:
+        missing: list[str] = []
+        invalid: list[str] = []
+
+        for err in exc.errors():
+            field_name = ".".join(str(part) for part in err.get("loc", ()))
+            if err.get("type") == "missing":
+                missing.append(field_name)
+            else:
+                invalid.append(f"{field_name}: {err.get('msg', 'Invalid value')}")
+
+        message_lines = ["Configuration error: backend startup aborted."]
+        if missing:
+            message_lines.append(f"Missing env vars: {', '.join(sorted(missing))}")
+        if invalid:
+            message_lines.append("Invalid env vars:")
+            message_lines.extend(f"  - {item}" for item in invalid)
+        message_lines.append("Check your environment variables or .env file and retry.")
+        raise SystemExit("\n".join(message_lines)) from None

@@ -4,7 +4,9 @@ from collections.abc import AsyncGenerator
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from app.core.config import settings
+from app.core.config import get_settings
+
+settings = get_settings()
 
 connect_args: dict[str, object] = {
     "timeout": settings.DATABASE_CONNECT_TIMEOUT,

@@ -13,13 +13,14 @@ from app.api.deps.auth import (
     get_current_user_id_optional,
     get_current_user_optional,
 )
-from app.core.config import settings
+from app.core.config import get_settings
 from app.db.database import get_db
 from app.main import app
 from app.models.user import User
 
 # Temporary test route
 router = APIRouter()
+settings = get_settings()
 
 
 @router.get("/test-auth")

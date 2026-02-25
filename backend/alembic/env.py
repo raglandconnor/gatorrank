@@ -5,7 +5,7 @@ from sqlalchemy import pool
 from sqlmodel import SQLModel
 
 from alembic import context
-from app.core.config import settings
+from app.core.config import load_settings_or_exit
 import app.models  # noqa: F401
 
 # this is the Alembic Config object, which provides
@@ -18,6 +18,7 @@ if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
 target_metadata = SQLModel.metadata
+settings = load_settings_or_exit()
 
 # other values from the config, defined by the needs of env.py,
 # can be acquired:
