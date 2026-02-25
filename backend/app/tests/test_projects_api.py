@@ -1,10 +1,11 @@
 from datetime import datetime, timezone
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 from uuid import UUID, uuid4
 
 from fastapi.testclient import TestClient
 
-from app.api.deps.auth import get_current_user_id_optional
+from app.api.deps.auth import get_current_user_optional
 from app.db.database import get_db
 from app.main import app
 from app.schemas.project import (
@@ -92,7 +93,7 @@ def test_get_project_detail_published_visible_anonymous():
     response_model = _build_project_response(project_id)
 
     app.dependency_overrides[get_db] = _override_get_db
-    app.dependency_overrides[get_current_user_id_optional] = lambda: None
+    app.dependency_overrides[get_current_user_optional] = lambda: None
     try:
         with patch(
             "app.api.v1.projects.ProjectService.get_project_detail",
@@ -115,7 +116,7 @@ def test_get_project_detail_unpublished_hidden_anonymous():
     project_id = uuid4()
 
     app.dependency_overrides[get_db] = _override_get_db
-    app.dependency_overrides[get_current_user_id_optional] = lambda: None
+    app.dependency_overrides[get_current_user_optional] = lambda: None
     try:
         with patch(
             "app.api.v1.projects.ProjectService.get_project_detail",
@@ -135,7 +136,9 @@ def test_get_project_detail_unpublished_visible_to_member():
     response_model = _build_project_response(project_id)
 
     app.dependency_overrides[get_db] = _override_get_db
-    app.dependency_overrides[get_current_user_id_optional] = lambda: member_id
+    app.dependency_overrides[get_current_user_optional] = lambda: SimpleNamespace(
+        id=member_id
+    )
     try:
         with patch(
             "app.api.v1.projects.ProjectService.get_project_detail",
@@ -153,7 +156,7 @@ def test_get_project_detail_not_found_returns_404():
     project_id = uuid4()
 
     app.dependency_overrides[get_db] = _override_get_db
-    app.dependency_overrides[get_current_user_id_optional] = lambda: None
+    app.dependency_overrides[get_current_user_optional] = lambda: None
     try:
         with patch(
             "app.api.v1.projects.ProjectService.get_project_detail",
