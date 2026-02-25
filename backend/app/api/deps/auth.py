@@ -6,12 +6,13 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from app.core.config import settings
+from app.core.config import get_settings
 from app.db.database import get_db
 from app.models.user import User
 
 security = HTTPBearer()
 optional_security = HTTPBearer(auto_error=False)
+settings = get_settings()
 
 
 async def _resolve_authenticated_user(

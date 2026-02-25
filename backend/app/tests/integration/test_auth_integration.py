@@ -9,12 +9,13 @@ from fastapi import APIRouter, Depends
 from httpx import ASGITransport, AsyncClient
 
 from app.api.deps.auth import get_current_user
-from app.core.config import settings
+from app.core.config import get_settings
 from app.db.database import get_db
 from app.main import app
 from app.models.user import User
 
 router = APIRouter()
+settings = get_settings()
 
 
 @router.get("/test-auth-integration")
