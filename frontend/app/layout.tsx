@@ -21,8 +21,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className={monaSans.variable} suppressHydrationWarning>
-      <body>
-        <Provider forcedTheme="light">{children}</Provider>
+      <body suppressHydrationWarning>
+        <Provider forcedTheme="light" enableSystem={false} defaultTheme="light">
+          {children}
+        </Provider>
       </body>
     </html>
   );
