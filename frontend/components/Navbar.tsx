@@ -1,7 +1,8 @@
 'use client';
 
-import { Box, HStack, Text, Button, Flex } from '@chakra-ui/react';
+import { Box, HStack, Text, Flex, Link } from '@chakra-ui/react';
 import Image from 'next/image';
+import NextLink from 'next/link';
 import { LuChevronDown } from 'react-icons/lu';
 
 export function Navbar() {
@@ -73,7 +74,12 @@ export function Navbar() {
           >
             Sign Up
           </Text>
-          <Button
+          <Link
+            as={NextLink}
+            href="/login"
+            display="inline-flex"
+            alignItems="center"
+            justifyContent="center"
             bg="orange.400"
             color="white"
             borderRadius="16px"
@@ -83,9 +89,10 @@ export function Navbar() {
             fontWeight="normal"
             _hover={{ bg: 'orange.500' }}
             transition="background 0.15s"
+            cursor="pointer"
           >
             Log In
-          </Button>
+          </Link>
         </HStack>
       </Flex>
     </Box>
