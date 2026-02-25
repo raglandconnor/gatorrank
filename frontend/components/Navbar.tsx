@@ -1,6 +1,7 @@
 'use client';
 
 import { Box, HStack, Text, Flex, Link } from '@chakra-ui/react';
+import { motion } from 'framer-motion';
 import Image from 'next/image';
 import NextLink from 'next/link';
 import { LuChevronDown } from 'react-icons/lu';
@@ -18,15 +19,25 @@ export function Navbar() {
       <Flex h="100%" align="center" justify="space-between">
         {/* Left side: logo + nav links */}
         <HStack gap="32px" align="center">
-          <Box position="relative" w="60px" h="60px" flexShrink={0}>
-            <Image
-              src="/logo.svg"
-              alt="GatorRank"
-              fill
-              style={{ objectFit: 'contain' }}
-              priority
-            />
-          </Box>
+          <Link as={NextLink} href="/" display="block" flexShrink={0}>
+            <motion.div
+              style={{
+                position: 'relative',
+                width: 60,
+                height: 60,
+              }}
+              whileHover={{ scale: 1.08 }}
+              transition={{ duration: 0.2 }}
+            >
+              <Image
+                src="/logo.svg"
+                alt="GatorRank"
+                fill
+                style={{ objectFit: 'contain' }}
+                priority
+              />
+            </motion.div>
+          </Link>
 
           {/* Categories — stateless hover element */}
           <HStack
