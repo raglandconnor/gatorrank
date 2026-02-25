@@ -394,4 +394,7 @@ class ProjectService:
         if raw_from is None or raw_to is None:
             return None
 
-        return (self._parse_date(raw_from), self._parse_date(raw_to))
+        try:
+            return (self._parse_date(raw_from), self._parse_date(raw_to))
+        except CursorError:
+            return None
