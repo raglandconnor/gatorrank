@@ -4,3 +4,6 @@ Thumbs.db
 
 # Ruff
 .ruff_cache/
+
+# Supabase
+supabase/
