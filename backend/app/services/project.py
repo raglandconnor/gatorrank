@@ -8,6 +8,7 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 from app.models.project import Project, ProjectMember
 from app.models.user import User
 from app.schemas.project import (
+    ProjectCreateRequest,
     ProjectDetailResponse,
     ProjectListItemResponse,
     ProjectListResponse,
@@ -34,6 +35,43 @@ class ProjectService:
         statement = select(Project).where(Project.id == project_id)
         result = await self.db.exec(statement)
         return result.first()
+
+    async def create_project(
+        self,
+        *,
+        created_by_id: UUID,
+        payload: ProjectCreateRequest,
+    ) -> ProjectDetailResponse:
+        project = Project(  # pyright: ignore[reportCallIssue]
+            created_by_id=created_by_id,
+            title=payload.title,
+            description=payload.description,
+            demo_url=payload.demo_url,
+            github_url=payload.github_url,
+            video_url=payload.video_url,
+            is_group_project=payload.is_group_project,
+            vote_count=0,
+            is_published=False,
+            published_at=None,
+        )
+        owner_member = ProjectMember(  # pyright: ignore[reportCallIssue]
+            project_id=project.id,
+            user_id=created_by_id,
+            role="owner",
+        )
+
+        try:
+            self.db.add(project)
+            self.db.add(owner_member)
+            await self.db.commit()
+        except Exception:
+            await self.db.rollback()
+            raise
+
+        created = await self.get_project_detail(project.id, created_by_id)
+        if created is None:
+            raise RuntimeError("Created project could not be loaded")
+        return created
 
     async def get_member_role(self, project_id: UUID, user_id: UUID) -> str | None:
         statement = select(ProjectMember).where(
@@ -130,11 +168,12 @@ class ProjectService:
         cursor: str | None = None,
         published_from: date | None = None,
         published_to: date | None = None,
+        created_by_id: UUID | None = None,
     ) -> ProjectListResponse:
         limit = max(1, min(limit, 100))
 
         project_cols = getattr(Project, "__table__").c
-        statement = self._base_published_projects_query()
+        statement = self._base_published_projects_query(created_by_id)
         if (
             sort == "top"
             and cursor is not None
@@ -225,9 +264,12 @@ class ProjectService:
         return ProjectListResponse(items=items, next_cursor=next_cursor)
 
     @staticmethod
-    def _base_published_projects_query():
+    def _base_published_projects_query(created_by_id: UUID | None = None):
         project_cols = getattr(Project, "__table__").c
-        return select(Project).where(project_cols.is_published.is_(True))
+        stmt = select(Project).where(project_cols.is_published.is_(True))
+        if created_by_id:
+            stmt = stmt.where(project_cols.created_by_id == created_by_id)
+        return stmt
 
     async def _get_members_for_projects(
         self, project_ids: list[UUID]
