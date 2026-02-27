@@ -5,13 +5,14 @@ from uuid import UUID, uuid4
 
 from fastapi.testclient import TestClient
 
-from app.api.deps.auth import get_current_user_optional
+from app.api.deps.auth import get_current_user, get_current_user_optional
 from app.db.database import get_db
 from app.main import app
 from app.schemas.project import (
     ProjectDetailResponse,
     ProjectListItemResponse,
     ProjectListResponse,
+    ProjectMemberInfo,
 )
 from app.services.project import CursorError, ProjectAccessForbiddenError
 
@@ -64,6 +65,45 @@ def _build_project_list_response() -> ProjectListResponse:
     )
 
 
+def _build_create_project_payload(**overrides):
+    payload = {
+        "title": " New Project ",
+        "description": "  A project description  ",
+        "github_url": "https://github.com/example/repo",
+    }
+    payload.update(overrides)
+    return payload
+
+
+def _build_draft_project_response(
+    project_id: UUID, created_by_id: UUID
+) -> ProjectDetailResponse:
+    now = datetime.now(timezone.utc)
+    return ProjectDetailResponse(
+        id=project_id,
+        created_by_id=created_by_id,
+        title="New Project",
+        description="A project description",
+        demo_url=None,
+        github_url="https://github.com/example/repo",
+        video_url=None,
+        vote_count=0,
+        is_group_project=False,
+        is_published=False,
+        published_at=None,
+        created_at=now,
+        updated_at=now,
+        members=[
+            ProjectMemberInfo(
+                user_id=created_by_id,
+                role="owner",
+                full_name=None,
+                profile_picture_url=None,
+            )
+        ],
+    )
+
+
 def _assert_service_called_with(
     mock_get_project_detail, project_id: UUID, current_user_id
 ):
@@ -86,6 +126,269 @@ async def _override_get_db():
         pass
 
     yield MockSession()
+
+
+def _override_current_user(user_id: UUID):
+    return lambda: SimpleNamespace(id=user_id, email="creator@ufl.edu")
+
+
+def test_create_project_returns_201_and_payload():
+    user_id = uuid4()
+    project_id = uuid4()
+    response_model = _build_draft_project_response(project_id, user_id)
+
+    app.dependency_overrides[get_db] = _override_get_db
+    app.dependency_overrides[get_current_user] = _override_current_user(user_id)
+    try:
+        with patch(
+            "app.api.v1.projects.ProjectService.create_project",
+            new=AsyncMock(return_value=response_model),
+        ):
+            response = client.post(
+                "/api/v1/projects", json=_build_create_project_payload()
+            )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 201
+    payload = response.json()
+    assert payload["id"] == str(project_id)
+    assert payload["created_by_id"] == str(user_id)
+    assert payload["is_published"] is False
+    assert payload["published_at"] is None
+    assert payload["members"][0]["role"] == "owner"
+
+
+def test_create_project_requires_auth():
+    response = client.post("/api/v1/projects", json=_build_create_project_payload())
+
+    assert response.status_code == 401
+    assert response.json()["detail"] == "Not authenticated"
+
+
+def test_create_project_passes_user_and_payload_to_service():
+    user_id = uuid4()
+    project_id = uuid4()
+    response_model = _build_draft_project_response(project_id, user_id)
+
+    app.dependency_overrides[get_db] = _override_get_db
+    app.dependency_overrides[get_current_user] = _override_current_user(user_id)
+    try:
+        with patch(
+            "app.api.v1.projects.ProjectService.create_project",
+            new=AsyncMock(return_value=response_model),
+        ) as mock_create_project:
+            response = client.post(
+                "/api/v1/projects", json=_build_create_project_payload()
+            )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 201
+    await_args = mock_create_project.await_args
+    assert await_args is not None
+    kwargs = await_args.kwargs
+    assert kwargs["created_by_id"] == user_id
+    assert kwargs["payload"].title == "New Project"
+    assert kwargs["payload"].description == "A project description"
+    assert kwargs["payload"].github_url == "https://github.com/example/repo"
+
+
+def test_create_project_validation_missing_title_returns_422():
+    user_id = uuid4()
+    payload = _build_create_project_payload()
+    payload.pop("title")
+
+    app.dependency_overrides[get_db] = _override_get_db
+    app.dependency_overrides[get_current_user] = _override_current_user(user_id)
+    try:
+        with patch(
+            "app.api.v1.projects.ProjectService.create_project",
+            new=AsyncMock(),
+        ) as mock_create_project:
+            response = client.post("/api/v1/projects", json=payload)
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 422
+    assert mock_create_project.await_count == 0
+
+
+def test_create_project_validation_blank_title_returns_422():
+    user_id = uuid4()
+
+    app.dependency_overrides[get_db] = _override_get_db
+    app.dependency_overrides[get_current_user] = _override_current_user(user_id)
+    try:
+        with patch(
+            "app.api.v1.projects.ProjectService.create_project",
+            new=AsyncMock(),
+        ) as mock_create_project:
+            response = client.post(
+                "/api/v1/projects",
+                json=_build_create_project_payload(title="   "),
+            )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 422
+    assert mock_create_project.await_count == 0
+
+
+def test_create_project_validation_missing_description_returns_422():
+    user_id = uuid4()
+    payload = _build_create_project_payload()
+    payload.pop("description")
+
+    app.dependency_overrides[get_db] = _override_get_db
+    app.dependency_overrides[get_current_user] = _override_current_user(user_id)
+    try:
+        with patch(
+            "app.api.v1.projects.ProjectService.create_project",
+            new=AsyncMock(),
+        ) as mock_create_project:
+            response = client.post("/api/v1/projects", json=payload)
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 422
+    assert mock_create_project.await_count == 0
+
+
+def test_create_project_validation_blank_description_returns_422():
+    user_id = uuid4()
+
+    app.dependency_overrides[get_db] = _override_get_db
+    app.dependency_overrides[get_current_user] = _override_current_user(user_id)
+    try:
+        with patch(
+            "app.api.v1.projects.ProjectService.create_project",
+            new=AsyncMock(),
+        ) as mock_create_project:
+            response = client.post(
+                "/api/v1/projects",
+                json=_build_create_project_payload(description="   "),
+            )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 422
+    assert mock_create_project.await_count == 0
+
+
+def test_create_project_validation_requires_at_least_one_project_url():
+    user_id = uuid4()
+
+    app.dependency_overrides[get_db] = _override_get_db
+    app.dependency_overrides[get_current_user] = _override_current_user(user_id)
+    try:
+        with patch(
+            "app.api.v1.projects.ProjectService.create_project",
+            new=AsyncMock(),
+        ) as mock_create_project:
+            response = client.post(
+                "/api/v1/projects",
+                json=_build_create_project_payload(
+                    demo_url=None,
+                    github_url=None,
+                    video_url=None,
+                ),
+            )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 422
+    assert mock_create_project.await_count == 0
+    errors = response.json()["detail"]
+    assert any(
+        "Provide at least one of demo_url, github_url, or video_url."
+        in str(error.get("msg", ""))
+        for error in errors
+    )
+
+
+def test_create_project_validation_invalid_url_returns_422():
+    user_id = uuid4()
+
+    app.dependency_overrides[get_db] = _override_get_db
+    app.dependency_overrides[get_current_user] = _override_current_user(user_id)
+    try:
+        with patch(
+            "app.api.v1.projects.ProjectService.create_project",
+            new=AsyncMock(),
+        ) as mock_create_project:
+            response = client.post(
+                "/api/v1/projects",
+                json=_build_create_project_payload(github_url="not-a-url"),
+            )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 422
+    assert mock_create_project.await_count == 0
+
+
+def test_create_project_validation_accepts_http_and_https_urls():
+    user_id = uuid4()
+    project_id = uuid4()
+    response_model = _build_draft_project_response(project_id, user_id)
+
+    app.dependency_overrides[get_db] = _override_get_db
+    app.dependency_overrides[get_current_user] = _override_current_user(user_id)
+    try:
+        with patch(
+            "app.api.v1.projects.ProjectService.create_project",
+            new=AsyncMock(return_value=response_model),
+        ) as mock_create_project:
+            response = client.post(
+                "/api/v1/projects",
+                json=_build_create_project_payload(
+                    demo_url="http://example.com/demo",
+                    github_url=None,
+                    video_url="https://example.com/video",
+                ),
+            )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 201
+    await_args = mock_create_project.await_args
+    assert await_args is not None
+    payload = await_args.kwargs["payload"]
+    assert payload.demo_url == "http://example.com/demo"
+    assert payload.video_url == "https://example.com/video"
+
+
+def test_create_project_normalizes_empty_optional_urls_to_none():
+    user_id = uuid4()
+    project_id = uuid4()
+    response_model = _build_draft_project_response(project_id, user_id)
+
+    app.dependency_overrides[get_db] = _override_get_db
+    app.dependency_overrides[get_current_user] = _override_current_user(user_id)
+    try:
+        with patch(
+            "app.api.v1.projects.ProjectService.create_project",
+            new=AsyncMock(return_value=response_model),
+        ) as mock_create_project:
+            response = client.post(
+                "/api/v1/projects",
+                json=_build_create_project_payload(
+                    demo_url="  ",
+                    github_url="https://github.com/example/repo",
+                    video_url="",
+                ),
+            )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 201
+    await_args = mock_create_project.await_args
+    assert await_args is not None
+    payload = await_args.kwargs["payload"]
+    assert payload.demo_url is None
+    assert payload.github_url == "https://github.com/example/repo"
+    assert payload.video_url is None
 
 
 def test_get_project_detail_published_visible_anonymous():
