@@ -8,6 +8,7 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 from app.models.project import Project, ProjectMember
 from app.models.user import User
 from app.schemas.project import (
+    ProjectCreateRequest,
     ProjectDetailResponse,
     ProjectListItemResponse,
     ProjectListResponse,
@@ -34,6 +35,43 @@ class ProjectService:
         statement = select(Project).where(Project.id == project_id)
         result = await self.db.exec(statement)
         return result.first()
+
+    async def create_project(
+        self,
+        *,
+        created_by_id: UUID,
+        payload: ProjectCreateRequest,
+    ) -> ProjectDetailResponse:
+        project = Project(  # pyright: ignore[reportCallIssue]
+            created_by_id=created_by_id,
+            title=payload.title,
+            description=payload.description,
+            demo_url=payload.demo_url,
+            github_url=payload.github_url,
+            video_url=payload.video_url,
+            is_group_project=payload.is_group_project,
+            vote_count=0,
+            is_published=False,
+            published_at=None,
+        )
+        owner_member = ProjectMember(  # pyright: ignore[reportCallIssue]
+            project_id=project.id,
+            user_id=created_by_id,
+            role="owner",
+        )
+
+        try:
+            self.db.add(project)
+            self.db.add(owner_member)
+            await self.db.commit()
+        except Exception:
+            await self.db.rollback()
+            raise
+
+        created = await self.get_project_detail(project.id, created_by_id)
+        if created is None:
+            raise RuntimeError("Created project could not be loaded")
+        return created
 
     async def get_member_role(self, project_id: UUID, user_id: UUID) -> str | None:
         statement = select(ProjectMember).where(

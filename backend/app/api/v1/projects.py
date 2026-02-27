@@ -2,13 +2,17 @@ from datetime import date
 from typing import Literal
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from app.api.deps.auth import get_current_user_optional
+from app.api.deps.auth import get_current_user, get_current_user_optional
 from app.db.database import get_db
 from app.models.user import User
-from app.schemas.project import ProjectDetailResponse, ProjectListResponse
+from app.schemas.project import (
+    ProjectCreateRequest,
+    ProjectDetailResponse,
+    ProjectListResponse,
+)
 from app.services.project import (
     CursorError,
     ProjectAccessForbiddenError,
@@ -18,11 +22,45 @@ from app.services.project import (
 router = APIRouter()
 
 
+@router.post(
+    "/projects",
+    summary="Create project draft",
+    response_model=ProjectDetailResponse,
+    status_code=status.HTTP_201_CREATED,
+    responses={
+        401: {"description": "Authentication required"},
+        422: {
+            "description": (
+                "Validation error (for example: missing/blank title or description, "
+                "invalid URL format, or no demo/github/video URL provided)."
+            )
+        },
+    },
+)
+async def create_project(
+    payload: ProjectCreateRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> ProjectDetailResponse:
+    """Create a draft project and add the creator as the owner member.
+
+    This endpoint always creates a draft (`is_published=false`).
+    """
+    service = ProjectService(db)
+    return await service.create_project(created_by_id=current_user.id, payload=payload)
+
+
 @router.get(
     "/projects/{project_id}",
     summary="Get project detail",
     description="Return project details if visible to the current requester",
     response_model=ProjectDetailResponse,
+    responses={
+        403: {"description": "Authenticated user cannot access this draft project"},
+        404: {
+            "description": "Project not found (or hidden draft for anonymous requester)"
+        },
+    },
 )
 async def get_project_detail(
     project_id: UUID,
