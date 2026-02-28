@@ -1,15 +1,16 @@
 import asyncio
 import httpx
+import os
 from supabase import create_client, Client
 
-url = "https://fbkwtmcefddxpdrvxqki.supabase.co"
-key = "sb_publishable_uCWMUWM-1n8MHIgtYBieVA_ZQrAITOI"
+url = os.environ.get("SUPABASE_URL", "https://your-project-ref.supabase.co")
+key = os.environ.get("SUPABASE_KEY", "your-anon-key")
 supabase: Client = create_client(url, key)
 
 
 async def run_integration_tests():
-    email = "integration_tester@ufl.edu"
-    password = "SuperSecretPassword123!"
+    email = os.environ.get("TEST_USER_EMAIL", "integration_tester@ufl.edu")
+    password = os.environ.get("TEST_USER_PASSWORD", "SuperSecretPassword123!")
 
     # 1. Sign up/In to get a real JWT
     print("\n--- 1. Authenticating with Supabase ---")
