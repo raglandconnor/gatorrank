@@ -8,6 +8,13 @@ from app.main import app
 from app.models.user import User
 
 
+from app.core.config import get_settings
+
+# Force local HS256 JWT mocking for pytests instead of remote Supabase calls
+get_settings().SUPABASE_URL = None
+get_settings().SUPABASE_KEY = None
+
+
 @pytest.fixture
 def client():
     return TestClient(app)

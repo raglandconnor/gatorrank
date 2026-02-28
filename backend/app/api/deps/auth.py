@@ -22,14 +22,33 @@ async def _resolve_authenticated_user(
 ) -> User:
     """Validate a bearer token, sync request auth state, and return/upsert the user."""
     try:
-        payload = jwt.decode(
-            token,
-            settings.DATABASE_JWT_SECRET,
-            algorithms=["HS256"],
-            audience="authenticated",
-        )
-        user_id_str = payload.get("sub")
-        email = payload.get("email")
+        # Check if we have a Supabase URL configured for remote auth
+        supabase_url = getattr(settings, "SUPABASE_URL", None)
+        supabase_key = getattr(settings, "SUPABASE_KEY", None)
+
+        if supabase_url and supabase_key:
+            from supabase import create_client
+
+            supabase = create_client(supabase_url, supabase_key)
+
+            # Using get_user validates the token and ensures it hasn't been revoked
+            res = supabase.auth.get_user(token)
+            if not res or not res.user:
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token"
+                )
+            user_id_str = res.user.id
+            email = res.user.email
+
+        else:
+            payload = jwt.decode(
+                token,
+                settings.DATABASE_JWT_SECRET,
+                algorithms=["HS256"],
+                audience="authenticated",
+            )
+            user_id_str = payload.get("sub")
+            email = payload.get("email")
 
         if not user_id_str or not email:
             raise HTTPException(
@@ -46,9 +65,12 @@ async def _resolve_authenticated_user(
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token"
         )
-    except ValueError:
+    except Exception as e:
+        # Handle Supabase Auth or other exceptions
+        if isinstance(e, HTTPException):
+            raise e
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token payload"
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token"
         )
 
     # Shared Contract: Set auth context in backend request state
