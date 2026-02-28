@@ -13,8 +13,9 @@ class Settings(BaseSettings):
     DATABASE_SSL_VERIFY: bool = True
     DATABASE_JWT_SECRET: str
     DATABASE_CONNECT_TIMEOUT: int = 10
-    # CORS
     CORS_ORIGINS: str = "http://localhost:3000"
+    SUPABASE_URL: str | None = None
+    SUPABASE_KEY: str | None = None
 
     model_config = SettingsConfigDict(
         env_file=".env",
