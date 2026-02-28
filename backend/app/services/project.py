@@ -168,11 +168,12 @@ class ProjectService:
         cursor: str | None = None,
         published_from: date | None = None,
         published_to: date | None = None,
+        created_by_id: UUID | None = None,
     ) -> ProjectListResponse:
         limit = max(1, min(limit, 100))
 
         project_cols = getattr(Project, "__table__").c
-        statement = self._base_published_projects_query()
+        statement = self._base_published_projects_query(created_by_id)
         if (
             sort == "top"
             and cursor is not None
@@ -263,9 +264,12 @@ class ProjectService:
         return ProjectListResponse(items=items, next_cursor=next_cursor)
 
     @staticmethod
-    def _base_published_projects_query():
+    def _base_published_projects_query(created_by_id: UUID | None = None):
         project_cols = getattr(Project, "__table__").c
-        return select(Project).where(project_cols.is_published.is_(True))
+        stmt = select(Project).where(project_cols.is_published.is_(True))
+        if created_by_id:
+            stmt = stmt.where(project_cols.created_by_id == created_by_id)
+        return stmt
 
     async def _get_members_for_projects(
         self, project_ids: list[UUID]
