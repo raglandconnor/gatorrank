@@ -209,7 +209,7 @@ async def test_patch_current_user_profile_invalid_url_returns_422(
 
 
 @pytest.mark.asyncio
-async def test_patch_current_user_profile_explicit_null_clears_field(
+async def test_patch_current_user_profile_rejects_null_full_name(
     api_client, db_session, monkeypatch
 ):
     jwt_secret = "integration-test-jwt-secret-at-least-32b"
@@ -228,20 +228,19 @@ async def test_patch_current_user_profile_explicit_null_clears_field(
             "/api/v1/users/me",
             headers={"Authorization": f"Bearer {token}"},
         )
-        await api_client.patch(
+        setup_response = await api_client.patch(
             "/api/v1/users/me",
             headers={"Authorization": f"Bearer {token}"},
             json={"full_name": "Will Be Cleared"},
         )
+        assert setup_response.status_code == 200
 
         response = await api_client.patch(
             "/api/v1/users/me",
             headers={"Authorization": f"Bearer {token}"},
             json={"full_name": None},
         )
-        assert response.status_code == 200
-        data = response.json()
-        assert data["full_name"] is None
+        assert response.status_code == 422
     finally:
         app.dependency_overrides.clear()
 

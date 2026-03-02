@@ -51,17 +51,17 @@ async def test_update_user_partial_profile_picture_only_updates_target_field():
 
 
 @pytest.mark.asyncio
-async def test_update_user_partial_full_name_allows_explicit_clear():
+async def test_update_user_partial_full_name_updates_name():
     db = DummySession()
     service = UserService(cast(AsyncSession, db))
     user = _build_user()
     service.get_user_by_id = AsyncMock(return_value=user)  # type: ignore[method-assign]
 
-    payload = UserUpdate(full_name=None)
+    payload = UserUpdate(full_name="Updated Name")
     updated = await service.update_user(user.id, payload)
 
     assert updated is user
-    assert user.full_name is None
+    assert user.full_name == "Updated Name"
     assert user.profile_picture_url == "https://example.com/old.jpg"
     db.commit.assert_awaited_once()
     db.refresh.assert_awaited_once_with(user)

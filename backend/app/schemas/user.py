@@ -17,6 +17,8 @@ class UserUpdate(BaseModel):
     def validate_at_least_one_field(self) -> "UserUpdate":
         if not self.model_fields_set:
             raise ValueError("At least one field must be provided")
+        if "full_name" in self.model_fields_set and self.full_name is None:
+            raise ValueError("full_name cannot be null")
         return self
 
 
