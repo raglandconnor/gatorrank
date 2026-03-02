@@ -158,6 +158,19 @@ def test_update_current_user_rejects_invalid_profile_url():
     assert response.status_code == 422
 
 
+def test_update_current_user_rejects_null_full_name():
+    user_id = uuid4()
+
+    app.dependency_overrides[get_db] = _override_get_db
+    app.dependency_overrides[get_current_user] = _override_current_user(user_id)
+    try:
+        response = client.patch("/api/v1/users/me", json={"full_name": None})
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 422
+
+
 def test_update_current_user_missing_user_returns_500():
     user_id = uuid4()
 
