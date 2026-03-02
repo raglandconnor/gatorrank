@@ -27,6 +27,7 @@ def create_app() -> FastAPI:
     # Import routes after config validation so missing env vars fail with a concise message.
     from app.api.v1.health import router as health_router
     from app.api.v1.projects import router as projects_router
+    from app.api.v1.users import router as users_router
 
     app = FastAPI(lifespan=lifespan)
     app.state.settings = settings
@@ -54,6 +55,7 @@ def create_app() -> FastAPI:
 
     app.include_router(health_router, prefix="/api/v1", tags=["health"])
     app.include_router(projects_router, prefix="/api/v1", tags=["projects"])
+    app.include_router(users_router, prefix="/api/v1", tags=["users"])
     return app
 
 
