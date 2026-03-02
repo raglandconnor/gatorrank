@@ -8,6 +8,7 @@ from app.db.database import get_db
 from app.main import app
 from app.models.user import User
 from app.schemas.project import ProjectListResponse
+from app.services.project import CursorError
 
 client = TestClient(app)
 
@@ -90,24 +91,92 @@ def test_update_current_user_profile():
     assert response.status_code == 200
     payload = response.json()
     assert payload["full_name"] == "New Name"
-    assert payload["profile_picture_url"] == "http://new.pic"
+    assert payload["profile_picture_url"] == "http://new.pic/"
     assert mock_update.await_count == 1
 
 
-def test_update_current_user_requires_full_name():
+def test_update_current_user_allows_partial_payload():
+    user_id = uuid4()
+    from datetime import datetime, timezone
+
+    now = datetime.now(timezone.utc)
+    updated_user = User(
+        id=user_id,
+        email="test@example.com",
+        full_name="Test User",
+        profile_picture_url="https://new.pic/avatar.jpg",
+        role="student",
+        created_at=now,
+        updated_at=now,
+    )
+
+    app.dependency_overrides[get_db] = _override_get_db
+    app.dependency_overrides[get_current_user] = _override_current_user(user_id)
+    try:
+        with patch(
+            "app.api.v1.users.UserService.update_user",
+            new=AsyncMock(return_value=updated_user),
+        ) as mock_update:
+            response = client.patch(
+                "/api/v1/users/me",
+                json={"profile_picture_url": "https://new.pic/avatar.jpg"},
+            )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    await_args = mock_update.await_args
+    assert await_args is not None
+    assert await_args.args[1].model_fields_set == {"profile_picture_url"}
+
+
+def test_update_current_user_requires_at_least_one_field():
+    user_id = uuid4()
+
+    app.dependency_overrides[get_db] = _override_get_db
+    app.dependency_overrides[get_current_user] = _override_current_user(user_id)
+    try:
+        response = client.patch("/api/v1/users/me", json={})
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 422
+
+
+def test_update_current_user_rejects_invalid_profile_url():
     user_id = uuid4()
 
     app.dependency_overrides[get_db] = _override_get_db
     app.dependency_overrides[get_current_user] = _override_current_user(user_id)
     try:
         response = client.patch(
-            "/api/v1/users/me", json={"profile_picture_url": "http://new.pic"}
+            "/api/v1/users/me", json={"profile_picture_url": "not-a-url"}
         )
     finally:
         app.dependency_overrides.clear()
 
-    # Pydantic returns 422 if full_name is missing
     assert response.status_code == 422
+
+
+def test_update_current_user_missing_user_returns_500():
+    user_id = uuid4()
+
+    app.dependency_overrides[get_db] = _override_get_db
+    app.dependency_overrides[get_current_user] = _override_current_user(user_id)
+    try:
+        with patch(
+            "app.api.v1.users.UserService.update_user",
+            new=AsyncMock(return_value=None),
+        ):
+            response = client.patch(
+                "/api/v1/users/me",
+                json={"full_name": "Name"},
+            )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 500
+    assert response.json()["detail"] == "Authenticated user record not found"
 
 
 def test_get_user_profile():
@@ -214,3 +283,38 @@ def test_list_user_projects_user_not_found():
         app.dependency_overrides.clear()
 
     assert response.status_code == 404
+
+
+def test_list_user_projects_invalid_cursor_returns_400():
+    target_user_id = uuid4()
+
+    from datetime import datetime, timezone
+
+    now = datetime.now(timezone.utc)
+    target_user = User(
+        id=target_user_id,
+        email="test@test.com",
+        created_at=now,
+        updated_at=now,
+    )
+
+    app.dependency_overrides[get_db] = _override_get_db
+    try:
+        with (
+            patch(
+                "app.api.v1.users.UserService.get_user_by_id",
+                new=AsyncMock(return_value=target_user),
+            ),
+            patch(
+                "app.api.v1.users.ProjectService.list_projects",
+                new=AsyncMock(side_effect=CursorError("Invalid cursor")),
+            ),
+        ):
+            response = client.get(
+                f"/api/v1/users/{target_user_id}/projects?cursor=bad-cursor"
+            )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Invalid cursor"

@@ -106,6 +106,147 @@ async def test_patch_current_user_profile(api_client, db_session, monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_patch_current_user_profile_partial_update(
+    api_client, db_session, monkeypatch
+):
+    jwt_secret = "integration-test-jwt-secret-at-least-32b"
+    monkeypatch.setattr(settings, "DATABASE_JWT_SECRET", jwt_secret)
+
+    user_id = uuid4()
+    email = f"user-{uuid4().hex[:8]}@ufl.edu"
+    token = generate_token(user_id, email, jwt_secret)
+
+    async def override_get_db():
+        yield db_session
+
+    app.dependency_overrides[get_db] = override_get_db
+    try:
+        await api_client.get(
+            "/api/v1/users/me",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+        response = await api_client.patch(
+            "/api/v1/users/me",
+            headers={"Authorization": f"Bearer {token}"},
+            json={
+                "profile_picture_url": "https://example.com/partial.jpg",
+            },
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["full_name"] is None
+        assert data["profile_picture_url"] == "https://example.com/partial.jpg"
+
+        db_user = await db_session.exec(sa.select(User).where(User.id == user_id))  # pyright: ignore[reportArgumentType]
+        user_record = db_user.scalars().one()
+        assert user_record.full_name is None
+        assert user_record.profile_picture_url == "https://example.com/partial.jpg"
+    finally:
+        app.dependency_overrides.clear()
+
+
+@pytest.mark.asyncio
+async def test_patch_current_user_profile_empty_payload_returns_422(
+    api_client, db_session, monkeypatch
+):
+    jwt_secret = "integration-test-jwt-secret-at-least-32b"
+    monkeypatch.setattr(settings, "DATABASE_JWT_SECRET", jwt_secret)
+
+    user_id = uuid4()
+    email = f"user-{uuid4().hex[:8]}@ufl.edu"
+    token = generate_token(user_id, email, jwt_secret)
+
+    async def override_get_db():
+        yield db_session
+
+    app.dependency_overrides[get_db] = override_get_db
+    try:
+        await api_client.get(
+            "/api/v1/users/me",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+        response = await api_client.patch(
+            "/api/v1/users/me",
+            headers={"Authorization": f"Bearer {token}"},
+            json={},
+        )
+        assert response.status_code == 422
+    finally:
+        app.dependency_overrides.clear()
+
+
+@pytest.mark.asyncio
+async def test_patch_current_user_profile_invalid_url_returns_422(
+    api_client, db_session, monkeypatch
+):
+    jwt_secret = "integration-test-jwt-secret-at-least-32b"
+    monkeypatch.setattr(settings, "DATABASE_JWT_SECRET", jwt_secret)
+
+    user_id = uuid4()
+    email = f"user-{uuid4().hex[:8]}@ufl.edu"
+    token = generate_token(user_id, email, jwt_secret)
+
+    async def override_get_db():
+        yield db_session
+
+    app.dependency_overrides[get_db] = override_get_db
+    try:
+        await api_client.get(
+            "/api/v1/users/me",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+        response = await api_client.patch(
+            "/api/v1/users/me",
+            headers={"Authorization": f"Bearer {token}"},
+            json={"profile_picture_url": "invalid-url"},
+        )
+        assert response.status_code == 422
+    finally:
+        app.dependency_overrides.clear()
+
+
+@pytest.mark.asyncio
+async def test_patch_current_user_profile_explicit_null_clears_field(
+    api_client, db_session, monkeypatch
+):
+    jwt_secret = "integration-test-jwt-secret-at-least-32b"
+    monkeypatch.setattr(settings, "DATABASE_JWT_SECRET", jwt_secret)
+
+    user_id = uuid4()
+    email = f"user-{uuid4().hex[:8]}@ufl.edu"
+    token = generate_token(user_id, email, jwt_secret)
+
+    async def override_get_db():
+        yield db_session
+
+    app.dependency_overrides[get_db] = override_get_db
+    try:
+        await api_client.get(
+            "/api/v1/users/me",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        await api_client.patch(
+            "/api/v1/users/me",
+            headers={"Authorization": f"Bearer {token}"},
+            json={"full_name": "Will Be Cleared"},
+        )
+
+        response = await api_client.patch(
+            "/api/v1/users/me",
+            headers={"Authorization": f"Bearer {token}"},
+            json={"full_name": None},
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["full_name"] is None
+    finally:
+        app.dependency_overrides.clear()
+
+
+@pytest.mark.asyncio
 async def test_get_user_profile(api_client, db_session, monkeypatch):
     user_id = uuid4()
     email = f"user-{uuid4().hex[:8]}@ufl.edu"
