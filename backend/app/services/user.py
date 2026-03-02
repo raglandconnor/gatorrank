@@ -21,9 +21,13 @@ class UserService:
         if not user:
             return None
 
-        # The schema validation guarantees full_name is present and non-empty
-        user.full_name = payload.full_name
-        user.profile_picture_url = payload.profile_picture_url
+        if "full_name" in payload.model_fields_set:
+            user.full_name = payload.full_name
+        if "profile_picture_url" in payload.model_fields_set:
+            profile_url = payload.profile_picture_url
+            user.profile_picture_url = (
+                str(profile_url) if profile_url is not None else None
+            )
 
         self.db.add(user)
         await self.db.commit()

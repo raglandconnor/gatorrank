@@ -28,7 +28,7 @@ async def get_current_user_profile(
     current_user: User = Depends(get_current_user),
 ) -> UserPrivate:
     """Return the authenticated user's private profile."""
-    return current_user  # pyright: ignore[reportReturnType]
+    return UserPrivate.model_validate(current_user)
 
 
 @router.patch(
@@ -37,7 +37,9 @@ async def get_current_user_profile(
     response_model=UserPrivate,
     responses={
         401: {"description": "Authentication required"},
-        422: {"description": "Validation error (e.g., empty full_name)"},
+        422: {
+            "description": "Validation error (e.g., empty payload or invalid fields)"
+        },
     },
 )
 async def update_current_user_profile(
@@ -49,8 +51,10 @@ async def update_current_user_profile(
     service = UserService(db)
     updated_user = await service.update_user(current_user.id, payload)
     if updated_user is None:
-        raise HTTPException(status_code=404, detail="User not found")
-    return updated_user  # pyright: ignore[reportReturnType]
+        raise HTTPException(
+            status_code=500, detail="Authenticated user record not found"
+        )
+    return UserPrivate.model_validate(updated_user)
 
 
 @router.get(
@@ -70,7 +74,7 @@ async def get_user_profile(
     user = await service.get_user_by_id(user_id)
     if user is None:
         raise HTTPException(status_code=404, detail="User not found")
-    return user  # pyright: ignore[reportReturnType]
+    return UserPublic.model_validate(user)
 
 
 @router.get(
