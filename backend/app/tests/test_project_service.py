@@ -71,14 +71,14 @@ def test_can_edit_project_allows_owner():
     assert service.can_edit_project(project, current_user_id=owner_id) is True
 
 
-def test_can_edit_project_allows_maintainer():
+def test_can_edit_project_rejects_maintainer():
     service = ProjectService(cast(AsyncSession, DummySession()))
     project = make_project(is_published=False)
 
     can_edit = service.can_edit_project(
         project, current_user_id=uuid4(), member_role="maintainer"
     )
-    assert can_edit is True
+    assert can_edit is False
 
 
 def test_can_edit_project_rejects_contributor():

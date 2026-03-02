@@ -111,7 +111,7 @@ class ProjectService:
             return False
         if project.created_by_id == current_user_id:
             return True
-        return member_role in {"owner", "maintainer"}
+        return member_role == "owner"
 
     async def get_project_detail(
         self,
