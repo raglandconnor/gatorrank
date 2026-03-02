@@ -2,6 +2,7 @@ from uuid import UUID
 
 import jwt
 from fastapi import Depends, HTTPException, Request, status
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
@@ -55,16 +56,22 @@ async def _resolve_authenticated_user(
     request.state.current_user_id = user_id
     request.state.current_user_email = email
 
-    # Upsert user on first authenticated request
+    user_table = getattr(User, "__table__")
+    upsert_stmt = (
+        pg_insert(user_table)
+        .values(id=user_id, email=email)
+        .on_conflict_do_update(
+            index_elements=[user_table.c.id],
+            set_={"email": email},
+        )
+    )
+    await db.exec(upsert_stmt)
+    await db.commit()
+
     result = await db.exec(select(User).where(User.id == user_id))
-
     user = result.one_or_none()
-
-    if not user:
-        user = User(id=user_id, email=email)  # pyright: ignore[reportCallIssue]
-        db.add(user)
-        await db.commit()
-        await db.refresh(user)
+    if user is None:
+        raise RuntimeError("Upserted user could not be loaded")
 
     return user
 
