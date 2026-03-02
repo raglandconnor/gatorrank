@@ -19,6 +19,7 @@ router = APIRouter()
 @router.get(
     "/users/me",
     summary="Get current user profile",
+    description="Return the authenticated user's private profile fields.",
     response_model=UserPrivate,
     responses={
         401: {"description": "Authentication required"},
@@ -34,12 +35,18 @@ async def get_current_user_profile(
 @router.patch(
     "/users/me",
     summary="Update current user profile",
+    description=(
+        "Partially update the authenticated user's profile. "
+        "At least one field must be provided. "
+        "`full_name` may be omitted but cannot be `null` when provided."
+    ),
     response_model=UserPrivate,
     responses={
         401: {"description": "Authentication required"},
         422: {
             "description": "Validation error (e.g., empty payload or invalid fields)"
         },
+        500: {"description": "Authenticated user invariant violation"},
     },
 )
 async def update_current_user_profile(
@@ -60,6 +67,7 @@ async def update_current_user_profile(
 @router.get(
     "/users/{user_id}",
     summary="Get public user profile",
+    description="Return public-safe profile fields for a specific user.",
     response_model=UserPublic,
     responses={
         404: {"description": "User not found"},
@@ -80,18 +88,42 @@ async def get_user_profile(
 @router.get(
     "/users/{user_id}/projects",
     summary="List published projects for a user",
+    description=(
+        "Return published projects authored by the given user, with cursor pagination."
+    ),
     response_model=ProjectListResponse,
     responses={
+        400: {"description": "Invalid cursor"},
         404: {"description": "User not found"},
     },
 )
 async def list_user_projects(
     user_id: UUID,
-    limit: int = Query(default=20, gt=0, le=100),
-    cursor: str | None = Query(default=None),
-    sort: Literal["top", "new"] = Query(default="new"),
-    published_from: date | None = Query(default=None),
-    published_to: date | None = Query(default=None),
+    limit: int = Query(
+        default=20,
+        gt=0,
+        le=100,
+        description="Page size (1-100).",
+    ),
+    cursor: str | None = Query(
+        default=None,
+        description=(
+            "Opaque pagination cursor from a previous response. "
+            "Reuse with the same `sort` and date-range values."
+        ),
+    ),
+    sort: Literal["top", "new"] = Query(
+        default="new",
+        description="Sort order: `new` by creation time, `top` by vote rank in date window.",
+    ),
+    published_from: date | None = Query(
+        default=None,
+        description="Inclusive `published_at` start date (`YYYY-MM-DD`) for `sort=top`.",
+    ),
+    published_to: date | None = Query(
+        default=None,
+        description="Inclusive `published_at` end date (`YYYY-MM-DD`) for `sort=top`.",
+    ),
     db: AsyncSession = Depends(get_db),
 ) -> ProjectListResponse:
     """Return published projects authored by the specific user."""
