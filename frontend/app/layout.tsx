@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { Mona_Sans } from 'next/font/google';
 import { Provider } from '@/components/ui/provider';
+import { Toaster } from '@/components/ui/toaster';
 import './globals.css';
 
 const monaSans = Mona_Sans({
@@ -24,6 +25,7 @@ export default function RootLayout({
       <body suppressHydrationWarning>
         <Provider forcedTheme="light" enableSystem={false} defaultTheme="light">
           {children}
+          <Toaster />
         </Provider>
       </body>
     </html>

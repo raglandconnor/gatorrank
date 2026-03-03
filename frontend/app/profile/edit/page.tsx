@@ -18,8 +18,6 @@ import {
 import {
   LuX,
   LuSave,
-  LuGraduationCap,
-  LuBookOpen,
   LuGithub,
   LuLinkedin,
   LuGlobe,
@@ -34,6 +32,8 @@ import {
 import { Navbar } from '@/components/Navbar';
 import { ProfileProjectCard } from '@/components/ProfileProjectCard';
 import { mockProfile, mockProfileProjects } from '@/data/mock-profile';
+import { toaster } from '@/components/ui/toaster';
+import { RoleBadge } from '@/components/ui/rolebadge';
 
 /* ── shared input style ─────────────────────────────────────── */
 const inputBase = {
@@ -48,32 +48,6 @@ const inputBase = {
   outline: 'none',
   _focus: { borderColor: 'orange.400' },
 } as const;
-
-/* ── RoleBadge (same as profile page) ──────────────────────── */
-function RoleBadge({ role }: { role: 'student' | 'faculty' }) {
-  const Icon = role === 'faculty' ? LuBookOpen : LuGraduationCap;
-  const label = role === 'faculty' ? 'Faculty' : 'Student';
-  return (
-    <HStack
-      gap="6px"
-      bg="rgba(251,146,60,0.1)"
-      border="1.6px solid"
-      borderColor="orange.400"
-      borderRadius="full"
-      px="12px"
-      py="4px"
-      display="inline-flex"
-      flexShrink={0}
-    >
-      <Box color="orange.400">
-        <Icon size={14} />
-      </Box>
-      <Text fontSize="xs" color="orange.400" fontWeight="medium">
-        {label}
-      </Text>
-    </HStack>
-  );
-}
 
 /* ── FieldLabel ─────────────────────────────────────────────── */
 function FieldLabel({ children }: { children: React.ReactNode }) {
@@ -161,7 +135,33 @@ export default function EditProfilePage() {
 
   const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) setAvatarPreview(URL.createObjectURL(file));
+    if (!file) return;
+
+    const MAX_SIZE_BYTES = 5 * 1024 * 1024; // 5MB
+    if (file.size > MAX_SIZE_BYTES) {
+      // Reset input so selecting the same file again still fires onChange
+      e.target.value = '';
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+
+      toaster.error({
+        id: String(Date.now()),
+        title: 'Image too large',
+        description: 'Please choose a file smaller than 5MB.',
+        duration: 3000,
+        closable: true,
+      });
+      return;
+    }
+
+    // Also reset input after a valid selection to allow re-selecting the same file later
+    e.target.value = '';
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+
+    setAvatarPreview(URL.createObjectURL(file));
   };
 
   /* profile form state (initialized from saved profile if present) */
