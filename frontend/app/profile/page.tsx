@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Box,
@@ -17,8 +17,6 @@ import {
 import {
   LuPencil,
   LuPlus,
-  LuGraduationCap,
-  LuBookOpen,
   LuGithub,
   LuLinkedin,
   LuGlobe,
@@ -27,31 +25,7 @@ import { Navbar } from '@/components/Navbar';
 import { AcademicInfoCard } from '@/components/AcademicInfoCard';
 import { ProfileProjectCard } from '@/components/ProfileProjectCard';
 import { mockProfile, mockProfileProjects } from '@/data/mock-profile';
-
-function RoleBadge({ role }: { role: 'student' | 'faculty' }) {
-  const Icon = role === 'faculty' ? LuBookOpen : LuGraduationCap;
-  const label = role === 'faculty' ? 'Faculty' : 'Student';
-
-  return (
-    <HStack
-      gap="6px"
-      bg="rgba(251,146,60,0.1)"
-      border="1.6px solid"
-      borderColor="orange.400"
-      borderRadius="full"
-      px="12px"
-      py="4px"
-      display="inline-flex"
-    >
-      <Box color="orange.400">
-        <Icon size={14} />
-      </Box>
-      <Text fontSize="xs" color="orange.400" fontWeight="medium">
-        {label}
-      </Text>
-    </HStack>
-  );
-}
+import { RoleBadge } from '@/components/ui/rolebadge';
 
 function SocialLink({
   href,
