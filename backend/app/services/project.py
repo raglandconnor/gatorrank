@@ -89,7 +89,9 @@ class ProjectService:
         if project is None:
             return None
 
-        member_role = await self.get_member_role(project_id, current_user_id)
+        member_role: str | None = None
+        if project.created_by_id != current_user_id:
+            member_role = await self.get_member_role(project_id, current_user_id)
         if not self.can_edit_project(project, current_user_id, member_role):
             raise ProjectAccessForbiddenError("Project edit forbidden")
 
