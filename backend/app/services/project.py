@@ -2,16 +2,19 @@ from datetime import UTC, date, datetime, time, timedelta
 from typing import Literal
 from uuid import UUID
 
+from sqlalchemy import update
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.models.project import Project, ProjectMember
 from app.models.user import User
 from app.schemas.project import (
+    ProjectCreateRequest,
     ProjectDetailResponse,
     ProjectListItemResponse,
     ProjectListResponse,
     ProjectMemberInfo,
+    ProjectUpdateRequest,
 )
 from app.utils.pagination import (
     CursorError,
@@ -26,6 +29,10 @@ class ProjectAccessForbiddenError(PermissionError):
     """Raised when an authenticated user cannot access an existing project."""
 
 
+class ProjectValidationError(ValueError):
+    """Raised when a project write operation fails business validation."""
+
+
 class ProjectService:
     def __init__(self, db: AsyncSession):
         self.db = db
@@ -34,6 +41,197 @@ class ProjectService:
         statement = select(Project).where(Project.id == project_id)
         result = await self.db.exec(statement)
         return result.first()
+
+    async def create_project(
+        self,
+        *,
+        created_by_id: UUID,
+        payload: ProjectCreateRequest,
+    ) -> ProjectDetailResponse:
+        project = Project(  # pyright: ignore[reportCallIssue]
+            created_by_id=created_by_id,
+            title=payload.title,
+            description=payload.description,
+            demo_url=payload.demo_url,
+            github_url=payload.github_url,
+            video_url=payload.video_url,
+            is_group_project=payload.is_group_project,
+            vote_count=0,
+            is_published=False,
+            published_at=None,
+        )
+        owner_member = ProjectMember(  # pyright: ignore[reportCallIssue]
+            project_id=project.id,
+            user_id=created_by_id,
+            role="owner",
+        )
+
+        try:
+            self.db.add(project)
+            self.db.add(owner_member)
+            await self.db.commit()
+        except Exception:
+            await self.db.rollback()
+            raise
+
+        created = await self.get_project_detail(project.id, created_by_id)
+        if created is None:
+            raise RuntimeError("Created project could not be loaded")
+        return created
+
+    async def update_project(
+        self,
+        *,
+        project_id: UUID,
+        current_user_id: UUID,
+        payload: ProjectUpdateRequest,
+    ) -> ProjectDetailResponse | None:
+        project = await self.get_project_by_id(project_id)
+        if project is None:
+            return None
+
+        member_role: str | None = None
+        if project.created_by_id != current_user_id:
+            member_role = await self.get_member_role(project_id, current_user_id)
+        if not self.can_edit_project(project, current_user_id, member_role):
+            raise ProjectAccessForbiddenError("Project edit forbidden")
+
+        final_demo_url = (
+            payload.demo_url
+            if "demo_url" in payload.model_fields_set
+            else project.demo_url
+        )
+        final_github_url = (
+            payload.github_url
+            if "github_url" in payload.model_fields_set
+            else project.github_url
+        )
+        final_video_url = (
+            payload.video_url
+            if "video_url" in payload.model_fields_set
+            else project.video_url
+        )
+        if not any([final_demo_url, final_github_url, final_video_url]):
+            raise ProjectValidationError(
+                "Provide at least one of demo_url, github_url, or video_url."
+            )
+
+        if "title" in payload.model_fields_set:
+            if payload.title is None:
+                raise ProjectValidationError("title cannot be null")
+            project.title = payload.title
+        if "description" in payload.model_fields_set:
+            if payload.description is None:
+                raise ProjectValidationError("description cannot be null")
+            project.description = payload.description
+        if "demo_url" in payload.model_fields_set:
+            project.demo_url = payload.demo_url
+        if "github_url" in payload.model_fields_set:
+            project.github_url = payload.github_url
+        if "video_url" in payload.model_fields_set:
+            project.video_url = payload.video_url
+
+        try:
+            self.db.add(project)
+            await self.db.commit()
+        except Exception:
+            await self.db.rollback()
+            raise
+
+        updated_project = await self.get_project_detail(project.id, current_user_id)
+        if updated_project is None:
+            raise RuntimeError("Updated project could not be loaded")
+        return updated_project
+
+    async def publish_project(
+        self,
+        *,
+        project_id: UUID,
+        current_user_id: UUID,
+    ) -> ProjectDetailResponse | None:
+        project = await self.get_project_by_id(project_id)
+        if project is None:
+            return None
+
+        member_role: str | None = None
+        if project.created_by_id != current_user_id:
+            member_role = await self.get_member_role(project_id, current_user_id)
+        if not self.can_edit_project(project, current_user_id, member_role):
+            raise ProjectAccessForbiddenError("Project publish forbidden")
+
+        if project.is_published:
+            published_project = await self.get_project_detail(
+                project.id, current_user_id
+            )
+            if published_project is None:
+                raise RuntimeError("Published project could not be loaded")
+            return published_project
+
+        publish_at = datetime.now(UTC)
+        project_cols = getattr(Project, "__table__").c
+        publish_statement = (
+            update(Project)
+            .where(
+                project_cols.id == project_id,
+                project_cols.is_published.is_(False),
+            )
+            .values(
+                is_published=True,
+                published_at=publish_at,
+            )
+        )
+
+        try:
+            result = await self.db.exec(publish_statement)
+            if result.rowcount and result.rowcount > 0:
+                await self.db.commit()
+        except Exception:
+            await self.db.rollback()
+            raise
+
+        published_project = await self.get_project_detail(project.id, current_user_id)
+        if published_project is None:
+            raise RuntimeError("Published project could not be loaded")
+        return published_project
+
+    async def unpublish_project(
+        self,
+        *,
+        project_id: UUID,
+        current_user_id: UUID,
+    ) -> ProjectDetailResponse | None:
+        project = await self.get_project_by_id(project_id)
+        if project is None:
+            return None
+
+        member_role: str | None = None
+        if project.created_by_id != current_user_id:
+            member_role = await self.get_member_role(project_id, current_user_id)
+        if not self.can_edit_project(project, current_user_id, member_role):
+            raise ProjectAccessForbiddenError("Project unpublish forbidden")
+
+        if not project.is_published:
+            unpublished_project = await self.get_project_detail(
+                project.id, current_user_id
+            )
+            if unpublished_project is None:
+                raise RuntimeError("Unpublished project could not be loaded")
+            return unpublished_project
+
+        project.is_published = False
+        project.published_at = None
+
+        try:
+            self.db.add(project)
+            await self.db.commit()
+        except Exception:
+            await self.db.rollback()
+            raise
+
+        unpublished_project = await self.get_project_detail(project.id, current_user_id)
+        if unpublished_project is None:
+            raise RuntimeError("Unpublished project could not be loaded")
+        return unpublished_project
 
     async def get_member_role(self, project_id: UUID, user_id: UUID) -> str | None:
         statement = select(ProjectMember).where(
@@ -73,7 +271,7 @@ class ProjectService:
             return False
         if project.created_by_id == current_user_id:
             return True
-        return member_role in {"owner", "maintainer"}
+        return member_role == "owner"
 
     async def get_project_detail(
         self,
@@ -130,11 +328,12 @@ class ProjectService:
         cursor: str | None = None,
         published_from: date | None = None,
         published_to: date | None = None,
+        created_by_id: UUID | None = None,
     ) -> ProjectListResponse:
         limit = max(1, min(limit, 100))
 
         project_cols = getattr(Project, "__table__").c
-        statement = self._base_published_projects_query()
+        statement = self._base_published_projects_query(created_by_id)
         if (
             sort == "top"
             and cursor is not None
@@ -225,9 +424,12 @@ class ProjectService:
         return ProjectListResponse(items=items, next_cursor=next_cursor)
 
     @staticmethod
-    def _base_published_projects_query():
+    def _base_published_projects_query(created_by_id: UUID | None = None):
         project_cols = getattr(Project, "__table__").c
-        return select(Project).where(project_cols.is_published.is_(True))
+        stmt = select(Project).where(project_cols.is_published.is_(True))
+        if created_by_id:
+            stmt = stmt.where(project_cols.created_by_id == created_by_id)
+        return stmt
 
     async def _get_members_for_projects(
         self, project_ids: list[UUID]
