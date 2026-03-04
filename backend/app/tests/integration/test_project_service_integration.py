@@ -4,6 +4,7 @@ from uuid import UUID
 
 import pytest
 from sqlmodel import select
+from sqlalchemy.sql.dml import Update
 
 from app.models.project import Project, ProjectMember
 from app.models.user import User
@@ -574,6 +575,300 @@ async def test_update_project_rolls_back_when_commit_fails(db_session, monkeypat
             project_id=project.id,
             current_user_id=owner.id,
             payload=payload,
+        )
+
+    assert rollback_spy.await_count == 1
+
+
+@pytest.mark.asyncio
+async def test_publish_project_owner_can_publish_and_is_idempotent(db_session):
+    now = datetime.now(timezone.utc)
+    owner = await _seed_user(db_session, "owner-publish@ufl.edu", "Owner Publish")
+    project = await _seed_project(
+        db_session,
+        created_by_id=owner.id,
+        title="Publish Target",
+        vote_count=0,
+        is_published=False,
+        created_at=now,
+    )
+    project.github_url = "https://github.com/example/publish"
+    await db_session.flush()
+
+    service = ProjectService(db_session)
+    first = await service.publish_project(
+        project_id=project.id, current_user_id=owner.id
+    )
+    second = await service.publish_project(
+        project_id=project.id, current_user_id=owner.id
+    )
+
+    assert first is not None
+    assert second is not None
+    assert first.is_published is True
+    assert first.published_at is not None
+    assert second.is_published is True
+    assert second.published_at == first.published_at
+
+    project_result = await db_session.exec(
+        select(Project).where(Project.id == project.id)
+    )
+    refreshed = project_result.one()
+    assert refreshed.is_published is True
+    assert refreshed.published_at == first.published_at
+
+
+@pytest.mark.asyncio
+async def test_publish_project_rejects_non_owner(db_session):
+    now = datetime.now(timezone.utc)
+    owner = await _seed_user(db_session, "owner-publish-2@ufl.edu", "Owner Publish 2")
+    maintainer = await _seed_user(
+        db_session, "maintainer-publish@ufl.edu", "Maintainer Publish"
+    )
+    project = await _seed_project(
+        db_session,
+        created_by_id=owner.id,
+        title="Publish Forbidden",
+        vote_count=0,
+        is_published=False,
+        created_at=now,
+    )
+    await _seed_member(
+        db_session,
+        project_id=project.id,
+        user_id=maintainer.id,
+        role="maintainer",
+        added_at=now,
+    )
+
+    service = ProjectService(db_session)
+    with pytest.raises(ProjectAccessForbiddenError, match="Project publish forbidden"):
+        await service.publish_project(
+            project_id=project.id, current_user_id=maintainer.id
+        )
+
+
+@pytest.mark.asyncio
+async def test_unpublish_project_owner_can_unpublish_and_is_idempotent(db_session):
+    now = datetime.now(timezone.utc)
+    owner = await _seed_user(db_session, "owner-unpublish@ufl.edu", "Owner Unpublish")
+    project = await _seed_project(
+        db_session,
+        created_by_id=owner.id,
+        title="Unpublish Target",
+        vote_count=0,
+        is_published=True,
+        created_at=now,
+    )
+    original_published_at = project.published_at
+
+    service = ProjectService(db_session)
+    first = await service.unpublish_project(
+        project_id=project.id,
+        current_user_id=owner.id,
+    )
+    second = await service.unpublish_project(
+        project_id=project.id,
+        current_user_id=owner.id,
+    )
+
+    assert first is not None
+    assert second is not None
+    assert first.is_published is False
+    assert first.published_at is None
+    assert second.is_published is False
+    assert second.published_at is None
+    assert original_published_at is not None
+
+    project_result = await db_session.exec(
+        select(Project).where(Project.id == project.id)
+    )
+    refreshed = project_result.one()
+    assert refreshed.is_published is False
+    assert refreshed.published_at is None
+
+
+@pytest.mark.asyncio
+async def test_unpublish_project_rejects_non_owner(db_session):
+    now = datetime.now(timezone.utc)
+    owner = await _seed_user(
+        db_session, "owner-unpublish-2@ufl.edu", "Owner Unpublish 2"
+    )
+    maintainer = await _seed_user(
+        db_session, "maintainer-unpublish@ufl.edu", "Maintainer Unpublish"
+    )
+    project = await _seed_project(
+        db_session,
+        created_by_id=owner.id,
+        title="Unpublish Forbidden",
+        vote_count=0,
+        is_published=True,
+        created_at=now,
+    )
+    await _seed_member(
+        db_session,
+        project_id=project.id,
+        user_id=maintainer.id,
+        role="maintainer",
+        added_at=now,
+    )
+
+    service = ProjectService(db_session)
+    with pytest.raises(
+        ProjectAccessForbiddenError, match="Project unpublish forbidden"
+    ):
+        await service.unpublish_project(
+            project_id=project.id,
+            current_user_id=maintainer.id,
+        )
+
+
+@pytest.mark.asyncio
+async def test_publish_then_unpublish_then_publish_sets_new_published_at(db_session):
+    now = datetime.now(timezone.utc)
+    owner = await _seed_user(
+        db_session, "owner-publish-republish@ufl.edu", "Owner Publish Republish"
+    )
+    project = await _seed_project(
+        db_session,
+        created_by_id=owner.id,
+        title="Republish Timestamp",
+        vote_count=0,
+        is_published=True,
+        created_at=now - timedelta(days=1),
+    )
+    original_published_at = project.published_at
+    assert original_published_at is not None
+
+    service = ProjectService(db_session)
+    unpublished = await service.unpublish_project(
+        project_id=project.id,
+        current_user_id=owner.id,
+    )
+    assert unpublished is not None
+    assert unpublished.is_published is False
+    assert unpublished.published_at is None
+
+    republished = await service.publish_project(
+        project_id=project.id,
+        current_user_id=owner.id,
+    )
+    assert republished is not None
+    assert republished.is_published is True
+    assert republished.published_at is not None
+    assert republished.published_at > original_published_at
+    assert republished.published_at != original_published_at
+
+
+@pytest.mark.asyncio
+async def test_publish_project_rolls_back_when_commit_fails(db_session, monkeypatch):
+    now = datetime.now(timezone.utc)
+    owner = await _seed_user(
+        db_session, "owner-publish-rollback@ufl.edu", "Owner Publish Rollback"
+    )
+    project = await _seed_project(
+        db_session,
+        created_by_id=owner.id,
+        title="Publish Rollback Target",
+        vote_count=0,
+        is_published=False,
+        created_at=now,
+    )
+    project.github_url = "https://github.com/example/publish-rollback"
+    await db_session.flush()
+
+    service = ProjectService(db_session)
+    rollback_spy = AsyncMock(return_value=None)
+
+    async def failing_commit():
+        raise RuntimeError("db commit failed")
+
+    monkeypatch.setattr(db_session, "commit", failing_commit)
+    monkeypatch.setattr(db_session, "rollback", rollback_spy)
+
+    with pytest.raises(RuntimeError, match="db commit failed"):
+        await service.publish_project(project_id=project.id, current_user_id=owner.id)
+
+    assert rollback_spy.await_count == 1
+
+
+@pytest.mark.asyncio
+async def test_publish_project_does_not_overwrite_published_at_after_race(
+    db_session, monkeypatch
+):
+    now = datetime.now(timezone.utc)
+    owner = await _seed_user(
+        db_session, "owner-publish-race@ufl.edu", "Owner Publish Race"
+    )
+    project = await _seed_project(
+        db_session,
+        created_by_id=owner.id,
+        title="Publish Race Target",
+        vote_count=0,
+        is_published=False,
+        created_at=now,
+    )
+    project.github_url = "https://github.com/example/publish-race"
+    await db_session.flush()
+
+    service = ProjectService(db_session)
+    raced_published_at = now - timedelta(minutes=10)
+    race_applied = False
+    original_exec = db_session.exec
+
+    async def exec_with_race(statement, *args, **kwargs):
+        nonlocal race_applied
+        table_name = getattr(getattr(statement, "table", None), "name", None)
+        if (
+            not race_applied
+            and isinstance(statement, Update)
+            and table_name == "projects"
+        ):
+            race_applied = True
+            project.is_published = True
+            project.published_at = raced_published_at
+            await db_session.flush()
+        return await original_exec(statement, *args, **kwargs)
+
+    monkeypatch.setattr(db_session, "exec", exec_with_race)
+
+    published = await service.publish_project(
+        project_id=project.id, current_user_id=owner.id
+    )
+    assert race_applied is True
+    assert published is not None
+    assert published.is_published is True
+    assert published.published_at == raced_published_at
+
+
+@pytest.mark.asyncio
+async def test_unpublish_project_rolls_back_when_commit_fails(db_session, monkeypatch):
+    now = datetime.now(timezone.utc)
+    owner = await _seed_user(
+        db_session, "owner-unpublish-rollback@ufl.edu", "Owner Unpublish Rollback"
+    )
+    project = await _seed_project(
+        db_session,
+        created_by_id=owner.id,
+        title="Unpublish Rollback Target",
+        vote_count=0,
+        is_published=True,
+        created_at=now,
+    )
+
+    service = ProjectService(db_session)
+    rollback_spy = AsyncMock(return_value=None)
+
+    async def failing_commit():
+        raise RuntimeError("db commit failed")
+
+    monkeypatch.setattr(db_session, "commit", failing_commit)
+    monkeypatch.setattr(db_session, "rollback", rollback_spy)
+
+    with pytest.raises(RuntimeError, match="db commit failed"):
+        await service.unpublish_project(
+            project_id=project.id,
+            current_user_id=owner.id,
         )
 
     assert rollback_spy.await_count == 1
