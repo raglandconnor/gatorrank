@@ -28,7 +28,7 @@ export default function LoginPage() {
       direction="column"
       align="center"
       justify="flex-start"
-      pt={{ base: 12, sm: 16 }}
+      py={{ base: 8, sm: 12 }}
       px={{ base: 4, sm: 6 }}
     >
       <Stack
