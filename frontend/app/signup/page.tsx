@@ -143,7 +143,9 @@ export default function SignupPage() {
                     variant="ghost"
                     onClick={() => setShowConfirmPassword((p) => !p)}
                     aria-label={
-                      showConfirmPassword ? 'Hide password' : 'Show password'
+                      showConfirmPassword
+                        ? 'Hide confirm password'
+                        : 'Show confirm password'
                     }
                     color="gray.500"
                     _hover={{ color: 'gray.700' }}
