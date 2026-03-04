@@ -1101,3 +1101,112 @@ def test_leave_project_not_member_returns_404():
 
     assert response.status_code == 404
     assert response.json()["detail"] == "Project membership not found"
+
+
+def test_openapi_documents_project_member_endpoints_contract():
+    response = client.get("/openapi.json")
+    assert response.status_code == 200
+    paths = response.json()["paths"]
+
+    members_path = "/api/v1/projects/{project_id}/members"
+    member_path = "/api/v1/projects/{project_id}/members/{user_id}"
+    leave_path = "/api/v1/projects/{project_id}/leave"
+
+    assert members_path in paths
+    assert "get" in paths[members_path]
+    assert "post" in paths[members_path]
+    assert "200" in paths[members_path]["get"]["responses"]
+    assert "201" in paths[members_path]["post"]["responses"]
+    assert "401" in paths[members_path]["post"]["responses"]
+    assert "403" in paths[members_path]["post"]["responses"]
+    assert "404" in paths[members_path]["post"]["responses"]
+    assert "409" in paths[members_path]["post"]["responses"]
+
+    assert member_path in paths
+    assert "patch" in paths[member_path]
+    assert "delete" in paths[member_path]
+    assert "200" in paths[member_path]["patch"]["responses"]
+    assert "204" in paths[member_path]["delete"]["responses"]
+    assert "401" in paths[member_path]["patch"]["responses"]
+    assert "401" in paths[member_path]["delete"]["responses"]
+    assert "403" in paths[member_path]["patch"]["responses"]
+    assert "403" in paths[member_path]["delete"]["responses"]
+    assert "404" in paths[member_path]["patch"]["responses"]
+    assert "404" in paths[member_path]["delete"]["responses"]
+    assert "409" in paths[member_path]["patch"]["responses"]
+    assert "409" in paths[member_path]["delete"]["responses"]
+
+    assert leave_path in paths
+    assert "post" in paths[leave_path]
+    assert "204" in paths[leave_path]["post"]["responses"]
+    assert "401" in paths[leave_path]["post"]["responses"]
+    assert "404" in paths[leave_path]["post"]["responses"]
+    assert "409" in paths[leave_path]["post"]["responses"]
+
+
+def test_add_project_member_validation_rejects_invalid_payload_shapes():
+    owner_id = uuid4()
+    project_id = uuid4()
+
+    invalid_payloads = [
+        {"email": None, "role": "contributor"},
+        {"email": 123, "role": "contributor"},
+        {"email": "member@ufl.edu", "role": "owner"},
+        {"email": "member@ufl.edu", "role": "admin"},
+        {"email": "member@ufl.edu", "role": 42},
+        {"email": "x" * 321, "role": "contributor"},
+        {
+            "email": "member@ufl.edu",
+            "role": "contributor",
+            "unexpected_field": "nope",
+        },
+    ]
+
+    app.dependency_overrides[get_db] = _override_get_db
+    app.dependency_overrides[get_current_user] = _override_current_user(owner_id)
+    try:
+        with patch(
+            "app.api.v1.projects.ProjectService.add_project_member",
+            new=AsyncMock(),
+        ) as mock_add_member:
+            for payload in invalid_payloads:
+                response = client.post(
+                    f"/api/v1/projects/{project_id}/members",
+                    json=payload,
+                )
+                assert response.status_code == 422
+            assert mock_add_member.await_count == 0
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_update_project_member_validation_rejects_invalid_payload_shapes():
+    owner_id = uuid4()
+    project_id = uuid4()
+    target_user_id = uuid4()
+
+    invalid_payloads = [
+        {},
+        {"role": "owner"},
+        {"role": "admin"},
+        {"role": 123},
+        {"role": None},
+        {"role": "maintainer", "extra": "field"},
+    ]
+
+    app.dependency_overrides[get_db] = _override_get_db
+    app.dependency_overrides[get_current_user] = _override_current_user(owner_id)
+    try:
+        with patch(
+            "app.api.v1.projects.ProjectService.update_project_member",
+            new=AsyncMock(),
+        ) as mock_update_member:
+            for payload in invalid_payloads:
+                response = client.patch(
+                    f"/api/v1/projects/{project_id}/members/{target_user_id}",
+                    json=payload,
+                )
+                assert response.status_code == 422
+            assert mock_update_member.await_count == 0
+    finally:
+        app.dependency_overrides.clear()
