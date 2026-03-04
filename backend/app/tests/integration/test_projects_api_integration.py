@@ -74,6 +74,16 @@ def _create_project_payload(**overrides):
     return payload
 
 
+def _update_project_payload(**overrides):
+    payload = {
+        "title": "  Updated API Project  ",
+        "description": "  Updated API description  ",
+        "demo_url": "https://example.com/updated-demo",
+    }
+    payload.update(overrides)
+    return payload
+
+
 def _override_authed_user(user: User):
     return lambda: user
 
@@ -362,6 +372,361 @@ async def test_get_project_detail_unpublished_hidden_anonymous(api_client, db_se
 
     assert response.status_code == 404
     assert response.json()["detail"] == "Project not found"
+
+
+@pytest.mark.asyncio
+async def test_patch_project_owner_can_update_published_project(api_client, db_session):
+    owner = await _seed_user(db_session, "owner_patch_api@ufl.edu", "Owner Patch API")
+    project = await _seed_project(
+        db_session,
+        created_by_id=owner.id,
+        title="Patch API Target",
+        is_published=True,
+    )
+    project.demo_url = "https://example.com/original-demo"
+    project.github_url = None
+    project.video_url = None
+    await db_session.flush()
+
+    async def override_get_db():
+        yield db_session
+
+    app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_current_user] = _override_authed_user(owner)
+    try:
+        response = await api_client.patch(
+            f"/api/v1/projects/{project.id}",
+            json=_update_project_payload(
+                demo_url="", github_url="https://github.com/example/updated-api"
+            ),
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["id"] == str(project.id)
+    assert payload["title"] == "Updated API Project"
+    assert payload["description"] == "Updated API description"
+    assert payload["demo_url"] is None
+    assert payload["github_url"] == "https://github.com/example/updated-api"
+    assert payload["is_published"] is True
+
+    project_result = await db_session.exec(
+        select(Project).where(Project.id == project.id)
+    )
+    updated = project_result.one()
+    assert updated.title == "Updated API Project"
+    assert updated.demo_url is None
+    assert updated.github_url == "https://github.com/example/updated-api"
+
+
+@pytest.mark.asyncio
+async def test_patch_project_owner_updates_non_url_fields_with_existing_url(
+    api_client, db_session
+):
+    owner = await _seed_user(
+        db_session, "owner_patch_non_url@ufl.edu", "Owner Patch Non URL"
+    )
+    project = await _seed_project(
+        db_session,
+        created_by_id=owner.id,
+        title="Patch Non URL Target",
+        is_published=False,
+    )
+    project.github_url = "https://github.com/example/existing-url"
+    await db_session.flush()
+
+    async def override_get_db():
+        yield db_session
+
+    app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_current_user] = _override_authed_user(owner)
+    try:
+        response = await api_client.patch(
+            f"/api/v1/projects/{project.id}",
+            json={
+                "title": "  Retitled Project  ",
+                "description": "  Revised summary  ",
+            },
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["title"] == "Retitled Project"
+    assert payload["description"] == "Revised summary"
+    assert payload["github_url"] == "https://github.com/example/existing-url"
+
+
+@pytest.mark.asyncio
+async def test_patch_project_unauthenticated_returns_401(api_client, db_session):
+    owner = await _seed_user(
+        db_session, "owner_patch_anon_api@ufl.edu", "Owner Patch Anonymous API"
+    )
+    project = await _seed_project(
+        db_session,
+        created_by_id=owner.id,
+        title="Patch Anonymous API Target",
+        is_published=False,
+    )
+
+    async def override_get_db():
+        yield db_session
+
+    app.dependency_overrides[get_db] = override_get_db
+    try:
+        response = await api_client.patch(
+            f"/api/v1/projects/{project.id}",
+            json=_update_project_payload(),
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 401
+    assert response.json()["detail"] == "Not authenticated"
+
+
+@pytest.mark.asyncio
+async def test_patch_project_non_owner_returns_403(api_client, db_session):
+    owner = await _seed_user(db_session, "owner_patch_403@ufl.edu", "Owner Patch 403")
+    maintainer = await _seed_user(
+        db_session, "maintainer_patch_403@ufl.edu", "Maintainer Patch 403"
+    )
+    project = await _seed_project(
+        db_session,
+        created_by_id=owner.id,
+        title="Patch Forbidden API Project",
+        is_published=False,
+    )
+    await _seed_member(
+        db_session,
+        project_id=project.id,
+        user_id=maintainer.id,
+        role="maintainer",
+    )
+
+    async def override_get_db():
+        yield db_session
+
+    app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_current_user] = _override_authed_user(maintainer)
+    try:
+        response = await api_client.patch(
+            f"/api/v1/projects/{project.id}",
+            json=_update_project_payload(),
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 403
+    assert response.json()["detail"] == "Project edit forbidden"
+
+
+@pytest.mark.asyncio
+async def test_patch_project_not_found_returns_404(api_client, db_session):
+    owner = await _seed_user(db_session, "owner_patch_404@ufl.edu", "Owner Patch 404")
+
+    async def override_get_db():
+        yield db_session
+
+    app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_current_user] = _override_authed_user(owner)
+    try:
+        response = await api_client.patch(
+            "/api/v1/projects/00000000-0000-0000-0000-000000000777",
+            json=_update_project_payload(),
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Project not found"
+
+
+@pytest.mark.asyncio
+async def test_patch_project_empty_payload_returns_422(api_client, db_session):
+    owner = await _seed_user(db_session, "owner_patch_422a@ufl.edu", "Owner Patch 422A")
+    project = await _seed_project(
+        db_session,
+        created_by_id=owner.id,
+        title="Patch 422 Empty",
+        is_published=False,
+    )
+
+    async def override_get_db():
+        yield db_session
+
+    app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_current_user] = _override_authed_user(owner)
+    try:
+        response = await api_client.patch(f"/api/v1/projects/{project.id}", json={})
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_patch_project_rejects_is_group_project_field(api_client, db_session):
+    owner = await _seed_user(db_session, "owner_patch_422b@ufl.edu", "Owner Patch 422B")
+    project = await _seed_project(
+        db_session,
+        created_by_id=owner.id,
+        title="Patch 422 Group Flag",
+        is_published=False,
+    )
+
+    async def override_get_db():
+        yield db_session
+
+    app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_current_user] = _override_authed_user(owner)
+    try:
+        response = await api_client.patch(
+            f"/api/v1/projects/{project.id}",
+            json={"title": "Allowed", "is_group_project": True},
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_patch_project_invalid_url_returns_422(api_client, db_session):
+    owner = await _seed_user(
+        db_session, "owner_patch_invalid_url@ufl.edu", "Owner Patch Invalid URL"
+    )
+    project = await _seed_project(
+        db_session,
+        created_by_id=owner.id,
+        title="Patch Invalid URL",
+        is_published=False,
+    )
+    project.demo_url = "https://example.com/valid-demo"
+    await db_session.flush()
+
+    async def override_get_db():
+        yield db_session
+
+    app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_current_user] = _override_authed_user(owner)
+    try:
+        response = await api_client.patch(
+            f"/api/v1/projects/{project.id}",
+            json={"github_url": "not-a-url"},
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_patch_project_rejects_clearing_last_url(api_client, db_session):
+    owner = await _seed_user(db_session, "owner_patch_422c@ufl.edu", "Owner Patch 422C")
+    project = await _seed_project(
+        db_session,
+        created_by_id=owner.id,
+        title="Patch 422 URL Rule",
+        is_published=False,
+    )
+    project.github_url = "https://github.com/example/only-url"
+    await db_session.flush()
+
+    async def override_get_db():
+        yield db_session
+
+    app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_current_user] = _override_authed_user(owner)
+    try:
+        response = await api_client.patch(
+            f"/api/v1/projects/{project.id}",
+            json={"github_url": None},
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 422
+    assert (
+        response.json()["detail"]
+        == "Provide at least one of demo_url, github_url, or video_url."
+    )
+
+
+@pytest.mark.asyncio
+async def test_patch_project_rejects_null_title_and_description(api_client, db_session):
+    owner = await _seed_user(
+        db_session, "owner_patch_null_fields@ufl.edu", "Owner Patch Null Fields"
+    )
+    project = await _seed_project(
+        db_session,
+        created_by_id=owner.id,
+        title="Patch Null Field Rule",
+        is_published=False,
+    )
+    project.video_url = "https://example.com/video"
+    await db_session.flush()
+
+    async def override_get_db():
+        yield db_session
+
+    app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_current_user] = _override_authed_user(owner)
+    try:
+        null_title = await api_client.patch(
+            f"/api/v1/projects/{project.id}",
+            json={"title": None},
+        )
+        null_description = await api_client.patch(
+            f"/api/v1/projects/{project.id}",
+            json={"description": None},
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert null_title.status_code == 422
+    assert null_description.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_patch_project_updates_updated_at_timestamp(api_client, db_session):
+    owner = await _seed_user(
+        db_session, "owner_patch_updated_at@ufl.edu", "Owner Patch Updated At"
+    )
+    project = await _seed_project(
+        db_session,
+        created_by_id=owner.id,
+        title="Patch Updated At",
+        is_published=False,
+    )
+    project.demo_url = "https://example.com/demo"
+    original_updated_at = datetime.now(timezone.utc) - timedelta(days=2)
+    project.updated_at = original_updated_at
+    await db_session.flush()
+
+    async def override_get_db():
+        yield db_session
+
+    app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_current_user] = _override_authed_user(owner)
+    try:
+        response = await api_client.patch(
+            f"/api/v1/projects/{project.id}",
+            json={"title": "Timestamp Updated"},
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+
+    project_result = await db_session.exec(
+        select(Project).where(Project.id == project.id)
+    )
+    refreshed = project_result.one()
+    assert refreshed.updated_at > original_updated_at
 
 
 @pytest.mark.asyncio
