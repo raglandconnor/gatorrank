@@ -5,6 +5,25 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
+def _normalize_optional_url_value(value: object) -> object:
+    if value is None:
+        return None
+    if isinstance(value, str):
+        normalized = value.strip()
+        return normalized or None
+    return value
+
+
+def _validate_http_url_value(value: str | None) -> str | None:
+    if value is None:
+        return None
+
+    parsed = urlparse(value)
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        raise ValueError("Must be a valid http(s) URL")
+    return value
+
+
 class ProjectMemberInfo(BaseModel):
     user_id: UUID
     role: str
@@ -64,23 +83,12 @@ class ProjectCreateRequest(BaseModel):
     @field_validator("demo_url", "github_url", "video_url", mode="before")
     @classmethod
     def _normalize_optional_url(cls, value: object) -> object:
-        if value is None:
-            return None
-        if isinstance(value, str):
-            normalized = value.strip()
-            return normalized or None
-        return value
+        return _normalize_optional_url_value(value)
 
     @field_validator("demo_url", "github_url", "video_url")
     @classmethod
     def _validate_http_url(cls, value: str | None) -> str | None:
-        if value is None:
-            return None
-
-        parsed = urlparse(value)
-        if parsed.scheme not in {"http", "https"} or not parsed.netloc:
-            raise ValueError("Must be a valid http(s) URL")
-        return value
+        return _validate_http_url_value(value)
 
     @model_validator(mode="after")
     def _require_at_least_one_project_url(self) -> "ProjectCreateRequest":
@@ -130,23 +138,12 @@ class ProjectUpdateRequest(BaseModel):
     @field_validator("demo_url", "github_url", "video_url", mode="before")
     @classmethod
     def _normalize_optional_url(cls, value: object) -> object:
-        if value is None:
-            return None
-        if isinstance(value, str):
-            normalized = value.strip()
-            return normalized or None
-        return value
+        return _normalize_optional_url_value(value)
 
     @field_validator("demo_url", "github_url", "video_url")
     @classmethod
     def _validate_http_url(cls, value: str | None) -> str | None:
-        if value is None:
-            return None
-
-        parsed = urlparse(value)
-        if parsed.scheme not in {"http", "https"} or not parsed.netloc:
-            raise ValueError("Must be a valid http(s) URL")
-        return value
+        return _validate_http_url_value(value)
 
     @model_validator(mode="after")
     def _validate_update_payload(self) -> "ProjectUpdateRequest":
