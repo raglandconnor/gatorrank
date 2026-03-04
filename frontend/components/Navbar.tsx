@@ -75,16 +75,17 @@ export function Navbar() {
 
           {/* Right side: Sign Up + Log In */}
           <HStack gap="16px" align="center">
-            <Text
+            <Link
+              as={NextLink}
+              href="/signup"
               fontSize="md"
               color="gray.900"
               lineHeight="30px"
-              cursor="pointer"
               _hover={{ opacity: 0.7 }}
               transition="opacity 0.15s"
             >
               Sign Up
-            </Text>
+            </Link>
             <Link
               as={NextLink}
               href="/login"
