@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 from app.api.deps.auth import get_current_user, get_current_user_optional
 from app.db.database import get_db
 from app.main import app
+from app.models.project_roles import ProjectMemberRole
 from app.schemas.project import (
     ProjectDetailResponse,
     ProjectListItemResponse,
@@ -120,7 +121,9 @@ def _build_draft_project_response(
     )
 
 
-def _build_member_info(user_id: UUID, role: str = "contributor") -> ProjectMemberInfo:
+def _build_member_info(
+    user_id: UUID, role: ProjectMemberRole = "contributor"
+) -> ProjectMemberInfo:
     return ProjectMemberInfo(
         user_id=user_id,
         role=role,
