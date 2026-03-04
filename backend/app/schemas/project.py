@@ -1,9 +1,9 @@
 from datetime import datetime
-from typing import Literal
 from urllib.parse import urlparse
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from app.models.project_roles import ProjectMemberRole, ProjectMemberWritableRole
 
 
 def _normalize_optional_url_value(value: object) -> object:
@@ -25,13 +25,9 @@ def _validate_http_url_value(value: str | None) -> str | None:
     return value
 
 
-ProjectMemberRole = Literal["owner", "maintainer", "contributor"]
-ProjectMemberWritableRole = Literal["maintainer", "contributor"]
-
-
 class ProjectMemberInfo(BaseModel):
     user_id: UUID
-    role: str
+    role: ProjectMemberRole
     full_name: str | None = None
     profile_picture_url: str | None = None
 

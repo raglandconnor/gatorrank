@@ -9,6 +9,11 @@ from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.models.project import Project, ProjectMember
+from app.models.project_roles import (
+    PROJECT_ROLE_OWNER,
+    ProjectMemberRole,
+    cast_project_member_role,
+)
 from app.models.user import User
 from app.schemas.project import (
     ProjectCreateRequest,
@@ -86,7 +91,7 @@ class ProjectService:
         owner_member = ProjectMember(  # pyright: ignore[reportCallIssue]
             project_id=project.id,
             user_id=created_by_id,
-            role="owner",
+            role=PROJECT_ROLE_OWNER,
         )
 
         try:
@@ -304,7 +309,7 @@ class ProjectService:
             return False
         if project.created_by_id == current_user_id:
             return True
-        return member_role == "owner"
+        return member_role == PROJECT_ROLE_OWNER
 
     async def get_project_detail(
         self,
@@ -426,7 +431,7 @@ class ProjectService:
         member = await self.get_project_member(project.id, target_user_id)
         if member is None:
             raise ProjectResourceNotFoundError("Project membership not found")
-        if member.role == "owner":
+        if member.role == PROJECT_ROLE_OWNER:
             raise ProjectConflictError("Owner role cannot be modified")
 
         user = await self.get_user_by_id(member.user_id)
@@ -460,7 +465,7 @@ class ProjectService:
         member = await self.get_project_member(project.id, target_user_id)
         if member is None:
             raise ProjectResourceNotFoundError("Project membership not found")
-        if member.role == "owner":
+        if member.role == PROJECT_ROLE_OWNER:
             raise ProjectConflictError("Owner membership cannot be removed")
 
         try:
@@ -484,8 +489,10 @@ class ProjectService:
         if member is None:
             raise ProjectResourceNotFoundError("Project membership not found")
 
-        if member.role == "owner":
-            owner_count = await self._count_members_by_role(project.id, role="owner")
+        if member.role == PROJECT_ROLE_OWNER:
+            owner_count = await self._count_members_by_role(
+                project.id, role=PROJECT_ROLE_OWNER
+            )
             if owner_count <= 1:
                 raise ProjectConflictError("Last owner cannot leave the project")
 
@@ -635,10 +642,17 @@ class ProjectService:
         self.db.add(project)
 
     @staticmethod
+    def _coerce_member_role(value: str) -> ProjectMemberRole:
+        try:
+            return cast_project_member_role(value)
+        except ValueError as exc:
+            raise RuntimeError("Unexpected project member role in database") from exc
+
+    @staticmethod
     def _member_to_info(member: ProjectMember, user: User) -> ProjectMemberInfo:
         return ProjectMemberInfo(
             user_id=user.id,
-            role=member.role,
+            role=ProjectService._coerce_member_role(member.role),
             full_name=user.full_name,
             profile_picture_url=user.profile_picture_url,
         )
@@ -676,7 +690,7 @@ class ProjectService:
             members_by_project[member.project_id].append(
                 ProjectMemberInfo(
                     user_id=user.id,
-                    role=member.role,
+                    role=self._coerce_member_role(member.role),
                     full_name=user.full_name,
                     profile_picture_url=user.profile_picture_url,
                 )
