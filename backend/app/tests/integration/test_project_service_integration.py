@@ -720,3 +720,105 @@ async def test_unpublish_project_rejects_non_owner(db_session):
             project_id=project.id,
             current_user_id=maintainer.id,
         )
+
+
+@pytest.mark.asyncio
+async def test_publish_then_unpublish_then_publish_sets_new_published_at(db_session):
+    now = datetime.now(timezone.utc)
+    owner = await _seed_user(
+        db_session, "owner-publish-republish@ufl.edu", "Owner Publish Republish"
+    )
+    project = await _seed_project(
+        db_session,
+        created_by_id=owner.id,
+        title="Republish Timestamp",
+        vote_count=0,
+        is_published=True,
+        created_at=now - timedelta(days=1),
+    )
+    original_published_at = project.published_at
+    assert original_published_at is not None
+
+    service = ProjectService(db_session)
+    unpublished = await service.unpublish_project(
+        project_id=project.id,
+        current_user_id=owner.id,
+    )
+    assert unpublished is not None
+    assert unpublished.is_published is False
+    assert unpublished.published_at is None
+
+    republished = await service.publish_project(
+        project_id=project.id,
+        current_user_id=owner.id,
+    )
+    assert republished is not None
+    assert republished.is_published is True
+    assert republished.published_at is not None
+    assert republished.published_at > original_published_at
+    assert republished.published_at != original_published_at
+
+
+@pytest.mark.asyncio
+async def test_publish_project_rolls_back_when_commit_fails(db_session, monkeypatch):
+    now = datetime.now(timezone.utc)
+    owner = await _seed_user(
+        db_session, "owner-publish-rollback@ufl.edu", "Owner Publish Rollback"
+    )
+    project = await _seed_project(
+        db_session,
+        created_by_id=owner.id,
+        title="Publish Rollback Target",
+        vote_count=0,
+        is_published=False,
+        created_at=now,
+    )
+    project.github_url = "https://github.com/example/publish-rollback"
+    await db_session.flush()
+
+    service = ProjectService(db_session)
+    rollback_spy = AsyncMock(return_value=None)
+
+    async def failing_commit():
+        raise RuntimeError("db commit failed")
+
+    monkeypatch.setattr(db_session, "commit", failing_commit)
+    monkeypatch.setattr(db_session, "rollback", rollback_spy)
+
+    with pytest.raises(RuntimeError, match="db commit failed"):
+        await service.publish_project(project_id=project.id, current_user_id=owner.id)
+
+    assert rollback_spy.await_count == 1
+
+
+@pytest.mark.asyncio
+async def test_unpublish_project_rolls_back_when_commit_fails(db_session, monkeypatch):
+    now = datetime.now(timezone.utc)
+    owner = await _seed_user(
+        db_session, "owner-unpublish-rollback@ufl.edu", "Owner Unpublish Rollback"
+    )
+    project = await _seed_project(
+        db_session,
+        created_by_id=owner.id,
+        title="Unpublish Rollback Target",
+        vote_count=0,
+        is_published=True,
+        created_at=now,
+    )
+
+    service = ProjectService(db_session)
+    rollback_spy = AsyncMock(return_value=None)
+
+    async def failing_commit():
+        raise RuntimeError("db commit failed")
+
+    monkeypatch.setattr(db_session, "commit", failing_commit)
+    monkeypatch.setattr(db_session, "rollback", rollback_spy)
+
+    with pytest.raises(RuntimeError, match="db commit failed"):
+        await service.unpublish_project(
+            project_id=project.id,
+            current_user_id=owner.id,
+        )
+
+    assert rollback_spy.await_count == 1
