@@ -46,15 +46,15 @@ export function GatorRankLogo({ size = 'md' }: GatorRankLogoProps) {
       ) : (
         <Box
           position="relative"
-          width={{ base: '100px', sm: '120px', md: '140px' }}
-          height={{ base: '100px', sm: '120px', md: '140px' }}
+          width={{ base: '80px', sm: '96px', md: '112px' }}
+          height={{ base: '80px', sm: '96px', md: '112px' }}
           flexShrink={0}
         >
           <Image
             src="/logo.svg"
             alt="GatorRank"
             fill
-            sizes="(max-width: 640px) 100px, (max-width: 768px) 120px, 140px"
+            sizes="(max-width: 640px) 80px, (max-width: 768px) 96px, 112px"
             style={{ objectFit: 'contain' }}
             priority
           />
