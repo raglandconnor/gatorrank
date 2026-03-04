@@ -2,6 +2,7 @@ from datetime import UTC, date, datetime, time, timedelta
 from typing import Literal
 from uuid import UUID
 
+from sqlalchemy import update
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
@@ -166,12 +167,24 @@ class ProjectService:
                 raise RuntimeError("Published project could not be loaded")
             return published_project
 
-        project.is_published = True
-        project.published_at = datetime.now(UTC)
+        publish_at = datetime.now(UTC)
+        project_cols = getattr(Project, "__table__").c
+        publish_statement = (
+            update(Project)
+            .where(
+                project_cols.id == project_id,
+                project_cols.is_published.is_(False),
+            )
+            .values(
+                is_published=True,
+                published_at=publish_at,
+            )
+        )
 
         try:
-            self.db.add(project)
-            await self.db.commit()
+            result = await self.db.exec(publish_statement)
+            if result.rowcount and result.rowcount > 0:
+                await self.db.commit()
         except Exception:
             await self.db.rollback()
             raise

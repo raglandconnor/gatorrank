@@ -4,6 +4,7 @@ from uuid import UUID
 
 import pytest
 from sqlmodel import select
+from sqlalchemy.sql.dml import Update
 
 from app.models.project import Project, ProjectMember
 from app.models.user import User
@@ -789,6 +790,55 @@ async def test_publish_project_rolls_back_when_commit_fails(db_session, monkeypa
         await service.publish_project(project_id=project.id, current_user_id=owner.id)
 
     assert rollback_spy.await_count == 1
+
+
+@pytest.mark.asyncio
+async def test_publish_project_does_not_overwrite_published_at_after_race(
+    db_session, monkeypatch
+):
+    now = datetime.now(timezone.utc)
+    owner = await _seed_user(
+        db_session, "owner-publish-race@ufl.edu", "Owner Publish Race"
+    )
+    project = await _seed_project(
+        db_session,
+        created_by_id=owner.id,
+        title="Publish Race Target",
+        vote_count=0,
+        is_published=False,
+        created_at=now,
+    )
+    project.github_url = "https://github.com/example/publish-race"
+    await db_session.flush()
+
+    service = ProjectService(db_session)
+    raced_published_at = now - timedelta(minutes=10)
+    race_applied = False
+    original_exec = db_session.exec
+
+    async def exec_with_race(statement, *args, **kwargs):
+        nonlocal race_applied
+        table_name = getattr(getattr(statement, "table", None), "name", None)
+        if (
+            not race_applied
+            and isinstance(statement, Update)
+            and table_name == "projects"
+        ):
+            race_applied = True
+            project.is_published = True
+            project.published_at = raced_published_at
+            await db_session.flush()
+        return await original_exec(statement, *args, **kwargs)
+
+    monkeypatch.setattr(db_session, "exec", exec_with_race)
+
+    published = await service.publish_project(
+        project_id=project.id, current_user_id=owner.id
+    )
+    assert race_applied is True
+    assert published is not None
+    assert published.is_published is True
+    assert published.published_at == raced_published_at
 
 
 @pytest.mark.asyncio
