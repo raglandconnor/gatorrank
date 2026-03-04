@@ -12,11 +12,13 @@ from app.schemas.project import (
     ProjectCreateRequest,
     ProjectDetailResponse,
     ProjectListResponse,
+    ProjectUpdateRequest,
 )
 from app.services.project import (
     CursorError,
     ProjectAccessForbiddenError,
     ProjectService,
+    ProjectValidationError,
 )
 
 router = APIRouter()
@@ -73,6 +75,51 @@ async def get_project_detail(
         project = await service.get_project_detail(project_id, current_user_id)
     except ProjectAccessForbiddenError as exc:
         raise HTTPException(status_code=403, detail="Project access forbidden") from exc
+    if project is None:
+        raise HTTPException(status_code=404, detail="Project not found")
+    return project
+
+
+@router.patch(
+    "/projects/{project_id}",
+    summary="Update project",
+    description=(
+        "Partially update a project. Editing is owner-only and allowed for both draft "
+        "and published projects. The final project state must include at least one "
+        "of `demo_url`, `github_url`, or `video_url`."
+    ),
+    response_model=ProjectDetailResponse,
+    responses={
+        401: {"description": "Authentication required"},
+        403: {"description": "Only the project owner can edit the project"},
+        404: {"description": "Project not found"},
+        422: {
+            "description": (
+                "Validation error (for example: empty payload, non-editable fields, "
+                "invalid URL format, or removing all project URLs)."
+            )
+        },
+    },
+)
+async def update_project(
+    project_id: UUID,
+    payload: ProjectUpdateRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> ProjectDetailResponse:
+    """Update editable fields for a project owned by the authenticated user."""
+    service = ProjectService(db)
+    try:
+        project = await service.update_project(
+            project_id=project_id,
+            current_user_id=current_user.id,
+            payload=payload,
+        )
+    except ProjectAccessForbiddenError as exc:
+        raise HTTPException(status_code=403, detail="Project edit forbidden") from exc
+    except ProjectValidationError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
     if project is None:
         raise HTTPException(status_code=404, detail="Project not found")
     return project

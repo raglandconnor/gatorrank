@@ -14,7 +14,11 @@ from app.schemas.project import (
     ProjectListResponse,
     ProjectMemberInfo,
 )
-from app.services.project import CursorError, ProjectAccessForbiddenError
+from app.services.project import (
+    CursorError,
+    ProjectAccessForbiddenError,
+    ProjectValidationError,
+)
 
 
 client = TestClient(app)
@@ -70,6 +74,16 @@ def _build_create_project_payload(**overrides):
         "title": " New Project ",
         "description": "  A project description  ",
         "github_url": "https://github.com/example/repo",
+    }
+    payload.update(overrides)
+    return payload
+
+
+def _build_update_project_payload(**overrides):
+    payload = {
+        "title": "  Updated Project Title  ",
+        "description": "  Updated project description  ",
+        "demo_url": "https://example.com/demo",
     }
     payload.update(overrides)
     return payload
@@ -494,6 +508,159 @@ def test_get_project_detail_forbidden_returns_403():
 
     assert response.status_code == 403
     assert response.json()["detail"] == "Project access forbidden"
+
+
+def test_update_project_returns_200_and_payload():
+    user_id = uuid4()
+    project_id = uuid4()
+    response_model = _build_project_response(project_id)
+
+    app.dependency_overrides[get_db] = _override_get_db
+    app.dependency_overrides[get_current_user] = _override_current_user(user_id)
+    try:
+        with patch(
+            "app.api.v1.projects.ProjectService.update_project",
+            new=AsyncMock(return_value=response_model),
+        ) as mock_update_project:
+            response = client.patch(
+                f"/api/v1/projects/{project_id}",
+                json=_build_update_project_payload(),
+            )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["id"] == str(project_id)
+
+    await_args = mock_update_project.await_args
+    assert await_args is not None
+    kwargs = await_args.kwargs
+    assert kwargs["project_id"] == project_id
+    assert kwargs["current_user_id"] == user_id
+    assert kwargs["payload"].title == "Updated Project Title"
+    assert kwargs["payload"].description == "Updated project description"
+    assert kwargs["payload"].demo_url == "https://example.com/demo"
+
+
+def test_update_project_requires_auth():
+    response = client.patch(
+        f"/api/v1/projects/{uuid4()}",
+        json=_build_update_project_payload(),
+    )
+    assert response.status_code == 401
+    assert response.json()["detail"] == "Not authenticated"
+
+
+def test_update_project_empty_payload_returns_422():
+    user_id = uuid4()
+
+    app.dependency_overrides[get_db] = _override_get_db
+    app.dependency_overrides[get_current_user] = _override_current_user(user_id)
+    try:
+        with patch(
+            "app.api.v1.projects.ProjectService.update_project",
+            new=AsyncMock(),
+        ) as mock_update_project:
+            response = client.patch(f"/api/v1/projects/{uuid4()}", json={})
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 422
+    assert mock_update_project.await_count == 0
+
+
+def test_update_project_rejects_non_editable_field_returns_422():
+    user_id = uuid4()
+
+    app.dependency_overrides[get_db] = _override_get_db
+    app.dependency_overrides[get_current_user] = _override_current_user(user_id)
+    try:
+        with patch(
+            "app.api.v1.projects.ProjectService.update_project",
+            new=AsyncMock(),
+        ) as mock_update_project:
+            response = client.patch(
+                f"/api/v1/projects/{uuid4()}",
+                json={"is_group_project": True, "title": "Updated"},
+            )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 422
+    assert mock_update_project.await_count == 0
+
+
+def test_update_project_not_found_returns_404():
+    user_id = uuid4()
+
+    app.dependency_overrides[get_db] = _override_get_db
+    app.dependency_overrides[get_current_user] = _override_current_user(user_id)
+    try:
+        with patch(
+            "app.api.v1.projects.ProjectService.update_project",
+            new=AsyncMock(return_value=None),
+        ):
+            response = client.patch(
+                f"/api/v1/projects/{uuid4()}",
+                json=_build_update_project_payload(),
+            )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Project not found"
+
+
+def test_update_project_forbidden_returns_403():
+    user_id = uuid4()
+
+    app.dependency_overrides[get_db] = _override_get_db
+    app.dependency_overrides[get_current_user] = _override_current_user(user_id)
+    try:
+        with patch(
+            "app.api.v1.projects.ProjectService.update_project",
+            new=AsyncMock(
+                side_effect=ProjectAccessForbiddenError("Project edit forbidden")
+            ),
+        ):
+            response = client.patch(
+                f"/api/v1/projects/{uuid4()}",
+                json=_build_update_project_payload(),
+            )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 403
+    assert response.json()["detail"] == "Project edit forbidden"
+
+
+def test_update_project_validation_error_returns_422():
+    user_id = uuid4()
+
+    app.dependency_overrides[get_db] = _override_get_db
+    app.dependency_overrides[get_current_user] = _override_current_user(user_id)
+    try:
+        with patch(
+            "app.api.v1.projects.ProjectService.update_project",
+            new=AsyncMock(
+                side_effect=ProjectValidationError(
+                    "Provide at least one of demo_url, github_url, or video_url."
+                )
+            ),
+        ):
+            response = client.patch(
+                f"/api/v1/projects/{uuid4()}",
+                json={"demo_url": None, "github_url": None, "video_url": None},
+            )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 422
+    assert (
+        response.json()["detail"]
+        == "Provide at least one of demo_url, github_url, or video_url."
+    )
 
 
 def test_list_projects_default_sort_top():
