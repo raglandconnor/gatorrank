@@ -83,6 +83,47 @@ async def test_get_current_user_upserts_user_in_real_db(
 
 
 @pytest.mark.asyncio
+async def test_get_current_user_normalizes_email_to_lowercase_on_upsert(
+    api_client, db_session, monkeypatch
+):
+    jwt_secret = "integration-test-jwt-secret-at-least-32b"
+    monkeypatch.setattr(settings, "DATABASE_JWT_SECRET", jwt_secret)
+
+    user_id = uuid4()
+    mixed_email = f"  Auth-Int-{uuid4().hex[:8]}@UFL.EDU  "
+    normalized_email = mixed_email.strip().lower()
+    token = jwt.encode(
+        {
+            "sub": str(user_id),
+            "email": mixed_email,
+            "aud": "authenticated",
+            "exp": datetime.now(UTC) + timedelta(minutes=5),
+        },
+        jwt_secret,
+        algorithm="HS256",
+    )
+
+    async def override_get_db():
+        yield db_session
+
+    app.dependency_overrides[get_db] = override_get_db
+    try:
+        response = await api_client.get(
+            "/test-auth-integration",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert response.status_code == 200
+        assert response.json() == {"id": str(user_id), "email": normalized_email}
+
+        after = await db_session.exec(sa.select(User).where(User.id == user_id))  # pyright: ignore[reportArgumentType]
+        created_user = after.scalars().one_or_none()
+        assert created_user is not None
+        assert created_user.email == normalized_email
+    finally:
+        app.dependency_overrides.clear()
+
+
+@pytest.mark.asyncio
 async def test_get_current_user_concurrent_first_requests_are_race_safe(
     async_engine: AsyncEngine, monkeypatch
 ):
