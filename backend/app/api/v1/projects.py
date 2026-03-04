@@ -125,6 +125,78 @@ async def update_project(
     return project
 
 
+@router.post(
+    "/projects/{project_id}/publish",
+    summary="Publish project",
+    description=(
+        "Publish a project owned by the authenticated user. This is idempotent: "
+        "publishing an already published project returns the current project state."
+    ),
+    response_model=ProjectDetailResponse,
+    responses={
+        401: {"description": "Authentication required"},
+        403: {"description": "Only the project owner can publish the project"},
+        404: {"description": "Project not found"},
+    },
+)
+async def publish_project(
+    project_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> ProjectDetailResponse:
+    """Publish a project and set `published_at` if it is currently a draft."""
+    service = ProjectService(db)
+    try:
+        project = await service.publish_project(
+            project_id=project_id,
+            current_user_id=current_user.id,
+        )
+    except ProjectAccessForbiddenError as exc:
+        raise HTTPException(
+            status_code=403, detail="Project publish forbidden"
+        ) from exc
+
+    if project is None:
+        raise HTTPException(status_code=404, detail="Project not found")
+    return project
+
+
+@router.post(
+    "/projects/{project_id}/unpublish",
+    summary="Unpublish project",
+    description=(
+        "Unpublish a project owned by the authenticated user. This is idempotent: "
+        "unpublishing an already draft project returns the current project state."
+    ),
+    response_model=ProjectDetailResponse,
+    responses={
+        401: {"description": "Authentication required"},
+        403: {"description": "Only the project owner can unpublish the project"},
+        404: {"description": "Project not found"},
+    },
+)
+async def unpublish_project(
+    project_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> ProjectDetailResponse:
+    """Unpublish a project and clear `published_at` if it is currently published."""
+    service = ProjectService(db)
+    try:
+        project = await service.unpublish_project(
+            project_id=project_id,
+            current_user_id=current_user.id,
+        )
+    except ProjectAccessForbiddenError as exc:
+        raise HTTPException(
+            status_code=403, detail="Project unpublish forbidden"
+        ) from exc
+
+    if project is None:
+        raise HTTPException(status_code=404, detail="Project not found")
+    return project
+
+
 @router.get(
     "/projects",
     summary="List projects",
