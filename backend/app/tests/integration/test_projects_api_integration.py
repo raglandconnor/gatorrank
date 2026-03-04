@@ -1620,3 +1620,227 @@ async def test_list_projects_cursor_sort_mismatch_returns_400(api_client, db_ses
 
     assert mismatch_response.status_code == 400
     assert mismatch_response.json()["detail"] == "Invalid cursor"
+
+
+@pytest.mark.asyncio
+async def test_get_project_members_published_visible_anonymous(api_client, db_session):
+    owner = await _seed_user(
+        db_session, "owner_members_pub@ufl.edu", "Owner Members Pub"
+    )
+    member = await _seed_user(
+        db_session, "member_members_pub@ufl.edu", "Member Members Pub"
+    )
+    project = await _seed_project(
+        db_session,
+        created_by_id=owner.id,
+        title="Members Published",
+        is_published=True,
+    )
+    await _seed_member(
+        db_session, project_id=project.id, user_id=member.id, role="contributor"
+    )
+
+    async def override_get_db():
+        yield db_session
+
+    app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_current_user_optional] = lambda: None
+    try:
+        response = await api_client.get(f"/api/v1/projects/{project.id}/members")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert [item["user_id"] for item in payload] == [str(member.id)]
+
+
+@pytest.mark.asyncio
+async def test_get_project_members_draft_rejects_non_member(api_client, db_session):
+    owner = await _seed_user(
+        db_session, "owner_members_draft@ufl.edu", "Owner Members Draft"
+    )
+    outsider = await _seed_user(
+        db_session, "outsider_members_draft@ufl.edu", "Outsider Members Draft"
+    )
+    project = await _seed_project(
+        db_session,
+        created_by_id=owner.id,
+        title="Members Draft",
+        is_published=False,
+    )
+
+    async def override_get_db():
+        yield db_session
+
+    app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_current_user_optional] = _override_authed_user(
+        outsider
+    )
+    try:
+        response = await api_client.get(f"/api/v1/projects/{project.id}/members")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 403
+    assert response.json()["detail"] == "Project members access forbidden"
+
+
+@pytest.mark.asyncio
+async def test_add_project_member_owner_only_case_insensitive_email_and_group_flag(
+    api_client, db_session
+):
+    owner = await _seed_user(db_session, "owner_add_member@ufl.edu", "Owner Add Member")
+    target = await _seed_user(
+        db_session, "target_add_member@ufl.edu", "Target Add Member"
+    )
+    project = await _seed_project(
+        db_session,
+        created_by_id=owner.id,
+        title="Add Member Project",
+        is_published=False,
+    )
+    await _seed_member(
+        db_session, project_id=project.id, user_id=owner.id, role="owner"
+    )
+    project.is_group_project = False
+    await db_session.flush()
+
+    async def override_get_db():
+        yield db_session
+
+    app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_current_user] = _override_authed_user(owner)
+    try:
+        response = await api_client.post(
+            f"/api/v1/projects/{project.id}/members",
+            json={"email": "  TARGET_ADD_MEMBER@UFL.EDU ", "role": "maintainer"},
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 201
+    payload = response.json()
+    assert payload["user_id"] == str(target.id)
+    assert payload["role"] == "maintainer"
+
+    project_result = await db_session.exec(
+        select(Project).where(Project.id == project.id)
+    )
+    refreshed = project_result.one()
+    assert refreshed.is_group_project is True
+
+
+@pytest.mark.asyncio
+async def test_add_project_member_rejects_duplicate_membership(api_client, db_session):
+    owner = await _seed_user(
+        db_session, "owner_add_dup_member@ufl.edu", "Owner Add Dup Member"
+    )
+    target = await _seed_user(
+        db_session, "target_add_dup_member@ufl.edu", "Target Add Dup Member"
+    )
+    project = await _seed_project(
+        db_session,
+        created_by_id=owner.id,
+        title="Add Duplicate Member Project",
+        is_published=False,
+    )
+    await _seed_member(
+        db_session, project_id=project.id, user_id=owner.id, role="owner"
+    )
+    await _seed_member(
+        db_session,
+        project_id=project.id,
+        user_id=target.id,
+        role="contributor",
+    )
+
+    async def override_get_db():
+        yield db_session
+
+    app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_current_user] = _override_authed_user(owner)
+    try:
+        response = await api_client.post(
+            f"/api/v1/projects/{project.id}/members",
+            json={"email": "target_add_dup_member@ufl.edu", "role": "contributor"},
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 409
+    assert response.json()["detail"] == "User is already a member of this project"
+
+
+@pytest.mark.asyncio
+async def test_remove_project_member_updates_group_flag(api_client, db_session):
+    owner = await _seed_user(
+        db_session, "owner_remove_member@ufl.edu", "Owner Remove Member"
+    )
+    target = await _seed_user(
+        db_session, "target_remove_member@ufl.edu", "Target Remove Member"
+    )
+    project = await _seed_project(
+        db_session,
+        created_by_id=owner.id,
+        title="Remove Member Project",
+        is_published=False,
+    )
+    await _seed_member(
+        db_session, project_id=project.id, user_id=owner.id, role="owner"
+    )
+    await _seed_member(
+        db_session,
+        project_id=project.id,
+        user_id=target.id,
+        role="contributor",
+    )
+    project.is_group_project = True
+    await db_session.flush()
+
+    async def override_get_db():
+        yield db_session
+
+    app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_current_user] = _override_authed_user(owner)
+    try:
+        response = await api_client.delete(
+            f"/api/v1/projects/{project.id}/members/{target.id}"
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 204
+
+    project_result = await db_session.exec(
+        select(Project).where(Project.id == project.id)
+    )
+    refreshed = project_result.one()
+    assert refreshed.is_group_project is False
+
+
+@pytest.mark.asyncio
+async def test_leave_project_last_owner_returns_409(api_client, db_session):
+    owner = await _seed_user(db_session, "owner_leave_last@ufl.edu", "Owner Leave Last")
+    project = await _seed_project(
+        db_session,
+        created_by_id=owner.id,
+        title="Last Owner Leave",
+        is_published=False,
+    )
+    await _seed_member(
+        db_session, project_id=project.id, user_id=owner.id, role="owner"
+    )
+
+    async def override_get_db():
+        yield db_session
+
+    app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_current_user] = _override_authed_user(owner)
+    try:
+        response = await api_client.post(f"/api/v1/projects/{project.id}/leave")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 409
+    assert response.json()["detail"] == "Last owner cannot leave the project"
