@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Literal
 from urllib.parse import urlparse
 from uuid import UUID
 
@@ -24,6 +25,10 @@ def _validate_http_url_value(value: str | None) -> str | None:
     return value
 
 
+ProjectMemberRole = Literal["owner", "maintainer", "contributor"]
+ProjectMemberWritableRole = Literal["maintainer", "contributor"]
+
+
 class ProjectMemberInfo(BaseModel):
     user_id: UUID
     role: str
@@ -32,6 +37,8 @@ class ProjectMemberInfo(BaseModel):
 
 
 class ProjectCreateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     title: str = Field(
         min_length=1,
         max_length=255,
@@ -67,10 +74,6 @@ class ProjectCreateRequest(BaseModel):
             "Optional video URL (`http` or `https`). At least one of demo_url, "
             "github_url, or video_url must be provided."
         ),
-    )
-    is_group_project: bool = Field(
-        default=False,
-        description="Whether this is a group project. Defaults to false.",
     )
 
     @field_validator("title", "description", mode="before")
@@ -154,6 +157,35 @@ class ProjectUpdateRequest(BaseModel):
         if "description" in self.model_fields_set and self.description is None:
             raise ValueError("description cannot be null")
         return self
+
+
+class ProjectMemberCreateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    email: str = Field(
+        min_length=3,
+        max_length=320,
+        description="Email address of the user to add as a project member.",
+    )
+    role: ProjectMemberWritableRole = Field(
+        default="contributor",
+        description="Role for the new member (`maintainer` or `contributor`).",
+    )
+
+    @field_validator("email", mode="before")
+    @classmethod
+    def _normalize_email(cls, value: object) -> object:
+        if isinstance(value, str):
+            return value.strip().lower()
+        return value
+
+
+class ProjectMemberUpdateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    role: ProjectMemberWritableRole = Field(
+        description="Updated role (`maintainer` or `contributor`)."
+    )
 
 
 class ProjectBaseResponse(BaseModel):

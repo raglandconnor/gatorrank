@@ -17,6 +17,8 @@ from app.schemas.project import (
 from app.services.project import (
     CursorError,
     ProjectAccessForbiddenError,
+    ProjectConflictError,
+    ProjectResourceNotFoundError,
     ProjectValidationError,
 )
 
@@ -115,6 +117,15 @@ def _build_draft_project_response(
                 profile_picture_url=None,
             )
         ],
+    )
+
+
+def _build_member_info(user_id: UUID, role: str = "contributor") -> ProjectMemberInfo:
+    return ProjectMemberInfo(
+        user_id=user_id,
+        role=role,
+        full_name="Member Name",
+        profile_picture_url="https://example.com/avatar.png",
     )
 
 
@@ -282,6 +293,27 @@ def test_create_project_validation_blank_description_returns_422():
             response = client.post(
                 "/api/v1/projects",
                 json=_build_create_project_payload(description="   "),
+            )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 422
+    assert mock_create_project.await_count == 0
+
+
+def test_create_project_rejects_is_group_project_field_returns_422():
+    user_id = uuid4()
+
+    app.dependency_overrides[get_db] = _override_get_db
+    app.dependency_overrides[get_current_user] = _override_current_user(user_id)
+    try:
+        with patch(
+            "app.api.v1.projects.ProjectService.create_project",
+            new=AsyncMock(),
+        ) as mock_create_project:
+            response = client.post(
+                "/api/v1/projects",
+                json=_build_create_project_payload(is_group_project=True),
             )
     finally:
         app.dependency_overrides.clear()
@@ -898,3 +930,174 @@ def test_list_projects_invalid_cursor_returns_400():
 
     assert response.status_code == 400
     assert response.json()["detail"] == "Invalid cursor"
+
+
+def test_list_project_members_returns_200():
+    project_id = uuid4()
+    member = _build_member_info(uuid4(), role="maintainer")
+
+    app.dependency_overrides[get_db] = _override_get_db
+    app.dependency_overrides[get_current_user_optional] = lambda: None
+    try:
+        with patch(
+            "app.api.v1.projects.ProjectService.list_project_members",
+            new=AsyncMock(return_value=[member]),
+        ):
+            response = client.get(f"/api/v1/projects/{project_id}/members")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert len(payload) == 1
+    assert payload[0]["user_id"] == str(member.user_id)
+    assert payload[0]["role"] == "maintainer"
+
+
+def test_add_project_member_returns_201():
+    project_id = uuid4()
+    owner_id = uuid4()
+    member = _build_member_info(uuid4(), role="contributor")
+
+    app.dependency_overrides[get_db] = _override_get_db
+    app.dependency_overrides[get_current_user] = _override_current_user(owner_id)
+    try:
+        with patch(
+            "app.api.v1.projects.ProjectService.add_project_member",
+            new=AsyncMock(return_value=member),
+        ) as mock_add_member:
+            response = client.post(
+                f"/api/v1/projects/{project_id}/members",
+                json={"email": "  NEWMEMBER@UFL.EDU ", "role": "contributor"},
+            )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 201
+    assert response.json()["user_id"] == str(member.user_id)
+    await_args = mock_add_member.await_args
+    assert await_args is not None
+    kwargs = await_args.kwargs
+    assert kwargs["project_id"] == project_id
+    assert kwargs["current_user_id"] == owner_id
+    assert kwargs["payload"].email == "newmember@ufl.edu"
+    assert kwargs["payload"].role == "contributor"
+
+
+def test_add_project_member_conflict_returns_409():
+    project_id = uuid4()
+    owner_id = uuid4()
+
+    app.dependency_overrides[get_db] = _override_get_db
+    app.dependency_overrides[get_current_user] = _override_current_user(owner_id)
+    try:
+        with patch(
+            "app.api.v1.projects.ProjectService.add_project_member",
+            new=AsyncMock(
+                side_effect=ProjectConflictError(
+                    "User is already a member of this project"
+                )
+            ),
+        ):
+            response = client.post(
+                f"/api/v1/projects/{project_id}/members",
+                json={"email": "member@ufl.edu", "role": "contributor"},
+            )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 409
+    assert response.json()["detail"] == "User is already a member of this project"
+
+
+def test_update_project_member_returns_200():
+    project_id = uuid4()
+    target_user_id = uuid4()
+    owner_id = uuid4()
+    member = _build_member_info(target_user_id, role="maintainer")
+
+    app.dependency_overrides[get_db] = _override_get_db
+    app.dependency_overrides[get_current_user] = _override_current_user(owner_id)
+    try:
+        with patch(
+            "app.api.v1.projects.ProjectService.update_project_member",
+            new=AsyncMock(return_value=member),
+        ) as mock_update_member:
+            response = client.patch(
+                f"/api/v1/projects/{project_id}/members/{target_user_id}",
+                json={"role": "maintainer"},
+            )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    assert response.json()["role"] == "maintainer"
+    await_args = mock_update_member.await_args
+    assert await_args is not None
+    kwargs = await_args.kwargs
+    assert kwargs["project_id"] == project_id
+    assert kwargs["target_user_id"] == target_user_id
+    assert kwargs["current_user_id"] == owner_id
+    assert kwargs["payload"].role == "maintainer"
+
+
+def test_remove_project_member_returns_204():
+    project_id = uuid4()
+    target_user_id = uuid4()
+    owner_id = uuid4()
+
+    app.dependency_overrides[get_db] = _override_get_db
+    app.dependency_overrides[get_current_user] = _override_current_user(owner_id)
+    try:
+        with patch(
+            "app.api.v1.projects.ProjectService.remove_project_member",
+            new=AsyncMock(return_value=True),
+        ):
+            response = client.delete(
+                f"/api/v1/projects/{project_id}/members/{target_user_id}"
+            )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 204
+    assert response.content == b""
+
+
+def test_leave_project_last_owner_returns_409():
+    project_id = uuid4()
+    user_id = uuid4()
+
+    app.dependency_overrides[get_db] = _override_get_db
+    app.dependency_overrides[get_current_user] = _override_current_user(user_id)
+    try:
+        with patch(
+            "app.api.v1.projects.ProjectService.leave_project",
+            new=AsyncMock(side_effect=ProjectConflictError("Last owner cannot leave")),
+        ):
+            response = client.post(f"/api/v1/projects/{project_id}/leave")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 409
+    assert response.json()["detail"] == "Last owner cannot leave"
+
+
+def test_leave_project_not_member_returns_404():
+    project_id = uuid4()
+    user_id = uuid4()
+
+    app.dependency_overrides[get_db] = _override_get_db
+    app.dependency_overrides[get_current_user] = _override_current_user(user_id)
+    try:
+        with patch(
+            "app.api.v1.projects.ProjectService.leave_project",
+            new=AsyncMock(
+                side_effect=ProjectResourceNotFoundError("Project membership not found")
+            ),
+        ):
+            response = client.post(f"/api/v1/projects/{project_id}/leave")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Project membership not found"

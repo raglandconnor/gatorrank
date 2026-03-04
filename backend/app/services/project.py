@@ -2,6 +2,8 @@ from datetime import UTC, date, datetime, time, timedelta
 from typing import Literal
 from uuid import UUID
 
+import sqlalchemy as sa
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy import update
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
@@ -13,7 +15,9 @@ from app.schemas.project import (
     ProjectDetailResponse,
     ProjectListItemResponse,
     ProjectListResponse,
+    ProjectMemberCreateRequest,
     ProjectMemberInfo,
+    ProjectMemberUpdateRequest,
     ProjectUpdateRequest,
 )
 from app.utils.pagination import (
@@ -33,12 +37,31 @@ class ProjectValidationError(ValueError):
     """Raised when a project write operation fails business validation."""
 
 
+class ProjectConflictError(ValueError):
+    """Raised when a request conflicts with project invariants."""
+
+
+class ProjectResourceNotFoundError(LookupError):
+    """Raised when a related project resource cannot be found."""
+
+
 class ProjectService:
     def __init__(self, db: AsyncSession):
         self.db = db
 
     async def get_project_by_id(self, project_id: UUID) -> Project | None:
         statement = select(Project).where(Project.id == project_id)
+        result = await self.db.exec(statement)
+        return result.first()
+
+    async def get_user_by_id(self, user_id: UUID) -> User | None:
+        statement = select(User).where(User.id == user_id)
+        result = await self.db.exec(statement)
+        return result.first()
+
+    async def get_user_by_email(self, email: str) -> User | None:
+        normalized_email = email.strip().lower()
+        statement = select(User).where(sa.func.lower(User.email) == normalized_email)
         result = await self.db.exec(statement)
         return result.first()
 
@@ -55,7 +78,7 @@ class ProjectService:
             demo_url=payload.demo_url,
             github_url=payload.github_url,
             video_url=payload.video_url,
-            is_group_project=payload.is_group_project,
+            is_group_project=False,
             vote_count=0,
             is_published=False,
             published_at=None,
@@ -244,6 +267,16 @@ class ProjectService:
             return None
         return member.role
 
+    async def get_project_member(
+        self, project_id: UUID, user_id: UUID
+    ) -> ProjectMember | None:
+        statement = select(ProjectMember).where(
+            ProjectMember.project_id == project_id,
+            ProjectMember.user_id == user_id,
+        )
+        result = await self.db.exec(statement)
+        return result.first()
+
     async def is_project_member(self, project_id: UUID, user_id: UUID) -> bool:
         return (await self.get_member_role(project_id, user_id)) is not None
 
@@ -310,15 +343,161 @@ class ProjectService:
 
         members: list[ProjectMemberInfo] = []
         for member, user in result.all():
-            members.append(
-                ProjectMemberInfo(
-                    user_id=user.id,
-                    role=member.role,
-                    full_name=user.full_name,
-                    profile_picture_url=user.profile_picture_url,
-                )
-            )
+            members.append(self._member_to_info(member, user))
         return members
+
+    async def list_project_members(
+        self, *, project_id: UUID, current_user_id: UUID | None
+    ) -> list[ProjectMemberInfo] | None:
+        project = await self.get_project_by_id(project_id)
+        if project is None:
+            return None
+
+        member_role: str | None = None
+        if current_user_id is not None:
+            member_role = await self.get_member_role(project.id, current_user_id)
+
+        if not self.can_view_project(project, current_user_id, member_role):
+            if current_user_id is not None:
+                raise ProjectAccessForbiddenError("Project members access forbidden")
+            return None
+
+        return await self.get_project_members(project.id)
+
+    async def add_project_member(
+        self,
+        *,
+        project_id: UUID,
+        current_user_id: UUID,
+        payload: ProjectMemberCreateRequest,
+    ) -> ProjectMemberInfo | None:
+        project = await self.get_project_by_id(project_id)
+        if project is None:
+            return None
+        await self._assert_owner_access(
+            project=project, current_user_id=current_user_id
+        )
+
+        user = await self.get_user_by_email(payload.email)
+        if user is None:
+            raise ProjectResourceNotFoundError("User not found")
+
+        existing_member = await self.get_project_member(project.id, user.id)
+        if existing_member is not None:
+            raise ProjectConflictError("User is already a member of this project")
+
+        member = ProjectMember(  # pyright: ignore[reportCallIssue]
+            project_id=project.id,
+            user_id=user.id,
+            role=payload.role,
+        )
+
+        try:
+            self.db.add(member)
+            await self.db.flush()
+            await self._sync_group_project_flag(project)
+            await self.db.commit()
+        except IntegrityError as exc:
+            await self.db.rollback()
+            raise ProjectConflictError(
+                "User is already a member of this project"
+            ) from exc
+        except Exception:
+            await self.db.rollback()
+            raise
+
+        return self._member_to_info(member, user)
+
+    async def update_project_member(
+        self,
+        *,
+        project_id: UUID,
+        target_user_id: UUID,
+        current_user_id: UUID,
+        payload: ProjectMemberUpdateRequest,
+    ) -> ProjectMemberInfo | None:
+        project = await self.get_project_by_id(project_id)
+        if project is None:
+            return None
+        await self._assert_owner_access(
+            project=project, current_user_id=current_user_id
+        )
+
+        member = await self.get_project_member(project.id, target_user_id)
+        if member is None:
+            raise ProjectResourceNotFoundError("Project membership not found")
+        if member.role == "owner":
+            raise ProjectConflictError("Owner role cannot be modified")
+
+        user = await self.get_user_by_id(member.user_id)
+        if user is None:
+            raise RuntimeError("Membership user could not be loaded")
+
+        member.role = payload.role
+        try:
+            self.db.add(member)
+            await self.db.commit()
+        except Exception:
+            await self.db.rollback()
+            raise
+
+        return self._member_to_info(member, user)
+
+    async def remove_project_member(
+        self,
+        *,
+        project_id: UUID,
+        target_user_id: UUID,
+        current_user_id: UUID,
+    ) -> bool | None:
+        project = await self.get_project_by_id(project_id)
+        if project is None:
+            return None
+        await self._assert_owner_access(
+            project=project, current_user_id=current_user_id
+        )
+
+        member = await self.get_project_member(project.id, target_user_id)
+        if member is None:
+            raise ProjectResourceNotFoundError("Project membership not found")
+        if member.role == "owner":
+            raise ProjectConflictError("Owner membership cannot be removed")
+
+        try:
+            await self.db.delete(member)
+            await self.db.flush()
+            await self._sync_group_project_flag(project)
+            await self.db.commit()
+        except Exception:
+            await self.db.rollback()
+            raise
+        return True
+
+    async def leave_project(
+        self, *, project_id: UUID, current_user_id: UUID
+    ) -> bool | None:
+        project = await self.get_project_by_id(project_id)
+        if project is None:
+            return None
+
+        member = await self.get_project_member(project.id, current_user_id)
+        if member is None:
+            raise ProjectResourceNotFoundError("Project membership not found")
+
+        if member.role == "owner":
+            owner_count = await self._count_members_by_role(project.id, role="owner")
+            if owner_count <= 1:
+                raise ProjectConflictError("Last owner cannot leave the project")
+
+        try:
+            await self.db.delete(member)
+            await self.db.flush()
+            await self._sync_group_project_flag(project)
+            await self.db.commit()
+        except Exception:
+            await self.db.rollback()
+            raise
+        return True
 
     async def list_projects(
         self,
@@ -422,6 +601,47 @@ class ProjectService:
             next_cursor = self._encode_cursor(projects[-1], sort, top_range=top_range)
 
         return ProjectListResponse(items=items, next_cursor=next_cursor)
+
+    async def _assert_owner_access(
+        self, *, project: Project, current_user_id: UUID | None
+    ) -> None:
+        member_role: str | None = None
+        if current_user_id is not None and project.created_by_id != current_user_id:
+            member_role = await self.get_member_role(project.id, current_user_id)
+        if not self.can_edit_project(project, current_user_id, member_role):
+            raise ProjectAccessForbiddenError("Project member management forbidden")
+
+    async def _count_members_by_role(self, project_id: UUID, *, role: str) -> int:
+        statement = (
+            select(sa.func.count())
+            .select_from(ProjectMember)
+            .where(
+                ProjectMember.project_id == project_id,
+                ProjectMember.role == role,
+            )
+        )
+        result = await self.db.exec(statement)
+        return int(result.one())
+
+    async def _sync_group_project_flag(self, project: Project) -> None:
+        statement = (
+            select(sa.func.count())
+            .select_from(ProjectMember)
+            .where(ProjectMember.project_id == project.id)
+        )
+        result = await self.db.exec(statement)
+        member_count = int(result.one())
+        project.is_group_project = member_count > 1
+        self.db.add(project)
+
+    @staticmethod
+    def _member_to_info(member: ProjectMember, user: User) -> ProjectMemberInfo:
+        return ProjectMemberInfo(
+            user_id=user.id,
+            role=member.role,
+            full_name=user.full_name,
+            profile_picture_url=user.profile_picture_url,
+        )
 
     @staticmethod
     def _base_published_projects_query(created_by_id: UUID | None = None):
