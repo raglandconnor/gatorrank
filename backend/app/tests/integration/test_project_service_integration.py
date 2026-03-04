@@ -7,8 +7,12 @@ from sqlmodel import select
 
 from app.models.project import Project, ProjectMember
 from app.models.user import User
-from app.schemas.project import ProjectCreateRequest
-from app.services.project import ProjectAccessForbiddenError, ProjectService
+from app.schemas.project import ProjectCreateRequest, ProjectUpdateRequest
+from app.services.project import (
+    ProjectAccessForbiddenError,
+    ProjectService,
+    ProjectValidationError,
+)
 
 
 async def _seed_user(db_session, email: str, name: str) -> User:
@@ -407,5 +411,169 @@ async def test_create_project_rolls_back_when_commit_fails(db_session, monkeypat
 
     with pytest.raises(RuntimeError, match="db commit failed"):
         await service.create_project(created_by_id=creator.id, payload=payload)
+
+    assert rollback_spy.await_count == 1
+
+
+@pytest.mark.asyncio
+async def test_update_project_owner_can_edit_published_project(db_session):
+    now = datetime.now(timezone.utc)
+    owner = await _seed_user(db_session, "owner-update@ufl.edu", "Owner Update")
+    project = await _seed_project(
+        db_session,
+        created_by_id=owner.id,
+        title="Update Target",
+        vote_count=5,
+        is_published=True,
+        created_at=now,
+    )
+    project.demo_url = "https://example.com/original-demo"
+    project.github_url = None
+    project.video_url = None
+    await db_session.flush()
+
+    service = ProjectService(db_session)
+    payload = ProjectUpdateRequest(
+        title="  Updated Title  ",
+        github_url=" https://github.com/example/updated ",
+        demo_url="",
+    )
+
+    updated = await service.update_project(
+        project_id=project.id,
+        current_user_id=owner.id,
+        payload=payload,
+    )
+
+    assert updated is not None
+    assert updated.title == "Updated Title"
+    assert updated.github_url == "https://github.com/example/updated"
+    assert updated.demo_url is None
+    assert updated.is_published is True
+
+    project_result = await db_session.exec(
+        select(Project).where(Project.id == project.id)
+    )
+    refreshed = project_result.one()
+    assert refreshed.title == "Updated Title"
+    assert refreshed.github_url == "https://github.com/example/updated"
+    assert refreshed.demo_url is None
+    assert refreshed.is_published is True
+
+
+@pytest.mark.asyncio
+async def test_update_project_rejects_non_owner(db_session):
+    now = datetime.now(timezone.utc)
+    owner = await _seed_user(db_session, "owner-update-2@ufl.edu", "Owner Update 2")
+    maintainer = await _seed_user(
+        db_session, "maintainer-update@ufl.edu", "Maintainer Update"
+    )
+    project = await _seed_project(
+        db_session,
+        created_by_id=owner.id,
+        title="Owner Only Edit",
+        vote_count=0,
+        is_published=False,
+        created_at=now,
+    )
+    await _seed_member(
+        db_session,
+        project_id=project.id,
+        user_id=maintainer.id,
+        role="maintainer",
+        added_at=now,
+    )
+
+    service = ProjectService(db_session)
+    payload = ProjectUpdateRequest(title="Blocked Update")
+
+    with pytest.raises(ProjectAccessForbiddenError):
+        await service.update_project(
+            project_id=project.id,
+            current_user_id=maintainer.id,
+            payload=payload,
+        )
+
+
+@pytest.mark.asyncio
+async def test_update_project_requires_at_least_one_resulting_url(db_session):
+    now = datetime.now(timezone.utc)
+    owner = await _seed_user(db_session, "owner-update-3@ufl.edu", "Owner Update 3")
+    project = await _seed_project(
+        db_session,
+        created_by_id=owner.id,
+        title="URL Rule",
+        vote_count=0,
+        is_published=False,
+        created_at=now,
+    )
+    project.demo_url = "https://example.com/demo"
+    project.github_url = None
+    project.video_url = None
+    await db_session.flush()
+
+    service = ProjectService(db_session)
+    payload = ProjectUpdateRequest(demo_url=None)
+
+    with pytest.raises(
+        ProjectValidationError,
+        match="Provide at least one of demo_url, github_url, or video_url.",
+    ):
+        await service.update_project(
+            project_id=project.id,
+            current_user_id=owner.id,
+            payload=payload,
+        )
+
+
+@pytest.mark.asyncio
+async def test_update_project_returns_none_when_project_missing(db_session):
+    service = ProjectService(db_session)
+    owner = await _seed_user(db_session, "owner-update-4@ufl.edu", "Owner Update 4")
+    payload = ProjectUpdateRequest(title="No Project")
+
+    updated = await service.update_project(
+        project_id=UUID("00000000-0000-0000-0000-000000000099"),
+        current_user_id=owner.id,
+        payload=payload,
+    )
+
+    assert updated is None
+
+
+@pytest.mark.asyncio
+async def test_update_project_rolls_back_when_commit_fails(db_session, monkeypatch):
+    now = datetime.now(timezone.utc)
+    owner = await _seed_user(
+        db_session, "owner-update-rollback@ufl.edu", "Owner Update Rollback"
+    )
+    project = await _seed_project(
+        db_session,
+        created_by_id=owner.id,
+        title="Rollback Update Target",
+        vote_count=0,
+        is_published=False,
+        created_at=now,
+    )
+    project.demo_url = "https://example.com/demo"
+    await db_session.flush()
+
+    service = ProjectService(db_session)
+    payload = ProjectUpdateRequest(title="Updated Then Rollback")
+
+    rollback_spy = AsyncMock(return_value=None)
+
+    async def failing_commit():
+        raise RuntimeError("db commit failed")
+
+    monkeypatch.setattr(db_session, "commit", failing_commit)
+    monkeypatch.setattr(db_session, "rollback", rollback_spy)
+
+    with pytest.raises(RuntimeError, match="db commit failed"):
+        await service.update_project(
+            project_id=project.id,
+            current_user_id=owner.id,
+            payload=payload,
+        )
 
     assert rollback_spy.await_count == 1

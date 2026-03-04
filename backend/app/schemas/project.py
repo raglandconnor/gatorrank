@@ -89,6 +89,76 @@ class ProjectCreateRequest(BaseModel):
         raise ValueError("Provide at least one of demo_url, github_url, or video_url.")
 
 
+class ProjectUpdateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    title: str | None = Field(
+        default=None,
+        min_length=1,
+        max_length=255,
+        description="Updated project title. Leading/trailing whitespace is trimmed.",
+    )
+    description: str | None = Field(
+        default=None,
+        min_length=1,
+        max_length=5000,
+        description="Updated project description. Leading/trailing whitespace is trimmed.",
+    )
+    demo_url: str | None = Field(
+        default=None,
+        max_length=2048,
+        description="Updated demo URL (`http` or `https`), or `null` to clear it.",
+    )
+    github_url: str | None = Field(
+        default=None,
+        max_length=2048,
+        description="Updated repository URL (`http` or `https`), or `null` to clear it.",
+    )
+    video_url: str | None = Field(
+        default=None,
+        max_length=2048,
+        description="Updated video URL (`http` or `https`), or `null` to clear it.",
+    )
+
+    @field_validator("title", "description", mode="before")
+    @classmethod
+    def _trim_optional_text(cls, value: object) -> object:
+        if isinstance(value, str):
+            return value.strip()
+        return value
+
+    @field_validator("demo_url", "github_url", "video_url", mode="before")
+    @classmethod
+    def _normalize_optional_url(cls, value: object) -> object:
+        if value is None:
+            return None
+        if isinstance(value, str):
+            normalized = value.strip()
+            return normalized or None
+        return value
+
+    @field_validator("demo_url", "github_url", "video_url")
+    @classmethod
+    def _validate_http_url(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+
+        parsed = urlparse(value)
+        if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+            raise ValueError("Must be a valid http(s) URL")
+        return value
+
+    @model_validator(mode="after")
+    def _validate_update_payload(self) -> "ProjectUpdateRequest":
+        if not self.model_fields_set:
+            raise ValueError("At least one editable field must be provided")
+        if "title" in self.model_fields_set and self.title is None:
+            raise ValueError("title cannot be null")
+        if "description" in self.model_fields_set and self.description is None:
+            raise ValueError("description cannot be null")
+        return self
+
+
 class ProjectBaseResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
