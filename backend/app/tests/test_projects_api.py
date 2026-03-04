@@ -663,6 +663,152 @@ def test_update_project_validation_error_returns_422():
     )
 
 
+def test_publish_project_returns_200_and_payload():
+    user_id = uuid4()
+    project_id = uuid4()
+    response_model = _build_project_response(project_id)
+
+    app.dependency_overrides[get_db] = _override_get_db
+    app.dependency_overrides[get_current_user] = _override_current_user(user_id)
+    try:
+        with patch(
+            "app.api.v1.projects.ProjectService.publish_project",
+            new=AsyncMock(return_value=response_model),
+        ) as mock_publish_project:
+            response = client.post(f"/api/v1/projects/{project_id}/publish")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["id"] == str(project_id)
+
+    await_args = mock_publish_project.await_args
+    assert await_args is not None
+    kwargs = await_args.kwargs
+    assert kwargs["project_id"] == project_id
+    assert kwargs["current_user_id"] == user_id
+
+
+def test_publish_project_requires_auth():
+    response = client.post(f"/api/v1/projects/{uuid4()}/publish")
+    assert response.status_code == 401
+    assert response.json()["detail"] == "Not authenticated"
+
+
+def test_publish_project_not_found_returns_404():
+    user_id = uuid4()
+
+    app.dependency_overrides[get_db] = _override_get_db
+    app.dependency_overrides[get_current_user] = _override_current_user(user_id)
+    try:
+        with patch(
+            "app.api.v1.projects.ProjectService.publish_project",
+            new=AsyncMock(return_value=None),
+        ):
+            response = client.post(f"/api/v1/projects/{uuid4()}/publish")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Project not found"
+
+
+def test_publish_project_forbidden_returns_403():
+    user_id = uuid4()
+
+    app.dependency_overrides[get_db] = _override_get_db
+    app.dependency_overrides[get_current_user] = _override_current_user(user_id)
+    try:
+        with patch(
+            "app.api.v1.projects.ProjectService.publish_project",
+            new=AsyncMock(
+                side_effect=ProjectAccessForbiddenError("Project publish forbidden")
+            ),
+        ):
+            response = client.post(f"/api/v1/projects/{uuid4()}/publish")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 403
+    assert response.json()["detail"] == "Project publish forbidden"
+
+
+def test_unpublish_project_returns_200_and_payload():
+    user_id = uuid4()
+    project_id = uuid4()
+    response_model = _build_project_response(project_id)
+    response_model.is_published = False
+    response_model.published_at = None
+
+    app.dependency_overrides[get_db] = _override_get_db
+    app.dependency_overrides[get_current_user] = _override_current_user(user_id)
+    try:
+        with patch(
+            "app.api.v1.projects.ProjectService.unpublish_project",
+            new=AsyncMock(return_value=response_model),
+        ) as mock_unpublish_project:
+            response = client.post(f"/api/v1/projects/{project_id}/unpublish")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["id"] == str(project_id)
+    assert payload["is_published"] is False
+    assert payload["published_at"] is None
+
+    await_args = mock_unpublish_project.await_args
+    assert await_args is not None
+    kwargs = await_args.kwargs
+    assert kwargs["project_id"] == project_id
+    assert kwargs["current_user_id"] == user_id
+
+
+def test_unpublish_project_requires_auth():
+    response = client.post(f"/api/v1/projects/{uuid4()}/unpublish")
+    assert response.status_code == 401
+    assert response.json()["detail"] == "Not authenticated"
+
+
+def test_unpublish_project_not_found_returns_404():
+    user_id = uuid4()
+
+    app.dependency_overrides[get_db] = _override_get_db
+    app.dependency_overrides[get_current_user] = _override_current_user(user_id)
+    try:
+        with patch(
+            "app.api.v1.projects.ProjectService.unpublish_project",
+            new=AsyncMock(return_value=None),
+        ):
+            response = client.post(f"/api/v1/projects/{uuid4()}/unpublish")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Project not found"
+
+
+def test_unpublish_project_forbidden_returns_403():
+    user_id = uuid4()
+
+    app.dependency_overrides[get_db] = _override_get_db
+    app.dependency_overrides[get_current_user] = _override_current_user(user_id)
+    try:
+        with patch(
+            "app.api.v1.projects.ProjectService.unpublish_project",
+            new=AsyncMock(
+                side_effect=ProjectAccessForbiddenError("Project unpublish forbidden")
+            ),
+        ):
+            response = client.post(f"/api/v1/projects/{uuid4()}/unpublish")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 403
+    assert response.json()["detail"] == "Project unpublish forbidden"
+
+
 def test_list_projects_default_sort_top():
     response_model = _build_project_list_response()
 

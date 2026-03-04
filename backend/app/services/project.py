@@ -142,6 +142,84 @@ class ProjectService:
             raise RuntimeError("Updated project could not be loaded")
         return updated_project
 
+    async def publish_project(
+        self,
+        *,
+        project_id: UUID,
+        current_user_id: UUID,
+    ) -> ProjectDetailResponse | None:
+        project = await self.get_project_by_id(project_id)
+        if project is None:
+            return None
+
+        member_role: str | None = None
+        if project.created_by_id != current_user_id:
+            member_role = await self.get_member_role(project_id, current_user_id)
+        if not self.can_edit_project(project, current_user_id, member_role):
+            raise ProjectAccessForbiddenError("Project publish forbidden")
+
+        if project.is_published:
+            published_project = await self.get_project_detail(
+                project.id, current_user_id
+            )
+            if published_project is None:
+                raise RuntimeError("Published project could not be loaded")
+            return published_project
+
+        project.is_published = True
+        project.published_at = datetime.now(UTC)
+
+        try:
+            self.db.add(project)
+            await self.db.commit()
+        except Exception:
+            await self.db.rollback()
+            raise
+
+        published_project = await self.get_project_detail(project.id, current_user_id)
+        if published_project is None:
+            raise RuntimeError("Published project could not be loaded")
+        return published_project
+
+    async def unpublish_project(
+        self,
+        *,
+        project_id: UUID,
+        current_user_id: UUID,
+    ) -> ProjectDetailResponse | None:
+        project = await self.get_project_by_id(project_id)
+        if project is None:
+            return None
+
+        member_role: str | None = None
+        if project.created_by_id != current_user_id:
+            member_role = await self.get_member_role(project_id, current_user_id)
+        if not self.can_edit_project(project, current_user_id, member_role):
+            raise ProjectAccessForbiddenError("Project unpublish forbidden")
+
+        if not project.is_published:
+            unpublished_project = await self.get_project_detail(
+                project.id, current_user_id
+            )
+            if unpublished_project is None:
+                raise RuntimeError("Unpublished project could not be loaded")
+            return unpublished_project
+
+        project.is_published = False
+        project.published_at = None
+
+        try:
+            self.db.add(project)
+            await self.db.commit()
+        except Exception:
+            await self.db.rollback()
+            raise
+
+        unpublished_project = await self.get_project_detail(project.id, current_user_id)
+        if unpublished_project is None:
+            raise RuntimeError("Unpublished project could not be loaded")
+        return unpublished_project
+
     async def get_member_role(self, project_id: UUID, user_id: UUID) -> str | None:
         statement = select(ProjectMember).where(
             ProjectMember.project_id == project_id,
