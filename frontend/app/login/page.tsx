@@ -1,9 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { motion } from 'framer-motion';
-import Image from 'next/image';
-import NextLink from 'next/link';
+import { GatorRankLogo } from '@/components/GatorRankLogo';
 import {
   Box,
   Button,
@@ -18,26 +16,7 @@ import {
   Text,
 } from '@chakra-ui/react';
 import { HiEye, HiEyeSlash } from 'react-icons/hi2';
-
-function GatorRankLogo() {
-  return (
-    <Box
-      position="relative"
-      width={{ base: '100px', sm: '120px', md: '140px' }}
-      height={{ base: '100px', sm: '120px', md: '140px' }}
-      flexShrink={0}
-    >
-      <Image
-        src="/logo.svg"
-        alt="GatorRank"
-        fill
-        sizes="(max-width: 640px) 100px, (max-width: 768px) 120px, 140px"
-        style={{ objectFit: 'contain' }}
-        priority
-      />
-    </Box>
-  );
-}
+import NextLink from 'next/link';
 
 export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
@@ -60,15 +39,7 @@ export default function LoginPage() {
         textAlign="center"
       >
         <Stack gap={0} align="center">
-          <Link as={NextLink} href="/" display="block">
-            <motion.div
-              whileHover={{ scale: 1.08 }}
-              transition={{ duration: 0.2 }}
-              style={{ display: 'inline-block' }}
-            >
-              <GatorRankLogo />
-            </motion.div>
-          </Link>
+          <GatorRankLogo />
           <Stack gap={1}>
             <Heading
               size={{ base: 'xl', sm: '2xl' }}
