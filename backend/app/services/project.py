@@ -13,6 +13,7 @@ from app.schemas.project import (
     ProjectListItemResponse,
     ProjectListResponse,
     ProjectMemberInfo,
+    ProjectUpdateRequest,
 )
 from app.utils.pagination import (
     CursorError,
@@ -25,6 +26,10 @@ ProjectSort = Literal["top", "new"]
 
 class ProjectAccessForbiddenError(PermissionError):
     """Raised when an authenticated user cannot access an existing project."""
+
+
+class ProjectValidationError(ValueError):
+    """Raised when a project write operation fails business validation."""
 
 
 class ProjectService:
@@ -72,6 +77,68 @@ class ProjectService:
         if created is None:
             raise RuntimeError("Created project could not be loaded")
         return created
+
+    async def update_project(
+        self,
+        *,
+        project_id: UUID,
+        current_user_id: UUID,
+        payload: ProjectUpdateRequest,
+    ) -> ProjectDetailResponse | None:
+        project = await self.get_project_by_id(project_id)
+        if project is None:
+            return None
+
+        member_role = await self.get_member_role(project_id, current_user_id)
+        if not self.can_edit_project(project, current_user_id, member_role):
+            raise ProjectAccessForbiddenError("Project edit forbidden")
+
+        final_demo_url = (
+            payload.demo_url
+            if "demo_url" in payload.model_fields_set
+            else project.demo_url
+        )
+        final_github_url = (
+            payload.github_url
+            if "github_url" in payload.model_fields_set
+            else project.github_url
+        )
+        final_video_url = (
+            payload.video_url
+            if "video_url" in payload.model_fields_set
+            else project.video_url
+        )
+        if not any([final_demo_url, final_github_url, final_video_url]):
+            raise ProjectValidationError(
+                "Provide at least one of demo_url, github_url, or video_url."
+            )
+
+        if "title" in payload.model_fields_set:
+            if payload.title is None:
+                raise ProjectValidationError("title cannot be null")
+            project.title = payload.title
+        if "description" in payload.model_fields_set:
+            if payload.description is None:
+                raise ProjectValidationError("description cannot be null")
+            project.description = payload.description
+        if "demo_url" in payload.model_fields_set:
+            project.demo_url = payload.demo_url
+        if "github_url" in payload.model_fields_set:
+            project.github_url = payload.github_url
+        if "video_url" in payload.model_fields_set:
+            project.video_url = payload.video_url
+
+        try:
+            self.db.add(project)
+            await self.db.commit()
+        except Exception:
+            await self.db.rollback()
+            raise
+
+        updated_project = await self.get_project_detail(project.id, current_user_id)
+        if updated_project is None:
+            raise RuntimeError("Updated project could not be loaded")
+        return updated_project
 
     async def get_member_role(self, project_id: UUID, user_id: UUID) -> str | None:
         statement = select(ProjectMember).where(
