@@ -30,14 +30,15 @@ async def _resolve_authenticated_user(
             audience="authenticated",
         )
         user_id_str = payload.get("sub")
-        email = payload.get("email")
+        raw_email = payload.get("email")
 
-        if not user_id_str or not email:
+        if not user_id_str or not isinstance(raw_email, str) or not raw_email.strip():
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token payload"
             )
 
         user_id = UUID(user_id_str)
+        email = raw_email.strip().lower()
 
     except jwt.ExpiredSignatureError:
         raise HTTPException(
