@@ -12,11 +12,16 @@ from app.schemas.project import (
     ProjectCreateRequest,
     ProjectDetailResponse,
     ProjectListResponse,
+    ProjectMemberCreateRequest,
+    ProjectMemberInfo,
+    ProjectMemberUpdateRequest,
     ProjectUpdateRequest,
 )
 from app.services.project import (
     CursorError,
     ProjectAccessForbiddenError,
+    ProjectConflictError,
+    ProjectResourceNotFoundError,
     ProjectService,
     ProjectValidationError,
 )
@@ -78,6 +83,214 @@ async def get_project_detail(
     if project is None:
         raise HTTPException(status_code=404, detail="Project not found")
     return project
+
+
+@router.get(
+    "/projects/{project_id}/members",
+    summary="List project members",
+    description=(
+        "Return members for a project. Published projects are visible publicly; "
+        "draft projects are visible only to authenticated project members."
+    ),
+    response_model=list[ProjectMemberInfo],
+    responses={
+        403: {
+            "description": "Authenticated user cannot access this draft project's members"
+        },
+        404: {
+            "description": "Project not found (or hidden draft for anonymous requester)"
+        },
+    },
+)
+async def list_project_members(
+    project_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User | None = Depends(get_current_user_optional),
+) -> list[ProjectMemberInfo]:
+    """List members for a project when the requester has project visibility."""
+    service = ProjectService(db)
+    current_user_id = current_user.id if current_user else None
+    try:
+        members = await service.list_project_members(
+            project_id=project_id,
+            current_user_id=current_user_id,
+        )
+    except ProjectAccessForbiddenError as exc:
+        raise HTTPException(
+            status_code=403, detail="Project members access forbidden"
+        ) from exc
+
+    if members is None:
+        raise HTTPException(status_code=404, detail="Project not found")
+    return members
+
+
+@router.post(
+    "/projects/{project_id}/members",
+    summary="Add project member",
+    description=(
+        "Add a member to a project by email. Only project owners can add members. "
+        "This updates `is_group_project` immediately based on member count."
+    ),
+    response_model=ProjectMemberInfo,
+    status_code=status.HTTP_201_CREATED,
+    responses={
+        401: {"description": "Authentication required"},
+        403: {"description": "Only the project owner can manage members"},
+        404: {"description": "Project or target user not found"},
+        409: {"description": "User is already a member of this project"},
+        422: {"description": "Validation error"},
+    },
+)
+async def add_project_member(
+    project_id: UUID,
+    payload: ProjectMemberCreateRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> ProjectMemberInfo:
+    """Add a new member to a project owned by the authenticated user."""
+    service = ProjectService(db)
+    try:
+        member = await service.add_project_member(
+            project_id=project_id,
+            current_user_id=current_user.id,
+            payload=payload,
+        )
+    except ProjectAccessForbiddenError as exc:
+        raise HTTPException(
+            status_code=403, detail="Project member management forbidden"
+        ) from exc
+    except ProjectResourceNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ProjectConflictError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+    if member is None:
+        raise HTTPException(status_code=404, detail="Project not found")
+    return member
+
+
+@router.patch(
+    "/projects/{project_id}/members/{user_id}",
+    summary="Update project member role",
+    description=(
+        "Update a non-owner member role (`maintainer` or `contributor`). "
+        "Only project owners can update member roles."
+    ),
+    response_model=ProjectMemberInfo,
+    responses={
+        401: {"description": "Authentication required"},
+        403: {"description": "Only the project owner can manage members"},
+        404: {"description": "Project or membership not found"},
+        409: {"description": "Requested role change violates owner protections"},
+        422: {"description": "Validation error"},
+    },
+)
+async def update_project_member(
+    project_id: UUID,
+    user_id: UUID,
+    payload: ProjectMemberUpdateRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> ProjectMemberInfo:
+    """Update the role of a project member."""
+    service = ProjectService(db)
+    try:
+        member = await service.update_project_member(
+            project_id=project_id,
+            target_user_id=user_id,
+            current_user_id=current_user.id,
+            payload=payload,
+        )
+    except ProjectAccessForbiddenError as exc:
+        raise HTTPException(
+            status_code=403, detail="Project member management forbidden"
+        ) from exc
+    except ProjectResourceNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ProjectConflictError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+    if member is None:
+        raise HTTPException(status_code=404, detail="Project not found")
+    return member
+
+
+@router.delete(
+    "/projects/{project_id}/members/{user_id}",
+    summary="Remove project member",
+    description=(
+        "Remove a non-owner member from a project. Only project owners can remove "
+        "members. Owner membership removal is blocked."
+    ),
+    status_code=status.HTTP_204_NO_CONTENT,
+    responses={
+        401: {"description": "Authentication required"},
+        403: {"description": "Only the project owner can manage members"},
+        404: {"description": "Project or membership not found"},
+        409: {"description": "Requested removal violates owner protections"},
+    },
+)
+async def remove_project_member(
+    project_id: UUID,
+    user_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> None:
+    """Remove a member from a project."""
+    service = ProjectService(db)
+    try:
+        removed = await service.remove_project_member(
+            project_id=project_id,
+            target_user_id=user_id,
+            current_user_id=current_user.id,
+        )
+    except ProjectAccessForbiddenError as exc:
+        raise HTTPException(
+            status_code=403, detail="Project member management forbidden"
+        ) from exc
+    except ProjectResourceNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ProjectConflictError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+    if removed is None:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+
+@router.post(
+    "/projects/{project_id}/leave",
+    summary="Leave project",
+    description=(
+        "Leave project membership for the authenticated user. The last project "
+        "owner cannot leave."
+    ),
+    status_code=status.HTTP_204_NO_CONTENT,
+    responses={
+        401: {"description": "Authentication required"},
+        404: {"description": "Project or membership not found"},
+        409: {"description": "Last owner cannot leave"},
+    },
+)
+async def leave_project(
+    project_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> None:
+    """Remove the authenticated user's membership from a project."""
+    service = ProjectService(db)
+    try:
+        left = await service.leave_project(
+            project_id=project_id,
+            current_user_id=current_user.id,
+        )
+    except ProjectResourceNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ProjectConflictError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+    if left is None:
+        raise HTTPException(status_code=404, detail="Project not found")
 
 
 @router.patch(

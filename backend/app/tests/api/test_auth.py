@@ -554,6 +554,26 @@ def test_real_jwt_new_user_creates_and_commits(jwt_test_context):
     assert session._existing_user.email == "new-user@ufl.edu"
 
 
+def test_real_jwt_email_is_normalized_to_lowercase_on_upsert(jwt_test_context):
+    user_id = uuid4()
+    session = jwt_test_context["configure_db"](existing_user=None)
+    token = _make_token(
+        "test-jwt-secret-at-least-32-bytes!!",
+        sub=str(user_id),
+        email="  MixedCase-User@UFL.EDU ",
+    )
+
+    response = jwt_test_context["client"].get(
+        "/test-auth",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {"email": "mixedcase-user@ufl.edu"}
+    assert session._existing_user is not None
+    assert session._existing_user.email == "mixedcase-user@ufl.edu"
+
+
 def test_real_jwt_db_execute_failure_bubbles(jwt_test_context):
     jwt_test_context["configure_db"](execute_error=RuntimeError("db execute failed"))
     token = _make_token("test-jwt-secret-at-least-32-bytes!!")
