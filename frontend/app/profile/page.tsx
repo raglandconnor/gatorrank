@@ -179,6 +179,7 @@ export default function ProfilePage() {
               fontWeight="normal"
               _hover={{ bg: 'orange.500' }}
               transition="background 0.15s"
+              onClick={() => router.push('/projects/create')}
             >
               <HStack gap="6px">
                 <LuPlus size={16} />
