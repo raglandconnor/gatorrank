@@ -29,7 +29,7 @@ export default function SignupPage() {
       direction="column"
       align="center"
       justify="flex-start"
-      py={{ base: 8, sm: 12 }}
+      py={{ base: 4, sm: 6 }}
       px={{ base: 4, sm: 6 }}
     >
       <Stack
