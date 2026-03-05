@@ -18,9 +18,77 @@ import {
 import { HiEye, HiEyeSlash } from 'react-icons/hi2';
 import NextLink from 'next/link';
 
+const EDU_EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.edu$/i;
+const NAME_REGEX = /^[a-zA-Z\s\-'']+$/;
+
+function isValidName(name: string): boolean {
+  if (!name.trim()) return false;
+  return NAME_REGEX.test(name.trim());
+}
+
+function isValidEduEmail(email: string): boolean {
+  if (!email.trim()) return false;
+  return EDU_EMAIL_REGEX.test(email.trim());
+}
+
+function isValidPassword(password: string): boolean {
+  if (password.length < 10) return false;
+  if (!/[A-Z]/.test(password)) return false;
+  if (!/[a-z]/.test(password)) return false;
+  if (!/[0-9]/.test(password)) return false;
+  if (!/[^A-Za-z0-9]/.test(password)) return false;
+  return true;
+}
+
 export default function SignupPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [fullName, setFullName] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [errors, setErrors] = useState<{
+    fullName?: string;
+    email?: string;
+    password?: string;
+    confirmPassword?: string;
+  }>({});
+
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    const newErrors: typeof errors = {};
+
+    if (!fullName.trim()) {
+      newErrors.fullName = 'Full name is required';
+    } else if (!isValidName(fullName)) {
+      newErrors.fullName =
+        'Name can only contain letters, spaces, hyphens, and apostrophes';
+    }
+
+    if (!email.trim()) {
+      newErrors.email = 'Email is required';
+    } else if (!isValidEduEmail(email)) {
+      newErrors.email = 'Please enter a valid .edu email address';
+    }
+
+    if (!password) {
+      newErrors.password = 'Password is required';
+    } else if (!isValidPassword(password)) {
+      newErrors.password =
+        'Password must be 10+ characters with upper, lower, numbers, and symbols';
+    }
+
+    if (!confirmPassword) {
+      newErrors.confirmPassword = 'Please confirm your password';
+    } else if (password !== confirmPassword) {
+      newErrors.confirmPassword = 'Passwords do not match';
+    }
+
+    setErrors(newErrors);
+    if (Object.keys(newErrors).length === 0) {
+      // Valid - would submit to API
+    }
+  }
 
   return (
     <Flex
@@ -62,8 +130,8 @@ export default function SignupPage() {
           width="100%"
           boxShadow="sm"
         >
-          <Stack as="form" gap={5} onSubmit={(e) => e.preventDefault()}>
-            <Field.Root>
+          <Stack as="form" gap={5} onSubmit={handleSubmit}>
+            <Field.Root invalid={!!errors.fullName}>
               <Field.Label fontWeight="500" color="gray.800" mb="2">
                 Full Name
               </Field.Label>
@@ -75,10 +143,26 @@ export default function SignupPage() {
                 color="gray.900"
                 borderColor="gray.200"
                 _placeholder={{ color: 'gray.400' }}
+                value={fullName}
+                onChange={(e) => {
+                  setFullName(e.target.value);
+                  if (errors.fullName)
+                    setErrors((prev) => ({ ...prev, fullName: undefined }));
+                }}
               />
+              {errors.fullName && (
+                <Field.ErrorText
+                  color="red.500"
+                  mt="1"
+                  fontSize="xs"
+                  textAlign="left"
+                >
+                  {errors.fullName}
+                </Field.ErrorText>
+              )}
             </Field.Root>
 
-            <Field.Root>
+            <Field.Root invalid={!!errors.email}>
               <Field.Label fontWeight="500" color="gray.800" mb="2">
                 Email
               </Field.Label>
@@ -90,10 +174,26 @@ export default function SignupPage() {
                 color="gray.900"
                 borderColor="gray.200"
                 _placeholder={{ color: 'gray.400' }}
+                value={email}
+                onChange={(e) => {
+                  setEmail(e.target.value);
+                  if (errors.email)
+                    setErrors((prev) => ({ ...prev, email: undefined }));
+                }}
               />
+              {errors.email && (
+                <Field.ErrorText
+                  color="red.500"
+                  mt="1"
+                  fontSize="xs"
+                  textAlign="left"
+                >
+                  {errors.email}
+                </Field.ErrorText>
+              )}
             </Field.Root>
 
-            <Field.Root>
+            <Field.Root invalid={!!errors.password}>
               <Field.Label fontWeight="500" color="gray.800" mb="2">
                 Password
               </Field.Label>
@@ -128,11 +228,37 @@ export default function SignupPage() {
                   borderColor="gray.200"
                   _placeholder={{ color: 'gray.400' }}
                   pe="10"
+                  value={password}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    setPassword(value);
+                    if (errors.password)
+                      setErrors((prev) => ({ ...prev, password: undefined }));
+                    if (confirmPassword) {
+                      setErrors((prev) => ({
+                        ...prev,
+                        confirmPassword:
+                          value !== confirmPassword
+                            ? 'Passwords do not match'
+                            : undefined,
+                      }));
+                    }
+                  }}
                 />
               </InputGroup>
+              {errors.password && (
+                <Field.ErrorText
+                  color="red.500"
+                  mt="1"
+                  fontSize="xs"
+                  textAlign="left"
+                >
+                  {errors.password}
+                </Field.ErrorText>
+              )}
             </Field.Root>
 
-            <Field.Root>
+            <Field.Root invalid={!!errors.confirmPassword}>
               <Field.Label fontWeight="500" color="gray.800" mb="2">
                 Confirm Password
               </Field.Label>
@@ -169,8 +295,30 @@ export default function SignupPage() {
                   borderColor="gray.200"
                   _placeholder={{ color: 'gray.400' }}
                   pe="10"
+                  value={confirmPassword}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    setConfirmPassword(value);
+                    setErrors((prev) => ({
+                      ...prev,
+                      confirmPassword:
+                        value && value !== password
+                          ? 'Passwords do not match'
+                          : undefined,
+                    }));
+                  }}
                 />
               </InputGroup>
+              {errors.confirmPassword && (
+                <Field.ErrorText
+                  color="red.500"
+                  mt="1"
+                  fontSize="xs"
+                  textAlign="left"
+                >
+                  {errors.confirmPassword}
+                </Field.ErrorText>
+              )}
             </Field.Root>
 
             <Button
