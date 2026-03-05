@@ -1,7 +1,7 @@
 'use client';
 
+import { GatorRankLogo } from '@/components/GatorRankLogo';
 import { Box, HStack, Text, Flex, Link } from '@chakra-ui/react';
-import Image from 'next/image';
 import NextLink from 'next/link';
 import { LuChevronDown } from 'react-icons/lu';
 
@@ -18,15 +18,7 @@ export function Navbar() {
         <Flex h="100%" align="center" justify="space-between">
           {/* Left side: logo + nav links */}
           <HStack gap="32px" align="center">
-            <Box position="relative" w="60px" h="60px" flexShrink={0}>
-              <Image
-                src="/logo.svg"
-                alt="GatorRank"
-                fill
-                style={{ objectFit: 'contain' }}
-                priority
-              />
-            </Box>
+            <GatorRankLogo size="sm" />
 
             {/* Categories — stateless hover element */}
             <HStack
@@ -64,16 +56,17 @@ export function Navbar() {
 
           {/* Right side: Sign Up + Log In */}
           <HStack gap="16px" align="center">
-            <Text
+            <Link
+              as={NextLink}
+              href="/signup"
               fontSize="md"
               color="gray.900"
               lineHeight="30px"
-              cursor="pointer"
               _hover={{ opacity: 0.7 }}
               transition="opacity 0.15s"
             >
               Sign Up
-            </Text>
+            </Link>
             <Link
               as={NextLink}
               href="/login"
