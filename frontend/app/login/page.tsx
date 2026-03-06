@@ -18,8 +18,41 @@ import {
 import { HiEye, HiEyeSlash } from 'react-icons/hi2';
 import NextLink from 'next/link';
 
+const EDU_EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.edu$/i;
+
+function isValidEduEmail(email: string): boolean {
+  if (!email.trim()) return false;
+  return EDU_EMAIL_REGEX.test(email.trim());
+}
+
 export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [errors, setErrors] = useState<{
+    email?: string;
+    password?: string;
+  }>({});
+
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    const newErrors: typeof errors = {};
+
+    if (!email.trim()) {
+      newErrors.email = 'Email is required';
+    } else if (!isValidEduEmail(email)) {
+      newErrors.email = 'Please enter a valid .edu email address';
+    }
+
+    if (!password) {
+      newErrors.password = 'Password is required';
+    }
+
+    setErrors(newErrors);
+    if (Object.keys(newErrors).length === 0) {
+      // Valid - would submit to API
+    }
+  }
 
   return (
     <Flex
@@ -61,8 +94,8 @@ export default function LoginPage() {
           width="100%"
           boxShadow="sm"
         >
-          <Stack as="form" gap={5} onSubmit={(e) => e.preventDefault()}>
-            <Field.Root>
+          <Stack as="form" gap={5} onSubmit={handleSubmit}>
+            <Field.Root invalid={!!errors.email}>
               <Field.Label fontWeight="500" color="gray.800" mb="2">
                 Email
               </Field.Label>
@@ -74,10 +107,26 @@ export default function LoginPage() {
                 color="gray.900"
                 borderColor="gray.200"
                 _placeholder={{ color: 'gray.400' }}
+                value={email}
+                onChange={(e) => {
+                  setEmail(e.target.value);
+                  if (errors.email)
+                    setErrors((prev) => ({ ...prev, email: undefined }));
+                }}
               />
+              {errors.email && (
+                <Field.ErrorText
+                  color="red.500"
+                  mt="1"
+                  fontSize="xs"
+                  textAlign="left"
+                >
+                  {errors.email}
+                </Field.ErrorText>
+              )}
             </Field.Root>
 
-            <Field.Root>
+            <Field.Root invalid={!!errors.password}>
               <Field.Label fontWeight="500" color="gray.800" mb="2">
                 Password
               </Field.Label>
@@ -112,8 +161,24 @@ export default function LoginPage() {
                   borderColor="gray.200"
                   _placeholder={{ color: 'gray.400' }}
                   pe="10"
+                  value={password}
+                  onChange={(e) => {
+                    setPassword(e.target.value);
+                    if (errors.password)
+                      setErrors((prev) => ({ ...prev, password: undefined }));
+                  }}
                 />
               </InputGroup>
+              {errors.password && (
+                <Field.ErrorText
+                  color="red.500"
+                  mt="1"
+                  fontSize="xs"
+                  textAlign="left"
+                >
+                  {errors.password}
+                </Field.ErrorText>
+              )}
             </Field.Root>
 
             <Button
