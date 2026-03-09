@@ -237,7 +237,11 @@ export default function ProfilePage() {
               </Text>
               <SimpleGrid columns={3} gap="16px" w="100%">
                 {projects.map((project) => (
-                  <ProfileProjectCard key={project.id} project={project} />
+                  <ProfileProjectCard
+                    key={project.id}
+                    project={project}
+                    onEdit={() => router.push('/projects/edit')}
+                  />
                 ))}
               </SimpleGrid>
             </VStack>
