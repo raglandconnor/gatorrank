@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Box, Flex, HStack, VStack, Text, Button } from '@chakra-ui/react';
 import { LuX, LuImage } from 'react-icons/lu';
@@ -13,6 +14,7 @@ import { toaster } from '@/components/ui/toaster';
 
 export default function CreateProjectPage() {
   const router = useRouter();
+  const [isSubmitDisabled, setIsSubmitDisabled] = useState(true);
 
   const initialValues: ProjectFormValues = {
     name: '',
@@ -83,15 +85,17 @@ export default function CreateProjectPage() {
             <Button
               type="submit"
               form="project-form"
-              bg="orange.400"
+              bg={isSubmitDisabled ? 'gray.300' : 'orange.400'}
               color="white"
               borderRadius="14px"
               h="44px"
               px="20px"
               fontSize="sm"
               fontWeight="normal"
-              _hover={{ bg: 'orange.500' }}
+              _hover={{ bg: isSubmitDisabled ? 'gray.300' : 'orange.500' }}
               transition="background 0.15s"
+              disabled={isSubmitDisabled}
+              cursor={isSubmitDisabled ? 'not-allowed' : 'pointer'}
             >
               <HStack gap="6px">
                 <LuImage size={16} />
@@ -105,8 +109,8 @@ export default function CreateProjectPage() {
         <ProjectForm
           mode="create"
           initialValues={initialValues}
-          submitLabel="Submit Project"
           onSubmit={handleSubmit}
+          onValidityChange={setIsSubmitDisabled}
         />
       </Box>
     </Box>

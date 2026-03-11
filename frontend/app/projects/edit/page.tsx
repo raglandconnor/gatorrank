@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Box, Flex, HStack, VStack, Text, Button } from '@chakra-ui/react';
 import { LuX, LuSave } from 'react-icons/lu';
@@ -14,6 +15,7 @@ import { mockProject } from '@/data/mock-project';
 
 export default function EditProjectPage() {
   const router = useRouter();
+  const [isSubmitDisabled, setIsSubmitDisabled] = useState(false);
 
   const initialValues: ProjectFormValues = {
     name: mockProject.name,
@@ -84,15 +86,17 @@ export default function EditProjectPage() {
             <Button
               type="submit"
               form="project-form"
-              bg="orange.400"
+              bg={isSubmitDisabled ? 'gray.300' : 'orange.400'}
               color="white"
               borderRadius="14px"
               h="44px"
               px="20px"
               fontSize="sm"
               fontWeight="normal"
-              _hover={{ bg: 'orange.500' }}
+              _hover={{ bg: isSubmitDisabled ? 'gray.300' : 'orange.500' }}
               transition="background 0.15s"
+              disabled={isSubmitDisabled}
+              cursor={isSubmitDisabled ? 'not-allowed' : 'pointer'}
             >
               <HStack gap="6px">
                 <LuSave size={16} />
@@ -106,8 +110,8 @@ export default function EditProjectPage() {
         <ProjectForm
           mode="edit"
           initialValues={initialValues}
-          submitLabel="Save Changes"
           onSubmit={handleSubmit}
+          onValidityChange={setIsSubmitDisabled}
         />
       </Box>
     </Box>
