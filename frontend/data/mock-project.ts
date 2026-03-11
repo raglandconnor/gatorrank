@@ -18,7 +18,8 @@ export const mockProject: EditableProject = {
     'Navigate campus with real-time indoor maps and directions.',
   fullDescription:
     'Campus Navigator is a mobile app that helps students and visitors find their way around campus. It features real-time indoor and outdoor maps, turn-by-turn directions, and points of interest. Built with React Native for cross-platform support.',
-  imageUrl: undefined,
+  imageUrl:
+    'https://images.unsplash.com/photo-1526498460520-4c246339dccb?auto=format&fit=crop&w=400&q=80',
   tags: ['React Native', 'Maps', 'Mobile'],
   teamMembers: [],
   websiteUrl: '',
