@@ -19,7 +19,7 @@ import { HiEye, HiEyeSlash } from 'react-icons/hi2';
 import NextLink from 'next/link';
 
 const EDU_EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.edu$/i;
-const NAME_REGEX = /^[a-zA-Z\s\-'']+$/;
+const NAME_REGEX = /^[a-zA-Z\s'\u2018\u2019-]+$/;
 
 function isValidName(name: string): boolean {
   if (!name.trim()) return false;
