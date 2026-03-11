@@ -17,28 +17,11 @@ import {
 } from '@chakra-ui/react';
 import { HiEye, HiEyeSlash } from 'react-icons/hi2';
 import NextLink from 'next/link';
-
-const EDU_EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.edu$/i;
-const NAME_REGEX = /^[a-zA-Z\s'\u2018\u2019-]+$/;
-
-function isValidName(name: string): boolean {
-  if (!name.trim()) return false;
-  return NAME_REGEX.test(name.trim());
-}
-
-function isValidEduEmail(email: string): boolean {
-  if (!email.trim()) return false;
-  return EDU_EMAIL_REGEX.test(email.trim());
-}
-
-function isValidPassword(password: string): boolean {
-  if (password.length < 10) return false;
-  if (!/[A-Z]/.test(password)) return false;
-  if (!/[a-z]/.test(password)) return false;
-  if (!/[0-9]/.test(password)) return false;
-  if (!/[^A-Za-z0-9]/.test(password)) return false;
-  return true;
-}
+import {
+  isValidEduEmail,
+  isValidName,
+  isValidPassword,
+} from '@/lib/validation';
 
 export default function SignupPage() {
   const [showPassword, setShowPassword] = useState(false);

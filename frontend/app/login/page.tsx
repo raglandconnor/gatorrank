@@ -17,13 +17,7 @@ import {
 } from '@chakra-ui/react';
 import { HiEye, HiEyeSlash } from 'react-icons/hi2';
 import NextLink from 'next/link';
-
-const EDU_EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.edu$/i;
-
-function isValidEduEmail(email: string): boolean {
-  if (!email.trim()) return false;
-  return EDU_EMAIL_REGEX.test(email.trim());
-}
+import { isValidEduEmail } from '@/lib/validation';
 
 export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
