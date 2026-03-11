@@ -155,8 +155,115 @@ def test_derive_original_refresh_ttl_defaults_when_non_positive_delta():
 async def test_refresh_token_pair_rejects_unknown_token():
     class SessionWithNoRefreshRows:
         async def exec(self, _statement):
-            return type("Result", (), {"first": lambda self: None})()
+            return type("Result", (), {"one_or_none": lambda self: None})()
 
     service = AuthService(cast(AsyncSession, SessionWithNoRefreshRows()))
     with pytest.raises(InvalidRefreshTokenError, match="Invalid refresh token"):
         await service.refresh_token_pair(refresh_token="missing-token")
+
+
+@pytest.mark.asyncio
+async def test_refresh_token_pair_rejects_token_for_missing_user():
+    class _ResultWithOneOrNone:
+        def __init__(self, row):
+            self._row = row
+
+        def one_or_none(self):
+            return self._row
+
+    class _ResultWithFirst:
+        def __init__(self, row):
+            self._row = row
+
+        def first(self):
+            return self._row
+
+    class SessionWithRevokedRowMissingUser:
+        def __init__(self):
+            now = datetime.now(UTC)
+            self.results = [
+                _ResultWithOneOrNone((uuid4(), uuid4(), now, now + timedelta(days=14))),
+                _ResultWithFirst(None),
+            ]
+            self.commit = AsyncMock()
+
+        async def exec(self, _statement):
+            return self.results.pop(0)
+
+        def add(self, _obj):
+            return None
+
+    service = AuthService(cast(AsyncSession, SessionWithRevokedRowMissingUser()))
+    with pytest.raises(InvalidRefreshTokenError, match="Invalid refresh token"):
+        await service.refresh_token_pair(refresh_token="missing-user-token")
+
+
+@pytest.mark.asyncio
+async def test_create_user_rolls_back_on_commit_failure():
+    class SessionCommitFails:
+        def __init__(self):
+            self.rollback = AsyncMock()
+            self.commit = AsyncMock(side_effect=RuntimeError("commit failed"))
+            self.refresh = AsyncMock()
+            self.added: list[object] = []
+
+        async def exec(self, _statement):
+            return type("Result", (), {"first": lambda self: None})()
+
+        def add(self, obj):
+            self.added.append(obj)
+            return None
+
+    db = SessionCommitFails()
+    service = AuthService(cast(AsyncSession, db))
+    service.get_user_by_email = AsyncMock(return_value=None)  # type: ignore[method-assign]
+
+    with pytest.raises(RuntimeError, match="commit failed"):
+        await service.create_user(
+            email="rollback-create@ufl.edu",
+            password="valid-create-password-123",
+        )
+    db.rollback.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_refresh_token_pair_rolls_back_on_commit_failure():
+    class _ResultWithOneOrNone:
+        def __init__(self, row):
+            self._row = row
+
+        def one_or_none(self):
+            return self._row
+
+    class _ResultWithFirst:
+        def __init__(self, row):
+            self._row = row
+
+        def first(self):
+            return self._row
+
+    class SessionCommitFailsOnRefresh:
+        def __init__(self):
+            now = datetime.now(UTC)
+            user_id = uuid4()
+            self.results = [
+                _ResultWithOneOrNone((uuid4(), user_id, now, now + timedelta(days=14))),
+                _ResultWithFirst(_build_user(email="refresh-rollback@ufl.edu")),
+            ]
+            self.rollback = AsyncMock()
+            self.commit = AsyncMock(side_effect=RuntimeError("commit failed"))
+            self.added: list[object] = []
+
+        async def exec(self, _statement):
+            return self.results.pop(0)
+
+        def add(self, obj):
+            self.added.append(obj)
+            return None
+
+    db = SessionCommitFailsOnRefresh()
+    service = AuthService(cast(AsyncSession, db))
+
+    with pytest.raises(RuntimeError, match="commit failed"):
+        await service.refresh_token_pair(refresh_token="refresh-rollback-token")
+    db.rollback.assert_awaited_once()
