@@ -1,3 +1,12 @@
+from app.schemas.auth import (
+    AuthLoginRequest,
+    AuthLogoutRequest,
+    AuthMeResponse,
+    AuthRefreshRequest,
+    AuthSignupRequest,
+    AuthTokenResponse,
+    AuthUserResponse,
+)
 from app.schemas.project import (
     ProjectDetailResponse,
     ProjectListItemResponse,
@@ -8,6 +17,13 @@ from app.schemas.project import (
 )
 
 __all__ = [
+    "AuthUserResponse",
+    "AuthTokenResponse",
+    "AuthSignupRequest",
+    "AuthLoginRequest",
+    "AuthRefreshRequest",
+    "AuthLogoutRequest",
+    "AuthMeResponse",
     "ProjectMemberCreateRequest",
     "ProjectMemberInfo",
     "ProjectMemberUpdateRequest",

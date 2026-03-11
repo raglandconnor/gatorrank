@@ -17,6 +17,12 @@
 - Frontend checks: `cd frontend && bun run lint && bunx tsc --noEmit`
 - Backend tests: `cd backend && uv run pytest`
 
+## Dependency Management
+
+- For backend Python dependencies, prefer `uv add <dependency>` (or `uv add --dev <dependency>` for dev packages).
+- Do not manually edit `backend/pyproject.toml` to add or change dependencies unless the user explicitly asks for a manual edit.
+- When dependency changes are made, commit the corresponding lockfile updates produced by `uv`.
+
 ## Migrations
 
 - After SQLModel schema changes, create and commit an Alembic migration.
