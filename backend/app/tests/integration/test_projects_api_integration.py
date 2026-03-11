@@ -49,7 +49,7 @@ async def _seed_project(
     project = Project(
         created_by_id=created_by_id,
         title=title,
-        description=f"{title} description",
+        short_description=f"{title} description",
         vote_count=0,
         is_group_project=False,
         is_published=is_published,
@@ -77,7 +77,7 @@ async def _seed_member(db_session, *, project_id, user_id, role: str) -> None:
 def _create_project_payload(**overrides):
     payload = {
         "title": "  API Create Project  ",
-        "description": "  API create project description  ",
+        "short_description": "  API create project description  ",
         "github_url": "https://github.com/example/api-create",
     }
     payload.update(overrides)
@@ -87,7 +87,7 @@ def _create_project_payload(**overrides):
 def _update_project_payload(**overrides):
     payload = {
         "title": "  Updated API Project  ",
-        "description": "  Updated API description  ",
+        "short_description": "  Updated API description  ",
         "demo_url": "https://example.com/updated-demo",
     }
     payload.update(overrides)
@@ -147,7 +147,7 @@ async def test_create_project_authenticated_returns_201_and_persists_draft(
     payload = response.json()
     assert payload["created_by_id"] == str(creator.id)
     assert payload["title"] == "API Create Project"
-    assert payload["description"] == "API create project description"
+    assert payload["short_description"] == "API create project description"
     assert payload["github_url"] == "https://github.com/example/api-create"
     assert payload["is_published"] is False
     assert payload["published_at"] is None
@@ -232,7 +232,7 @@ async def test_create_project_blank_title_or_description_returns_422(
         )
         description_response = await api_client.post(
             "/api/v1/projects",
-            json=_create_project_payload(description="   "),
+            json=_create_project_payload(short_description="   "),
         )
     finally:
         app.dependency_overrides.clear()
@@ -417,7 +417,7 @@ async def test_patch_project_owner_can_update_published_project(api_client, db_s
     payload = response.json()
     assert payload["id"] == str(project.id)
     assert payload["title"] == "Updated API Project"
-    assert payload["description"] == "Updated API description"
+    assert payload["short_description"] == "Updated API description"
     assert payload["demo_url"] is None
     assert payload["github_url"] == "https://github.com/example/updated-api"
     assert payload["is_published"] is True
@@ -457,7 +457,7 @@ async def test_patch_project_owner_updates_non_url_fields_with_existing_url(
             f"/api/v1/projects/{project.id}",
             json={
                 "title": "  Retitled Project  ",
-                "description": "  Revised summary  ",
+                "short_description": "  Revised summary  ",
             },
         )
     finally:
@@ -466,7 +466,7 @@ async def test_patch_project_owner_updates_non_url_fields_with_existing_url(
     assert response.status_code == 200
     payload = response.json()
     assert payload["title"] == "Retitled Project"
-    assert payload["description"] == "Revised summary"
+    assert payload["short_description"] == "Revised summary"
     assert payload["github_url"] == "https://github.com/example/existing-url"
 
 
@@ -692,7 +692,7 @@ async def test_patch_project_rejects_null_title_and_description(api_client, db_s
         )
         null_description = await api_client.patch(
             f"/api/v1/projects/{project.id}",
-            json={"description": None},
+            json={"short_description": None},
         )
     finally:
         app.dependency_overrides.clear()
@@ -2200,7 +2200,7 @@ async def test_add_project_member_concurrent_duplicate_requests_one_success_one_
         project = Project(
             created_by_id=owner.id,
             title="Concurrent Member Add",
-            description="Concurrent add coverage",
+            short_description="Concurrent add coverage",
             vote_count=0,
             is_group_project=False,
             is_published=False,

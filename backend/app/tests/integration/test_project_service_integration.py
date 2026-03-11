@@ -42,7 +42,7 @@ async def _seed_project(
     project = Project(
         created_by_id=created_by_id,
         title=title,
-        description=f"{title} description",
+        short_description=f"{title} description",
         vote_count=vote_count,
         is_group_project=False,
         is_published=is_published,
@@ -306,7 +306,7 @@ async def test_create_project_creates_draft_and_owner_membership_and_returns_det
     service = ProjectService(db_session)
     payload = ProjectCreateRequest(
         title="  Build GatorRank  ",
-        description="  A project for ranking UF projects  ",
+        short_description="  A project for ranking UF projects  ",
         github_url="https://github.com/example/gatorrank",
     )
 
@@ -314,7 +314,7 @@ async def test_create_project_creates_draft_and_owner_membership_and_returns_det
 
     assert created.created_by_id == creator.id
     assert created.title == "Build GatorRank"
-    assert created.description == "A project for ranking UF projects"
+    assert created.short_description == "A project for ranking UF projects"
     assert created.is_published is False
     assert created.published_at is None
     assert created.vote_count == 0
@@ -349,7 +349,7 @@ async def test_create_project_defaults_group_flag_and_persists_optional_urls(
     service = ProjectService(db_session)
     payload = ProjectCreateRequest(
         title="Project URLs",
-        description="Testing URL persistence",
+        short_description="Testing URL persistence",
         demo_url="https://example.com/demo",
         video_url="http://example.com/video",
     )
@@ -377,7 +377,7 @@ async def test_create_project_normalizes_empty_optional_urls_to_none(db_session)
     service = ProjectService(db_session)
     payload = ProjectCreateRequest(
         title="Project Normalize",
-        description="Normalization coverage",
+        short_description="Normalization coverage",
         demo_url="   ",
         github_url="https://github.com/example/normalized",
         video_url="",
@@ -404,7 +404,7 @@ async def test_create_project_rolls_back_when_commit_fails(db_session, monkeypat
     service = ProjectService(db_session)
     payload = ProjectCreateRequest(
         title="Rollback Project",
-        description="Rollback coverage",
+        short_description="Rollback coverage",
         github_url="https://github.com/example/rollback",
     )
 

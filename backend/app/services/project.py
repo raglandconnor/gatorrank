@@ -79,7 +79,8 @@ class ProjectService:
         project = Project(  # pyright: ignore[reportCallIssue]
             created_by_id=created_by_id,
             title=payload.title,
-            description=payload.description,
+            short_description=payload.short_description,
+            long_description=payload.long_description,
             demo_url=payload.demo_url,
             github_url=payload.github_url,
             video_url=payload.video_url,
@@ -148,10 +149,12 @@ class ProjectService:
             if payload.title is None:
                 raise ProjectValidationError("title cannot be null")
             project.title = payload.title
-        if "description" in payload.model_fields_set:
-            if payload.description is None:
-                raise ProjectValidationError("description cannot be null")
-            project.description = payload.description
+        if "short_description" in payload.model_fields_set:
+            if payload.short_description is None:
+                raise ProjectValidationError("short_description cannot be null")
+            project.short_description = payload.short_description
+        if "long_description" in payload.model_fields_set:
+            project.long_description = payload.long_description
         if "demo_url" in payload.model_fields_set:
             project.demo_url = payload.demo_url
         if "github_url" in payload.model_fields_set:

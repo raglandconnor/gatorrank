@@ -33,7 +33,7 @@ def _build_project_response(project_id: UUID) -> ProjectDetailResponse:
         id=project_id,
         created_by_id=uuid4(),
         title="Project",
-        description="Project description",
+        short_description="Project description",
         demo_url=None,
         github_url=None,
         video_url=None,
@@ -55,7 +55,7 @@ def _build_project_list_response() -> ProjectListResponse:
                 id=uuid4(),
                 created_by_id=uuid4(),
                 title="Listed Project",
-                description="Listed project description",
+                short_description="Listed project description",
                 demo_url=None,
                 github_url=None,
                 video_url=None,
@@ -75,7 +75,7 @@ def _build_project_list_response() -> ProjectListResponse:
 def _build_create_project_payload(**overrides):
     payload = {
         "title": " New Project ",
-        "description": "  A project description  ",
+        "short_description": "  A project description  ",
         "github_url": "https://github.com/example/repo",
     }
     payload.update(overrides)
@@ -85,7 +85,7 @@ def _build_create_project_payload(**overrides):
 def _build_update_project_payload(**overrides):
     payload = {
         "title": "  Updated Project Title  ",
-        "description": "  Updated project description  ",
+        "short_description": "  Updated project description  ",
         "demo_url": "https://example.com/demo",
     }
     payload.update(overrides)
@@ -100,7 +100,7 @@ def _build_draft_project_response(
         id=project_id,
         created_by_id=created_by_id,
         title="New Project",
-        description="A project description",
+        short_description="A project description",
         demo_url=None,
         github_url="https://github.com/example/repo",
         video_url=None,
@@ -218,7 +218,7 @@ def test_create_project_passes_user_and_payload_to_service():
     kwargs = await_args.kwargs
     assert kwargs["created_by_id"] == user_id
     assert kwargs["payload"].title == "New Project"
-    assert kwargs["payload"].description == "A project description"
+    assert kwargs["payload"].short_description == "A project description"
     assert kwargs["payload"].github_url == "https://github.com/example/repo"
 
 
@@ -266,7 +266,7 @@ def test_create_project_validation_blank_title_returns_422():
 def test_create_project_validation_missing_description_returns_422():
     user_id = uuid4()
     payload = _build_create_project_payload()
-    payload.pop("description")
+    payload.pop("short_description")
 
     app.dependency_overrides[get_db] = _override_get_db
     app.dependency_overrides[get_current_user] = _override_current_user(user_id)
@@ -295,7 +295,7 @@ def test_create_project_validation_blank_description_returns_422():
         ) as mock_create_project:
             response = client.post(
                 "/api/v1/projects",
-                json=_build_create_project_payload(description="   "),
+                json=_build_create_project_payload(short_description="   "),
             )
     finally:
         app.dependency_overrides.clear()
@@ -574,7 +574,7 @@ def test_update_project_returns_200_and_payload():
     assert kwargs["project_id"] == project_id
     assert kwargs["current_user_id"] == user_id
     assert kwargs["payload"].title == "Updated Project Title"
-    assert kwargs["payload"].description == "Updated project description"
+    assert kwargs["payload"].short_description == "Updated project description"
     assert kwargs["payload"].demo_url == "https://example.com/demo"
 
 

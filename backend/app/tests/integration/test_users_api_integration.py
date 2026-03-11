@@ -319,7 +319,7 @@ async def test_list_user_projects(api_client, db_session):
     p1 = Project(
         id=uuid4(),
         title="Published Project",
-        description="Desc",
+        short_description="Desc",
         is_published=True,
         published_at=now,
         created_by_id=user_id,
@@ -328,7 +328,7 @@ async def test_list_user_projects(api_client, db_session):
     p2 = Project(
         id=uuid4(),
         title="Draft Project",
-        description="Desc",
+        short_description="Desc",
         is_published=False,
         created_by_id=user_id,
     )  # pyright: ignore[reportCallIssue]
