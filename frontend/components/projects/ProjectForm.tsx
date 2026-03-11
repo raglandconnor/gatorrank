@@ -248,7 +248,7 @@ export function ProjectForm({
     !projectName.trim() ||
     !shortDescription.trim() ||
     !fullDescription.trim() ||
-    (!logoPreview && mode === 'create');
+    !logoPreview;
 
   useEffect(() => {
     onValidityChange?.(isSubmitDisabled);

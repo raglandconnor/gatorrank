@@ -1,5 +1,5 @@
 export interface EditableProject {
-  id: string;
+  id: number;
   name: string;
   shortDescription: string;
   fullDescription: string;
@@ -12,7 +12,7 @@ export interface EditableProject {
 }
 
 export const mockProject: EditableProject = {
-  id: '1',
+  id: 1,
   name: 'Campus Navigator',
   shortDescription:
     'Navigate campus with real-time indoor maps and directions.',
