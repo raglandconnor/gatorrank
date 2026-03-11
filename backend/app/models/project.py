@@ -11,8 +11,13 @@ class Project(SQLModel, table=True):
 
     id: UUID = Field(default_factory=uuid4, primary_key=True, nullable=False)
     created_by_id: UUID = Field(foreign_key="users.id", nullable=False, index=True)
-    title: str = Field(nullable=False, max_length=255)
-    description: str = Field(sa_column=sa.Column(sa.Text(), nullable=False))
+    title: str = Field(sa_column=sa.Column(sa.String(length=50), nullable=False))
+    short_description: str = Field(
+        sa_column=sa.Column(sa.String(length=280), nullable=False)
+    )
+    long_description: str | None = Field(
+        default=None, sa_column=sa.Column(sa.Text(), nullable=True)
+    )
     demo_url: str | None = Field(default=None, max_length=2048)
     github_url: str | None = Field(default=None, max_length=2048)
     video_url: str | None = Field(default=None, max_length=2048)

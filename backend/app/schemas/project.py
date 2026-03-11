@@ -37,14 +37,21 @@ class ProjectCreateRequest(BaseModel):
 
     title: str = Field(
         min_length=1,
-        max_length=255,
+        max_length=50,
         description="Project title. Leading/trailing whitespace is trimmed.",
     )
-    description: str = Field(
+    short_description: str = Field(
         min_length=1,
+        max_length=280,
+        description=(
+            "Short project summary. Required for draft creation and trimmed before validation."
+        ),
+    )
+    long_description: str | None = Field(
+        default=None,
         max_length=5000,
         description=(
-            "Project description. Required for draft creation and trimmed before validation."
+            "Optional long project description. Leading/trailing whitespace is trimmed."
         ),
     )
     demo_url: str | None = Field(
@@ -72,9 +79,9 @@ class ProjectCreateRequest(BaseModel):
         ),
     )
 
-    @field_validator("title", "description", mode="before")
+    @field_validator("title", "short_description", "long_description", mode="before")
     @classmethod
-    def _trim_required_text(cls, value: object) -> object:
+    def _trim_text(cls, value: object) -> object:
         if isinstance(value, str):
             return value.strip()
         return value
@@ -102,14 +109,19 @@ class ProjectUpdateRequest(BaseModel):
     title: str | None = Field(
         default=None,
         min_length=1,
-        max_length=255,
+        max_length=50,
         description="Updated project title. Leading/trailing whitespace is trimmed.",
     )
-    description: str | None = Field(
+    short_description: str | None = Field(
         default=None,
         min_length=1,
+        max_length=280,
+        description="Updated short project summary. Leading/trailing whitespace is trimmed.",
+    )
+    long_description: str | None = Field(
+        default=None,
         max_length=5000,
-        description="Updated project description. Leading/trailing whitespace is trimmed.",
+        description="Updated long project description. Leading/trailing whitespace is trimmed.",
     )
     demo_url: str | None = Field(
         default=None,
@@ -127,7 +139,7 @@ class ProjectUpdateRequest(BaseModel):
         description="Updated video URL (`http` or `https`), or `null` to clear it.",
     )
 
-    @field_validator("title", "description", mode="before")
+    @field_validator("title", "short_description", "long_description", mode="before")
     @classmethod
     def _trim_optional_text(cls, value: object) -> object:
         if isinstance(value, str):
@@ -150,8 +162,11 @@ class ProjectUpdateRequest(BaseModel):
             raise ValueError("At least one editable field must be provided")
         if "title" in self.model_fields_set and self.title is None:
             raise ValueError("title cannot be null")
-        if "description" in self.model_fields_set and self.description is None:
-            raise ValueError("description cannot be null")
+        if (
+            "short_description" in self.model_fields_set
+            and self.short_description is None
+        ):
+            raise ValueError("short_description cannot be null")
         return self
 
 
@@ -190,7 +205,8 @@ class ProjectBaseResponse(BaseModel):
     id: UUID
     created_by_id: UUID
     title: str
-    description: str | None = None
+    short_description: str
+    long_description: str | None = None
     demo_url: str | None = None
     github_url: str | None = None
     video_url: str | None = None

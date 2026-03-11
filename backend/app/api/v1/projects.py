@@ -38,8 +38,9 @@ router = APIRouter()
         401: {"description": "Authentication required"},
         422: {
             "description": (
-                "Validation error (for example: missing/blank title or description, "
-                "invalid URL format, or no demo/github/video URL provided)."
+                "Validation error (for example: missing/blank title or "
+                "short_description, invalid URL format, or no demo/github/video URL "
+                "provided)."
             )
         },
     },
