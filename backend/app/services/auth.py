@@ -187,8 +187,12 @@ class AuthService:
             expires_at=now + refresh_ttl,
             revoked_at=None,
         )
-        self.db.add(refresh_session)
-        await self.db.commit()
+        try:
+            self.db.add(refresh_session)
+            await self.db.commit()
+        except Exception:
+            await self.db.rollback()
+            raise
 
         return self._build_token_pair(
             user=user,

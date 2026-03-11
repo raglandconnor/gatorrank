@@ -28,6 +28,7 @@ class FakeIssueSession:
     def __init__(self):
         self.added: list[object] = []
         self.commit = AsyncMock()
+        self.rollback = AsyncMock()
 
     def add(self, obj: object) -> None:
         self.added.append(obj)
@@ -95,6 +96,32 @@ async def test_issue_token_pair_access_token_claims_match_auth_dependency_contra
     assert tokens.expires_in == int(ACCESS_TOKEN_TTL.total_seconds())
     db.commit.assert_awaited_once()
     assert len(db.added) == 1
+
+
+@pytest.mark.asyncio
+async def test_issue_token_pair_rolls_back_on_commit_failure(monkeypatch):
+    settings = get_settings()
+    monkeypatch.setattr(
+        settings, "DATABASE_JWT_SECRET", "unit-test-secret-at-least-32-bytes"
+    )
+
+    class SessionCommitFailsOnIssue:
+        def __init__(self):
+            self.added: list[object] = []
+            self.commit = AsyncMock(side_effect=RuntimeError("commit failed"))
+            self.rollback = AsyncMock()
+
+        def add(self, obj: object) -> None:
+            self.added.append(obj)
+
+    db = SessionCommitFailsOnIssue()
+    service = AuthService(cast(AsyncSession, db))
+    user = _build_user(email="issue-rollback@ufl.edu")
+
+    with pytest.raises(RuntimeError, match="commit failed"):
+        await service.issue_token_pair(user=user, remember_me=False)
+
+    db.rollback.assert_awaited_once()
 
 
 @pytest.mark.asyncio
