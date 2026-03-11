@@ -33,9 +33,7 @@ async def _resolve_authenticated_user(
         raw_email = payload.get("email")
 
         if not user_id_str or not isinstance(raw_email, str) or not raw_email.strip():
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token payload"
-            )
+            raise ValueError("Invalid token payload")
 
         user_id = UUID(user_id_str)
         email = raw_email.strip().lower()
@@ -50,7 +48,7 @@ async def _resolve_authenticated_user(
         )
     except ValueError:
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token payload"
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token"
         )
 
     # Shared Contract: Set auth context in backend request state

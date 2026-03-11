@@ -366,6 +366,7 @@ def test_real_jwt_malformed_sub_claim(jwt_test_client):
         headers={"Authorization": f"Bearer {token}"},
     )
     assert response.status_code == 401
+    assert response.json()["detail"] == "Invalid token"
 
 
 def test_real_jwt_wrong_audience(jwt_test_client):
