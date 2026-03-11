@@ -26,7 +26,13 @@ async def api_client():
 
 async def _seed_user(db_session, email: str, name: str) -> User:
     now = datetime.now(timezone.utc)
-    user = User(email=email, full_name=name, created_at=now, updated_at=now)
+    user = User(
+        email=email,
+        password_hash="integration-password-hash",
+        full_name=name,
+        created_at=now,
+        updated_at=now,
+    )
     db_session.add(user)
     await db_session.flush()
     return user
@@ -2175,12 +2181,14 @@ async def test_add_project_member_concurrent_duplicate_requests_one_success_one_
     async with session_factory() as setup_session:
         owner = User(
             email=owner_email,
+            password_hash="integration-password-hash",
             full_name="Owner Race",
             created_at=now,
             updated_at=now,
         )
         target = User(
             email=target_email,
+            password_hash="integration-password-hash",
             full_name="Target Race",
             created_at=now,
             updated_at=now,

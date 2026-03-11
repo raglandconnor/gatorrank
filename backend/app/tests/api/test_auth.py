@@ -1,7 +1,7 @@
 from datetime import UTC, datetime, timedelta
 from typing import cast
 from types import SimpleNamespace
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import jwt
 import pytest
@@ -21,6 +21,7 @@ from app.models.user import User
 # Temporary test route
 router = APIRouter()
 settings = get_settings()
+DEFAULT_AUTH_USER_ID = UUID("00000000-0000-0000-0000-000000000123")
 
 
 @router.get("/test-auth")
@@ -160,9 +161,15 @@ def test_optional_auth_missing_email_claim_401(jwt_test_client):
     assert response.json()["detail"] == "Invalid token payload"
 
 
-def test_optional_auth_valid_token_upserts_user(jwt_test_context):
+def test_optional_auth_valid_token_returns_existing_user(jwt_test_context):
     user_id = uuid4()
-    session = jwt_test_context["configure_db"](existing_user=None)
+    existing_user = User(  # pyright: ignore[reportCallIssue]
+        id=user_id,
+        email="optional-user@ufl.edu",
+        password_hash="test-password-hash",
+        role="student",
+    )
+    session = jwt_test_context["configure_db"](existing_user=existing_user)
     token = _make_token(
         "test-jwt-secret-at-least-32-bytes!!",
         sub=str(user_id),
@@ -178,9 +185,9 @@ def test_optional_auth_valid_token_upserts_user(jwt_test_context):
     assert payload["authenticated"] is True
     assert payload["email"] == "optional-user@ufl.edu"
     assert payload["state_user_id"] == str(user_id)
-    assert session.execute_calls == 2
+    assert session.execute_calls == 1
     assert session.add_calls == 0
-    assert session.commit_calls == 1
+    assert session.commit_calls == 0
     assert session.refresh_calls == 0
 
 
@@ -218,18 +225,6 @@ class _MockSession:
         if self._execute_error is not None:
             raise self._execute_error
         self.execute_calls += 1
-        if getattr(_query, "is_insert", False):
-            params = _query.compile().params
-            user_id = params.get("id")
-            email = params.get("email")
-            if self._existing_user is None:
-                self._existing_user = User(  # pyright: ignore[reportCallIssue]
-                    id=user_id,
-                    email=email,
-                    role="student",
-                )
-            else:
-                self._existing_user.email = str(email)
         return _MockResult(self._existing_user)
 
     async def exec(self, _query):
@@ -261,9 +256,15 @@ def jwt_test_client(client, monkeypatch):
         "DATABASE_JWT_SECRET",
         "test-jwt-secret-at-least-32-bytes!!",
     )
+    existing_user = User(  # pyright: ignore[reportCallIssue]
+        id=DEFAULT_AUTH_USER_ID,
+        email="jwt-test@ufl.edu",
+        password_hash="test-password-hash",
+        role="student",
+    )
 
     async def override_get_db():
-        yield _MockSession()
+        yield _MockSession(existing_user=existing_user)
 
     app.dependency_overrides[get_db] = override_get_db
     try:
@@ -311,7 +312,7 @@ def jwt_test_context(client, monkeypatch):
 
 def _make_token(secret: str, **overrides: object) -> str:
     payload = {
-        "sub": str(uuid4()),
+        "sub": str(DEFAULT_AUTH_USER_ID),
         "email": "jwt-test@ufl.edu",
         "aud": "authenticated",
         "exp": datetime.now(UTC) + timedelta(minutes=5),
@@ -507,7 +508,10 @@ def test_real_jwt_missing_exp_claim_currently_allowed(jwt_test_client):
 def test_real_jwt_existing_user_does_not_create(jwt_test_context):
     user_id = uuid4()
     existing_user = User(  # pyright: ignore[reportCallIssue]
-        id=user_id, email="existing@ufl.edu", role="student"
+        id=user_id,
+        email="existing@ufl.edu",
+        password_hash="test-password-hash",
+        role="student",
     )
     session = jwt_test_context["configure_db"](existing_user=existing_user)
     token = _make_token(
@@ -523,13 +527,13 @@ def test_real_jwt_existing_user_does_not_create(jwt_test_context):
 
     assert response.status_code == 200
     assert response.json() == {"email": existing_user.email}
-    assert session.execute_calls == 2
+    assert session.execute_calls == 1
     assert session.add_calls == 0
-    assert session.commit_calls == 1
+    assert session.commit_calls == 0
     assert session.refresh_calls == 0
 
 
-def test_real_jwt_new_user_creates_and_commits(jwt_test_context):
+def test_real_jwt_unknown_user_returns_401(jwt_test_context):
     user_id = uuid4()
     session = jwt_test_context["configure_db"](existing_user=None)
     token = _make_token(
@@ -543,20 +547,23 @@ def test_real_jwt_new_user_creates_and_commits(jwt_test_context):
         headers={"Authorization": f"Bearer {token}"},
     )
 
-    assert response.status_code == 200
-    assert response.json() == {"email": "new-user@ufl.edu"}
-    assert session.execute_calls == 2
+    assert response.status_code == 401
+    assert response.json()["detail"] == "Invalid token"
+    assert session.execute_calls == 1
     assert session.add_calls == 0
-    assert session.commit_calls == 1
+    assert session.commit_calls == 0
     assert session.refresh_calls == 0
-    assert session._existing_user is not None
-    assert session._existing_user.id == user_id
-    assert session._existing_user.email == "new-user@ufl.edu"
 
 
-def test_real_jwt_email_is_normalized_to_lowercase_on_upsert(jwt_test_context):
+def test_real_jwt_email_claim_does_not_mutate_existing_user(jwt_test_context):
     user_id = uuid4()
-    session = jwt_test_context["configure_db"](existing_user=None)
+    existing_user = User(  # pyright: ignore[reportCallIssue]
+        id=user_id,
+        email="existing@ufl.edu",
+        password_hash="test-password-hash",
+        role="student",
+    )
+    session = jwt_test_context["configure_db"](existing_user=existing_user)
     token = _make_token(
         "test-jwt-secret-at-least-32-bytes!!",
         sub=str(user_id),
@@ -569,9 +576,8 @@ def test_real_jwt_email_is_normalized_to_lowercase_on_upsert(jwt_test_context):
     )
 
     assert response.status_code == 200
-    assert response.json() == {"email": "mixedcase-user@ufl.edu"}
-    assert session._existing_user is not None
-    assert session._existing_user.email == "mixedcase-user@ufl.edu"
+    assert response.json() == {"email": "existing@ufl.edu"}
+    assert session.execute_calls == 1
 
 
 def test_real_jwt_db_execute_failure_bubbles(jwt_test_context):
@@ -585,21 +591,17 @@ def test_real_jwt_db_execute_failure_bubbles(jwt_test_context):
         )
 
 
-def test_real_jwt_db_commit_failure_bubbles(jwt_test_context):
-    session = jwt_test_context["configure_db"](
-        commit_error=RuntimeError("db commit failed")
-    )
+def test_real_jwt_db_commit_not_called(jwt_test_context):
+    session = jwt_test_context["configure_db"]()
     token = _make_token("test-jwt-secret-at-least-32-bytes!!")
-
-    with pytest.raises(RuntimeError, match="db commit failed"):
-        jwt_test_context["client"].get(
-            "/test-auth",
-            headers={"Authorization": f"Bearer {token}"},
-        )
-
+    response = jwt_test_context["client"].get(
+        "/test-auth",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert response.status_code == 401
     assert session.execute_calls == 1
     assert session.add_calls == 0
-    assert session.commit_calls == 1
+    assert session.commit_calls == 0
     assert session.refresh_calls == 0
 
 

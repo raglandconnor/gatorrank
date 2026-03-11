@@ -35,6 +35,17 @@ def generate_token(user_id, email, jwt_secret):
     )
 
 
+async def seed_auth_user(db_session, *, user_id, email: str) -> None:
+    user = User(  # pyright: ignore[reportCallIssue]
+        id=user_id,
+        email=email,
+        password_hash="integration-password-hash",
+        role="student",
+    )
+    db_session.add(user)
+    await db_session.commit()
+
+
 @pytest.mark.asyncio
 async def test_get_current_user_profile(api_client, db_session, monkeypatch):
     jwt_secret = "integration-test-jwt-secret-at-least-32b"
@@ -42,6 +53,7 @@ async def test_get_current_user_profile(api_client, db_session, monkeypatch):
 
     user_id = uuid4()
     email = f"user-{uuid4().hex[:8]}@ufl.edu"
+    await seed_auth_user(db_session, user_id=user_id, email=email)
     token = generate_token(user_id, email, jwt_secret)
 
     async def override_get_db():
@@ -49,7 +61,6 @@ async def test_get_current_user_profile(api_client, db_session, monkeypatch):
 
     app.dependency_overrides[get_db] = override_get_db
     try:
-        # First request will upsert
         response = await api_client.get(
             "/api/v1/users/me",
             headers={"Authorization": f"Bearer {token}"},
@@ -71,6 +82,7 @@ async def test_patch_current_user_profile(api_client, db_session, monkeypatch):
 
     user_id = uuid4()
     email = f"user-{uuid4().hex[:8]}@ufl.edu"
+    await seed_auth_user(db_session, user_id=user_id, email=email)
     token = generate_token(user_id, email, jwt_secret)
 
     async def override_get_db():
@@ -78,12 +90,6 @@ async def test_patch_current_user_profile(api_client, db_session, monkeypatch):
 
     app.dependency_overrides[get_db] = override_get_db
     try:
-        # First request to ensure user is created
-        await api_client.get(
-            "/api/v1/users/me",
-            headers={"Authorization": f"Bearer {token}"},
-        )
-
         response = await api_client.patch(
             "/api/v1/users/me",
             headers={"Authorization": f"Bearer {token}"},
@@ -114,6 +120,7 @@ async def test_patch_current_user_profile_partial_update(
 
     user_id = uuid4()
     email = f"user-{uuid4().hex[:8]}@ufl.edu"
+    await seed_auth_user(db_session, user_id=user_id, email=email)
     token = generate_token(user_id, email, jwt_secret)
 
     async def override_get_db():
@@ -121,11 +128,6 @@ async def test_patch_current_user_profile_partial_update(
 
     app.dependency_overrides[get_db] = override_get_db
     try:
-        await api_client.get(
-            "/api/v1/users/me",
-            headers={"Authorization": f"Bearer {token}"},
-        )
-
         response = await api_client.patch(
             "/api/v1/users/me",
             headers={"Authorization": f"Bearer {token}"},
@@ -155,6 +157,7 @@ async def test_patch_current_user_profile_empty_payload_returns_422(
 
     user_id = uuid4()
     email = f"user-{uuid4().hex[:8]}@ufl.edu"
+    await seed_auth_user(db_session, user_id=user_id, email=email)
     token = generate_token(user_id, email, jwt_secret)
 
     async def override_get_db():
@@ -162,11 +165,6 @@ async def test_patch_current_user_profile_empty_payload_returns_422(
 
     app.dependency_overrides[get_db] = override_get_db
     try:
-        await api_client.get(
-            "/api/v1/users/me",
-            headers={"Authorization": f"Bearer {token}"},
-        )
-
         response = await api_client.patch(
             "/api/v1/users/me",
             headers={"Authorization": f"Bearer {token}"},
@@ -186,6 +184,7 @@ async def test_patch_current_user_profile_invalid_url_returns_422(
 
     user_id = uuid4()
     email = f"user-{uuid4().hex[:8]}@ufl.edu"
+    await seed_auth_user(db_session, user_id=user_id, email=email)
     token = generate_token(user_id, email, jwt_secret)
 
     async def override_get_db():
@@ -193,11 +192,6 @@ async def test_patch_current_user_profile_invalid_url_returns_422(
 
     app.dependency_overrides[get_db] = override_get_db
     try:
-        await api_client.get(
-            "/api/v1/users/me",
-            headers={"Authorization": f"Bearer {token}"},
-        )
-
         response = await api_client.patch(
             "/api/v1/users/me",
             headers={"Authorization": f"Bearer {token}"},
@@ -217,6 +211,7 @@ async def test_patch_current_user_profile_rejects_null_full_name(
 
     user_id = uuid4()
     email = f"user-{uuid4().hex[:8]}@ufl.edu"
+    await seed_auth_user(db_session, user_id=user_id, email=email)
     token = generate_token(user_id, email, jwt_secret)
 
     async def override_get_db():
@@ -224,10 +219,6 @@ async def test_patch_current_user_profile_rejects_null_full_name(
 
     app.dependency_overrides[get_db] = override_get_db
     try:
-        await api_client.get(
-            "/api/v1/users/me",
-            headers={"Authorization": f"Bearer {token}"},
-        )
         setup_response = await api_client.patch(
             "/api/v1/users/me",
             headers={"Authorization": f"Bearer {token}"},
@@ -246,12 +237,44 @@ async def test_patch_current_user_profile_rejects_null_full_name(
 
 
 @pytest.mark.asyncio
+async def test_get_current_user_profile_unknown_user_returns_401(
+    api_client, db_session, monkeypatch
+):
+    jwt_secret = "integration-test-jwt-secret-at-least-32b"
+    monkeypatch.setattr(settings, "DATABASE_JWT_SECRET", jwt_secret)
+
+    user_id = uuid4()
+    email = f"user-{uuid4().hex[:8]}@ufl.edu"
+    token = generate_token(user_id, email, jwt_secret)
+
+    async def override_get_db():
+        yield db_session
+
+    app.dependency_overrides[get_db] = override_get_db
+    try:
+        response = await api_client.get(
+            "/api/v1/users/me",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert response.status_code == 401
+        assert response.json()["detail"] == "Invalid token"
+    finally:
+        app.dependency_overrides.clear()
+
+
+@pytest.mark.asyncio
 async def test_get_user_profile(api_client, db_session, monkeypatch):
     user_id = uuid4()
     email = f"user-{uuid4().hex[:8]}@ufl.edu"
 
     # Pre-insert user
-    user = User(id=user_id, email=email, full_name="Public User", role="student")  # pyright: ignore[reportCallIssue]
+    user = User(  # pyright: ignore[reportCallIssue]
+        id=user_id,
+        email=email,
+        password_hash="integration-password-hash",
+        full_name="Public User",
+        role="student",
+    )
     db_session.add(user)
     await db_session.commit()
 
@@ -276,7 +299,13 @@ async def test_list_user_projects(api_client, db_session):
     email = f"user-{uuid4().hex[:8]}@ufl.edu"
 
     # Pre-insert user and some projects
-    user = User(id=user_id, email=email, full_name="Author", role="student")  # pyright: ignore[reportCallIssue]
+    user = User(  # pyright: ignore[reportCallIssue]
+        id=user_id,
+        email=email,
+        password_hash="integration-password-hash",
+        full_name="Author",
+        role="student",
+    )
     db_session.add(user)
     await db_session.commit()
 

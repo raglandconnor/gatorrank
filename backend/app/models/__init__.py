@@ -1,3 +1,4 @@
+from app.models.auth import RefreshSession
 from app.models.user import User
 from app.models.project import Project, ProjectMember, Vote
 from app.models.project_roles import (
@@ -10,6 +11,7 @@ from app.models.project_roles import (
 
 __all__ = [
     "User",
+    "RefreshSession",
     "Project",
     "ProjectMember",
     "Vote",

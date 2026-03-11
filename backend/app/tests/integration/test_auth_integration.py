@@ -8,7 +8,7 @@ import jwt
 import pytest
 import pytest_asyncio
 import sqlalchemy as sa
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi import Request
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncEngine
@@ -40,7 +40,51 @@ async def api_client():
 
 
 @pytest.mark.asyncio
-async def test_get_current_user_upserts_user_in_real_db(
+async def test_get_current_user_returns_existing_user(
+    api_client, db_session, monkeypatch
+):
+    jwt_secret = "integration-test-jwt-secret-at-least-32b"
+    monkeypatch.setattr(settings, "DATABASE_JWT_SECRET", jwt_secret)
+
+    user_id = uuid4()
+    email = f"auth-int-{uuid4().hex[:8]}@ufl.edu"
+    existing_user = User(  # pyright: ignore[reportCallIssue]
+        id=user_id,
+        email=email,
+        password_hash="integration-password-hash",
+        role="student",
+    )
+    db_session.add(existing_user)
+    await db_session.commit()
+
+    token = jwt.encode(
+        {
+            "sub": str(user_id),
+            "email": email,
+            "aud": "authenticated",
+            "exp": datetime.now(UTC) + timedelta(minutes=5),
+        },
+        jwt_secret,
+        algorithm="HS256",
+    )
+
+    async def override_get_db():
+        yield db_session
+
+    app.dependency_overrides[get_db] = override_get_db
+    try:
+        response = await api_client.get(
+            "/test-auth-integration",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert response.status_code == 200
+        assert response.json() == {"id": str(user_id), "email": email}
+    finally:
+        app.dependency_overrides.clear()
+
+
+@pytest.mark.asyncio
+async def test_get_current_user_rejects_unknown_user(
     api_client, db_session, monkeypatch
 ):
     jwt_secret = "integration-test-jwt-secret-at-least-32b"
@@ -64,67 +108,18 @@ async def test_get_current_user_upserts_user_in_real_db(
 
     app.dependency_overrides[get_db] = override_get_db
     try:
-        before = await db_session.exec(sa.select(User).where(User.id == user_id))  # pyright: ignore[reportArgumentType]
-        assert before.scalars().one_or_none() is None
-
         response = await api_client.get(
             "/test-auth-integration",
             headers={"Authorization": f"Bearer {token}"},
         )
-        assert response.status_code == 200
-        assert response.json() == {"id": str(user_id), "email": email}
-
-        after = await db_session.exec(sa.select(User).where(User.id == user_id))  # pyright: ignore[reportArgumentType]
-        created_user = after.scalars().one_or_none()
-        assert created_user is not None
-        assert created_user.email == email
+        assert response.status_code == 401
+        assert response.json()["detail"] == "Invalid token"
     finally:
         app.dependency_overrides.clear()
 
 
 @pytest.mark.asyncio
-async def test_get_current_user_normalizes_email_to_lowercase_on_upsert(
-    api_client, db_session, monkeypatch
-):
-    jwt_secret = "integration-test-jwt-secret-at-least-32b"
-    monkeypatch.setattr(settings, "DATABASE_JWT_SECRET", jwt_secret)
-
-    user_id = uuid4()
-    mixed_email = f"  Auth-Int-{uuid4().hex[:8]}@UFL.EDU  "
-    normalized_email = mixed_email.strip().lower()
-    token = jwt.encode(
-        {
-            "sub": str(user_id),
-            "email": mixed_email,
-            "aud": "authenticated",
-            "exp": datetime.now(UTC) + timedelta(minutes=5),
-        },
-        jwt_secret,
-        algorithm="HS256",
-    )
-
-    async def override_get_db():
-        yield db_session
-
-    app.dependency_overrides[get_db] = override_get_db
-    try:
-        response = await api_client.get(
-            "/test-auth-integration",
-            headers={"Authorization": f"Bearer {token}"},
-        )
-        assert response.status_code == 200
-        assert response.json() == {"id": str(user_id), "email": normalized_email}
-
-        after = await db_session.exec(sa.select(User).where(User.id == user_id))  # pyright: ignore[reportArgumentType]
-        created_user = after.scalars().one_or_none()
-        assert created_user is not None
-        assert created_user.email == normalized_email
-    finally:
-        app.dependency_overrides.clear()
-
-
-@pytest.mark.asyncio
-async def test_get_current_user_concurrent_first_requests_are_race_safe(
+async def test_get_current_user_concurrent_unknown_user_requests_are_rejected(
     async_engine: AsyncEngine, monkeypatch
 ):
     jwt_secret = "integration-test-jwt-secret-at-least-32b"
@@ -148,23 +143,16 @@ async def test_get_current_user_concurrent_first_requests_are_race_safe(
         async with AsyncSession(async_engine, expire_on_commit=False) as session:
             return await _resolve_authenticated_user(request, token, session)
 
-    first_user, second_user = await asyncio.gather(
-        authenticate_once(), authenticate_once()
+    first_response, second_response = await asyncio.gather(
+        authenticate_once(), authenticate_once(), return_exceptions=True
     )
-    assert first_user.id == user_id
-    assert second_user.id == user_id
-    assert first_user.email == email
-    assert second_user.email == email
+    assert isinstance(first_response, HTTPException)
+    assert isinstance(second_response, HTTPException)
+    assert first_response.status_code == 401
+    assert second_response.status_code == 401
 
     async with AsyncSession(async_engine, expire_on_commit=False) as verify_session:
         count_result = await verify_session.exec(  # pyright: ignore[reportCallIssue]
             sa.select(sa.func.count()).select_from(User).where(User.id == user_id)  # pyright: ignore[reportArgumentType]
         )
-        assert count_result.scalar_one() == 1
-        stored_user_result = await verify_session.exec(  # pyright: ignore[reportCallIssue]
-            sa.select(User).where(User.id == user_id)  # pyright: ignore[reportArgumentType]
-        )
-        stored_user = stored_user_result.scalars().one()
-        assert stored_user.email == email
-        await verify_session.delete(stored_user)
-        await verify_session.commit()
+        assert count_result.scalar_one() == 0

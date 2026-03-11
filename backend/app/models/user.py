@@ -10,6 +10,9 @@ class User(SQLModel, table=True):
 
     id: UUID = Field(default_factory=uuid4, primary_key=True, nullable=False)
     email: str = Field(unique=True, nullable=False, max_length=320)
+    password_hash: str = Field(
+        sa_column=sa.Column(sa.String(length=255), nullable=False)
+    )
     role: str = Field(default="student", nullable=False, max_length=32)
     full_name: str | None = Field(default=None, max_length=255)
     profile_picture_url: str | None = Field(default=None, max_length=2048)

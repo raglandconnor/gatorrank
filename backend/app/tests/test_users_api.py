@@ -67,6 +67,7 @@ def test_update_current_user_profile():
     updated_user = User(
         id=user_id,
         email="test@example.com",
+        password_hash="test-password-hash",
         full_name="New Name",
         profile_picture_url="http://new.pic",
         role="student",
@@ -103,6 +104,7 @@ def test_update_current_user_allows_partial_payload():
     updated_user = User(
         id=user_id,
         email="test@example.com",
+        password_hash="test-password-hash",
         full_name="Test User",
         profile_picture_url="https://new.pic/avatar.jpg",
         role="student",
@@ -201,6 +203,7 @@ def test_get_user_profile():
     target_user = User(
         id=target_user_id,
         email="hidden@example.com",
+        password_hash="test-password-hash",
         full_name="Target User",
         profile_picture_url=None,
         role="student",
@@ -251,6 +254,7 @@ def test_list_user_projects():
     target_user = User(
         id=target_user_id,
         email="test@test.com",
+        password_hash="test-password-hash",
         created_at=now,
         updated_at=now,
     )
@@ -307,6 +311,7 @@ def test_list_user_projects_invalid_cursor_returns_400():
     target_user = User(
         id=target_user_id,
         email="test@test.com",
+        password_hash="test-password-hash",
         created_at=now,
         updated_at=now,
     )
