@@ -23,12 +23,14 @@ async def api_client():
 
 
 def generate_token(user_id, email, jwt_secret):
+    now = datetime.now(UTC)
     return jwt.encode(
         {
             "sub": str(user_id),
             "email": email,
             "aud": "authenticated",
-            "exp": datetime.now(UTC) + timedelta(minutes=5),
+            "iat": int(now.timestamp()),
+            "exp": now + timedelta(minutes=5),
         },
         jwt_secret,
         algorithm="HS256",

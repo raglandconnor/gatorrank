@@ -136,7 +136,7 @@ def test_optional_auth_missing_sub_claim_401(jwt_test_client):
         headers={"Authorization": f"Bearer {token_without_sub}"},
     )
     assert response.status_code == 401
-    assert response.json()["detail"] == "Invalid token payload"
+    assert response.json()["detail"] == "Invalid token"
 
 
 def test_optional_auth_missing_email_claim_401(jwt_test_client):
@@ -158,7 +158,7 @@ def test_optional_auth_missing_email_claim_401(jwt_test_client):
         headers={"Authorization": f"Bearer {token_without_email}"},
     )
     assert response.status_code == 401
-    assert response.json()["detail"] == "Invalid token payload"
+    assert response.json()["detail"] == "Invalid token"
 
 
 def test_optional_auth_valid_token_returns_existing_user(jwt_test_context):
@@ -311,11 +311,13 @@ def jwt_test_context(client, monkeypatch):
 
 
 def _make_token(secret: str, **overrides: object) -> str:
+    now = datetime.now(UTC)
     payload = {
         "sub": str(DEFAULT_AUTH_USER_ID),
         "email": "jwt-test@ufl.edu",
         "aud": "authenticated",
-        "exp": datetime.now(UTC) + timedelta(minutes=5),
+        "iat": int(now.timestamp()),
+        "exp": int((now + timedelta(minutes=5)).timestamp()),
     }
     payload.update(overrides)
     return jwt.encode(payload, secret, algorithm="HS256")
@@ -389,7 +391,7 @@ def test_real_jwt_missing_email_claim(jwt_test_client):
         headers={"Authorization": f"Bearer {token}"},
     )
     assert response.status_code == 401
-    assert response.json()["detail"] == "Invalid token payload"
+    assert response.json()["detail"] == "Invalid token"
 
 
 def test_real_jwt_missing_sub_claim(jwt_test_client):
@@ -411,7 +413,7 @@ def test_real_jwt_missing_sub_claim(jwt_test_client):
         headers={"Authorization": f"Bearer {token_without_sub}"},
     )
     assert response.status_code == 401
-    assert response.json()["detail"] == "Invalid token payload"
+    assert response.json()["detail"] == "Invalid token"
 
 
 def test_real_jwt_missing_email_claim_omitted(jwt_test_client):
@@ -433,7 +435,7 @@ def test_real_jwt_missing_email_claim_omitted(jwt_test_client):
         headers={"Authorization": f"Bearer {token_without_email}"},
     )
     assert response.status_code == 401
-    assert response.json()["detail"] == "Invalid token payload"
+    assert response.json()["detail"] == "Invalid token"
 
 
 def test_auth_invalid_header_scheme(jwt_test_client):
@@ -483,7 +485,42 @@ def test_real_jwt_missing_aud_claim(jwt_test_client):
     assert response.json()["detail"] == "Invalid token"
 
 
-def test_real_jwt_missing_exp_claim_currently_allowed(jwt_test_client):
+def test_real_jwt_access_token_exp_boundary(jwt_test_client):
+    valid_token = _make_token(
+        "test-jwt-secret-at-least-32-bytes!!",
+        exp=int((datetime.now(UTC) + timedelta(seconds=5)).timestamp()),
+    )
+    valid_response = jwt_test_client.get(
+        "/test-auth",
+        headers={"Authorization": f"Bearer {valid_token}"},
+    )
+    assert valid_response.status_code == 200
+    assert valid_response.json() == {"email": "jwt-test@ufl.edu"}
+
+    at_exp_token = _make_token(
+        "test-jwt-secret-at-least-32-bytes!!",
+        exp=int(datetime.now(UTC).timestamp()),
+    )
+    at_exp_response = jwt_test_client.get(
+        "/test-auth",
+        headers={"Authorization": f"Bearer {at_exp_token}"},
+    )
+    assert at_exp_response.status_code == 401
+    assert at_exp_response.json()["detail"] == "Token expired"
+
+    expired_token = _make_token(
+        "test-jwt-secret-at-least-32-bytes!!",
+        exp=int((datetime.now(UTC) - timedelta(seconds=10)).timestamp()),
+    )
+    expired_response = jwt_test_client.get(
+        "/test-auth",
+        headers={"Authorization": f"Bearer {expired_token}"},
+    )
+    assert expired_response.status_code == 401
+    assert expired_response.json()["detail"] == "Token expired"
+
+
+def test_real_jwt_missing_exp_claim_rejected(jwt_test_client):
     token = _make_token("test-jwt-secret-at-least-32-bytes!!")
     payload = jwt.decode(
         token,
@@ -501,8 +538,30 @@ def test_real_jwt_missing_exp_claim_currently_allowed(jwt_test_client):
         "/test-auth",
         headers={"Authorization": f"Bearer {token_without_exp}"},
     )
-    assert response.status_code == 200
-    assert response.json() == {"email": "jwt-test@ufl.edu"}
+    assert response.status_code == 401
+    assert response.json()["detail"] == "Invalid token"
+
+
+def test_real_jwt_missing_iat_claim_rejected(jwt_test_client):
+    token = _make_token("test-jwt-secret-at-least-32-bytes!!")
+    payload = jwt.decode(
+        token,
+        "test-jwt-secret-at-least-32-bytes!!",
+        algorithms=["HS256"],
+        options={"verify_exp": False, "verify_aud": False},
+    )
+    payload.pop("iat", None)
+    token_without_iat = jwt.encode(
+        payload,
+        "test-jwt-secret-at-least-32-bytes!!",
+        algorithm="HS256",
+    )
+    response = jwt_test_client.get(
+        "/test-auth",
+        headers={"Authorization": f"Bearer {token_without_iat}"},
+    )
+    assert response.status_code == 401
+    assert response.json()["detail"] == "Invalid token"
 
 
 def test_real_jwt_existing_user_does_not_create(jwt_test_context):

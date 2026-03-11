@@ -27,6 +27,7 @@ async def _resolve_authenticated_user(
             settings.DATABASE_JWT_SECRET,
             algorithms=["HS256"],
             audience="authenticated",
+            options={"require": ["sub", "email", "aud", "exp", "iat"]},
         )
         user_id_str = payload.get("sub")
         raw_email = payload.get("email")

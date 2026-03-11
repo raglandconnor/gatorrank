@@ -9,6 +9,7 @@ import sqlalchemy as sa
 from argon2 import PasswordHasher
 from argon2.exceptions import InvalidHashError, VerifyMismatchError
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.sql import update
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
@@ -204,52 +205,81 @@ class AuthService:
         return delta
 
     async def refresh_token_pair(self, *, refresh_token: str) -> tuple[TokenPair, User]:
-        now = datetime.now(UTC)
-        refresh_token_hash = self.hash_refresh_token(refresh_token)
-        refresh_session_cols = getattr(RefreshSession, "__table__").c
+        try:
+            now = datetime.now(UTC)
+            refresh_token_hash = self.hash_refresh_token(refresh_token)
+            refresh_session_cols = getattr(RefreshSession, "__table__").c
 
-        session_statement = select(RefreshSession).where(
-            refresh_session_cols.token_hash == refresh_token_hash,
-            refresh_session_cols.revoked_at.is_(None),
-        )
-        session_result = await self.db.exec(session_statement)
-        refresh_session = session_result.first()
-        if refresh_session is None:
-            raise InvalidRefreshTokenError("Invalid refresh token")
-        if refresh_session.expires_at <= now:
-            raise InvalidRefreshTokenError("Invalid refresh token")
+            # Atomically claim (revoke) the active refresh session to prevent replay races.
+            revoke_statement = (
+                update(RefreshSession)
+                .where(
+                    refresh_session_cols.token_hash == refresh_token_hash,
+                    refresh_session_cols.revoked_at.is_(None),
+                )
+                .values(revoked_at=now)
+                .returning(
+                    refresh_session_cols.id,
+                    refresh_session_cols.user_id,
+                    refresh_session_cols.created_at,
+                    refresh_session_cols.expires_at,
+                )
+            )
+            revoked_row_result = await self.db.exec(revoke_statement)
+            revoked_row = revoked_row_result.one_or_none()
+            if revoked_row is None:
+                raise InvalidRefreshTokenError("Invalid refresh token")
 
-        user_result = await self.db.exec(
-            select(User).where(User.id == refresh_session.user_id)
-        )
-        user = user_result.first()
-        if user is None:
-            raise InvalidRefreshTokenError("Invalid refresh token")
+            session_user_id = revoked_row[1]
+            session_created_at = revoked_row[2]
+            session_expires_at = revoked_row[3]
+            if session_expires_at <= now:
+                await self.db.commit()
+                raise InvalidRefreshTokenError("Invalid refresh token")
 
-        original_ttl = self._derive_original_refresh_ttl(refresh_session)
-        next_refresh_token = secrets.token_urlsafe(REFRESH_TOKEN_BYTES)
-        next_refresh_token_hash = self.hash_refresh_token(next_refresh_token)
+            user_result = await self.db.exec(
+                select(User).where(User.id == session_user_id)
+            )
+            user = user_result.first()
+            if user is None:
+                await self.db.commit()
+                raise InvalidRefreshTokenError("Invalid refresh token")
 
-        refresh_session.revoked_at = now
-        replacement_session = RefreshSession(  # pyright: ignore[reportCallIssue]
-            user_id=user.id,
-            token_hash=next_refresh_token_hash,
-            expires_at=now + original_ttl,
-            revoked_at=None,
-        )
-        self.db.add(refresh_session)
-        self.db.add(replacement_session)
-        await self.db.commit()
+            original_ttl = self._derive_original_refresh_ttl(
+                RefreshSession(  # pyright: ignore[reportCallIssue]
+                    id=revoked_row[0],
+                    user_id=session_user_id,
+                    token_hash=refresh_token_hash,
+                    created_at=session_created_at,
+                    expires_at=session_expires_at,
+                    revoked_at=now,
+                )
+            )
+            next_refresh_token = secrets.token_urlsafe(REFRESH_TOKEN_BYTES)
+            next_refresh_token_hash = self.hash_refresh_token(next_refresh_token)
+            replacement_session = RefreshSession(  # pyright: ignore[reportCallIssue]
+                user_id=user.id,
+                token_hash=next_refresh_token_hash,
+                expires_at=now + original_ttl,
+                revoked_at=None,
+            )
+            self.db.add(replacement_session)
+            await self.db.commit()
 
-        return (
-            self._build_token_pair(
-                user=user,
-                refresh_token=next_refresh_token,
-                refresh_ttl=original_ttl,
-                now=now,
-            ),
-            user,
-        )
+            return (
+                self._build_token_pair(
+                    user=user,
+                    refresh_token=next_refresh_token,
+                    refresh_ttl=original_ttl,
+                    now=now,
+                ),
+                user,
+            )
+        except InvalidRefreshTokenError:
+            raise
+        except Exception:
+            await self.db.rollback()
+            raise
 
     async def revoke_refresh_session(self, *, refresh_token: str) -> bool:
         now = datetime.now(UTC)

@@ -212,3 +212,58 @@ def test_signup_password_policy_validation_returns_422():
         },
     )
     assert response.status_code == 422
+
+
+def test_auth_openapi_metadata_and_response_codes_align_with_routes():
+    openapi = app.openapi()
+    paths = openapi["paths"]
+
+    signup = paths["/api/v1/auth/signup"]["post"]
+    assert signup["summary"] == "Sign up with email and password"
+    assert signup["description"]
+    assert {"201", "409", "422"}.issubset(signup["responses"].keys())
+
+    login = paths["/api/v1/auth/login"]["post"]
+    assert login["summary"] == "Log in with email and password"
+    assert login["description"]
+    assert {"200", "401", "422"}.issubset(login["responses"].keys())
+
+    auth_me = paths["/api/v1/auth/me"]["get"]
+    assert auth_me["summary"] == "Get authenticated user profile"
+    assert auth_me["description"]
+    assert {"200", "401"}.issubset(auth_me["responses"].keys())
+
+    refresh = paths["/api/v1/auth/refresh"]["post"]
+    assert refresh["summary"] == "Rotate refresh token"
+    assert refresh["description"]
+    assert {"200", "401", "422"}.issubset(refresh["responses"].keys())
+
+    logout = paths["/api/v1/auth/logout"]["post"]
+    assert logout["summary"] == "Log out refresh session"
+    assert logout["description"]
+    assert "204" in logout["responses"]
+
+
+def test_auth_openapi_response_models_align_with_contract():
+    openapi = app.openapi()
+    paths = openapi["paths"]
+
+    signup_201_schema = paths["/api/v1/auth/signup"]["post"]["responses"]["201"][
+        "content"
+    ]["application/json"]["schema"]
+    assert signup_201_schema["$ref"].endswith("/AuthTokenResponse")
+
+    login_200_schema = paths["/api/v1/auth/login"]["post"]["responses"]["200"][
+        "content"
+    ]["application/json"]["schema"]
+    assert login_200_schema["$ref"].endswith("/AuthTokenResponse")
+
+    refresh_200_schema = paths["/api/v1/auth/refresh"]["post"]["responses"]["200"][
+        "content"
+    ]["application/json"]["schema"]
+    assert refresh_200_schema["$ref"].endswith("/AuthTokenResponse")
+
+    auth_me_200_schema = paths["/api/v1/auth/me"]["get"]["responses"]["200"]["content"][
+        "application/json"
+    ]["schema"]
+    assert auth_me_200_schema["$ref"].endswith("/AuthMeResponse")
