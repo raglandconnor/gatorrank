@@ -3,20 +3,31 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Box, VStack, HStack, Text, Flex } from '@chakra-ui/react';
-import { LuMessageSquare, LuChevronUp, LuArrowRight } from 'react-icons/lu';
+import {
+  LuMessageSquare,
+  LuChevronUp,
+  LuArrowRight,
+  LuPencil,
+} from 'react-icons/lu';
+import { Button } from '@chakra-ui/react';
 import type { ProfileProject } from '@/data/mock-profile';
 
 interface ProfileProjectCardProps {
   project: ProfileProject;
+  onEdit?: (projectId: number) => void;
 }
 
-export function ProfileProjectCard({ project }: ProfileProjectCardProps) {
+export function ProfileProjectCard({
+  project,
+  onEdit,
+}: ProfileProjectCardProps) {
   const [isHovered, setIsHovered] = useState(false);
   const [isVoted, setIsVoted] = useState(false);
   const voteCount = project.votes + (isVoted ? 1 : 0);
 
   return (
     <Box
+      position="relative"
       bg={isHovered ? '#efefef' : 'gray.100'}
       borderRadius="13px"
       p="16px"
@@ -26,6 +37,34 @@ export function ProfileProjectCard({ project }: ProfileProjectCardProps) {
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
+      {onEdit && (
+        <Button
+          type="button"
+          aria-label={`Edit ${project.name}`}
+          position="absolute"
+          top="12px"
+          right="12px"
+          zIndex={1}
+          size="xs"
+          variant="ghost"
+          minW="auto"
+          h="auto"
+          p="6px"
+          borderRadius="full"
+          bg="white"
+          border="1px solid"
+          borderColor="gray.300"
+          color="gray.600"
+          _hover={{ bg: 'gray.100', color: 'gray.800' }}
+          transition="background 0.15s, color 0.15s"
+          onClick={(e) => {
+            e.stopPropagation();
+            onEdit(project.id);
+          }}
+        >
+          <LuPencil size={14} />
+        </Button>
+      )}
       <VStack align="start" gap="12px">
         {/* Image placeholder */}
         <Box
