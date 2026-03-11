@@ -15,7 +15,12 @@ def client():
 
 @pytest.fixture
 def mock_user():
-    return User(id=uuid4(), email="test@ufl.edu", role="student")  # pyright: ignore[reportCallIssue]
+    return User(  # pyright: ignore[reportCallIssue]
+        id=uuid4(),
+        email="test@ufl.edu",
+        password_hash="test-password-hash",
+        role="student",
+    )
 
 
 @pytest.fixture
