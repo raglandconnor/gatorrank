@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   Box,
   Flex,
@@ -146,15 +146,15 @@ export interface ProjectPayload {
 interface ProjectFormProps {
   mode: ProjectFormMode;
   initialValues: ProjectFormValues;
-  submitLabel: string;
   onSubmit: (payload: ProjectPayload, values: ProjectFormValues) => void;
+  onValidityChange?: (isDisabled: boolean) => void;
 }
 
 export function ProjectForm({
   mode,
   initialValues,
-  submitLabel,
   onSubmit,
+  onValidityChange,
 }: ProjectFormProps) {
   const [projectName, setProjectName] = useState(initialValues.name);
   const [shortDescription, setShortDescription] = useState(
@@ -165,6 +165,7 @@ export function ProjectForm({
   );
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const logoUrlRef = useRef<string | null>(null);
   const [logoPreview, setLogoPreview] = useState<string | null>(
     initialValues.imageUrl ?? null,
   );
@@ -204,9 +205,11 @@ export function ProjectForm({
   };
 
   const addMember = () => {
-    const value = memberInput.trim();
-    if (!value) return;
-    if (!isValidUflEmail(value)) {
+    const raw = memberInput.trim();
+    if (!raw) return;
+
+    const normalized = raw.toLowerCase();
+    if (!isValidUflEmail(normalized)) {
       toaster.error({
         title: 'Invalid email',
         description: 'Team members must use a valid @ufl.edu email address.',
@@ -214,13 +217,14 @@ export function ProjectForm({
       return;
     }
     setTeamMembers((prev: string[]) =>
-      prev.includes(value) ? prev : [...prev, value],
+      prev.includes(normalized) ? prev : [...prev, normalized],
     );
     setMemberInput('');
   };
 
   const removeMember = (value: string) => {
-    setTeamMembers((prev: string[]) => prev.filter((m) => m !== value));
+    const normalized = value.toLowerCase().trim();
+    setTeamMembers((prev: string[]) => prev.filter((m) => m !== normalized));
   };
 
   const handleLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -228,6 +232,10 @@ export function ProjectForm({
     if (!file) return;
 
     const previewUrl = URL.createObjectURL(file);
+    if (logoUrlRef.current) {
+      URL.revokeObjectURL(logoUrlRef.current);
+    }
+    logoUrlRef.current = previewUrl;
     setLogoPreview(previewUrl);
 
     e.target.value = '';
@@ -241,6 +249,18 @@ export function ProjectForm({
     !shortDescription.trim() ||
     !fullDescription.trim() ||
     (!logoPreview && mode === 'create');
+
+  useEffect(() => {
+    onValidityChange?.(isSubmitDisabled);
+  }, [isSubmitDisabled, onValidityChange]);
+
+  useEffect(() => {
+    return () => {
+      if (logoUrlRef.current) {
+        URL.revokeObjectURL(logoUrlRef.current);
+      }
+    };
+  }, []);
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -713,9 +733,14 @@ export function ProjectForm({
                   </Box>
                   <Input
                     value={websiteUrl}
-                    onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                      setWebsiteUrl(e.target.value)
-                    }
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                      setWebsiteUrl(e.target.value);
+                      if (errors.websiteUrl)
+                        setErrors((prev) => ({
+                          ...prev,
+                          websiteUrl: undefined,
+                        }));
+                    }}
                     placeholder="https://yourproject.com"
                     {...inputBase}
                     h="36px"
