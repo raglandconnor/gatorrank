@@ -121,7 +121,7 @@ async def test_refresh_rotation_revokes_old_token_and_issues_new_token(
     )
 
     initial_tokens = await service.issue_token_pair(user=user, remember_me=True)
-    rotated_tokens = await service.refresh_token_pair(
+    rotated_tokens, _ = await service.refresh_token_pair(
         refresh_token=initial_tokens.refresh_token
     )
 
@@ -157,7 +157,7 @@ async def test_refresh_rotation_preserves_default_ttl_for_non_remember_me(db_ses
     )
 
     initial_tokens = await service.issue_token_pair(user=user, remember_me=False)
-    rotated_tokens = await service.refresh_token_pair(
+    rotated_tokens, _ = await service.refresh_token_pair(
         refresh_token=initial_tokens.refresh_token
     )
 

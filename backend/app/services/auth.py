@@ -8,6 +8,7 @@ import jwt
 import sqlalchemy as sa
 from argon2 import PasswordHasher
 from argon2.exceptions import InvalidHashError, VerifyMismatchError
+from sqlalchemy.exc import IntegrityError
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
@@ -31,6 +32,10 @@ class InvalidRefreshTokenError(ValueError):
     """Raised when refresh token validation fails."""
 
 
+class DuplicateEmailError(ValueError):
+    """Raised when attempting to create an already-registered email."""
+
+
 @dataclass(frozen=True)
 class TokenPair:
     access_token: str
@@ -49,6 +54,13 @@ class AuthService:
     @staticmethod
     def normalize_email(email: str) -> str:
         return email.strip().lower()
+
+    @staticmethod
+    def normalize_full_name(full_name: str | None) -> str | None:
+        if full_name is None:
+            return None
+        normalized = full_name.strip()
+        return normalized or None
 
     @staticmethod
     def _refresh_ttl(remember_me: bool) -> timedelta:
@@ -81,6 +93,15 @@ class AuthService:
         except (VerifyMismatchError, InvalidHashError):
             return False
 
+    @staticmethod
+    def validate_password_policy(password: str) -> None:
+        if password.strip() == "":
+            raise InvalidCredentialsError("Password cannot be whitespace only")
+        if len(password) < 12:
+            raise InvalidCredentialsError("Password must be at least 12 characters")
+        if len(password) > 128:
+            raise InvalidCredentialsError("Password must be at most 128 characters")
+
     async def get_user_by_email(self, email: str) -> User | None:
         normalized_email = self.normalize_email(email)
         statement = select(User).where(sa.func.lower(User.email) == normalized_email)
@@ -93,6 +114,40 @@ class AuthService:
             raise InvalidCredentialsError("Invalid credentials")
         if not self.verify_password(password, user.password_hash):
             raise InvalidCredentialsError("Invalid credentials")
+        return user
+
+    async def create_user(
+        self,
+        *,
+        email: str,
+        password: str,
+        full_name: str | None = None,
+    ) -> User:
+        self.validate_password_policy(password)
+        normalized_email = self.normalize_email(email)
+        normalized_full_name = self.normalize_full_name(full_name)
+
+        existing = await self.get_user_by_email(normalized_email)
+        if existing is not None:
+            raise DuplicateEmailError("Email already registered")
+
+        user = User(  # pyright: ignore[reportCallIssue]
+            email=normalized_email,
+            password_hash=self.hash_password(password),
+            full_name=normalized_full_name,
+            role="student",
+        )
+        try:
+            self.db.add(user)
+            await self.db.commit()
+            await self.db.refresh(user)
+        except IntegrityError as exc:
+            await self.db.rollback()
+            raise DuplicateEmailError("Email already registered") from exc
+        except Exception:
+            await self.db.rollback()
+            raise
+
         return user
 
     def hash_refresh_token(self, refresh_token: str) -> str:
@@ -148,7 +203,7 @@ class AuthService:
             return REFRESH_TOKEN_TTL_DEFAULT
         return delta
 
-    async def refresh_token_pair(self, *, refresh_token: str) -> TokenPair:
+    async def refresh_token_pair(self, *, refresh_token: str) -> tuple[TokenPair, User]:
         now = datetime.now(UTC)
         refresh_token_hash = self.hash_refresh_token(refresh_token)
         refresh_session_cols = getattr(RefreshSession, "__table__").c
@@ -186,9 +241,30 @@ class AuthService:
         self.db.add(replacement_session)
         await self.db.commit()
 
-        return self._build_token_pair(
-            user=user,
-            refresh_token=next_refresh_token,
-            refresh_ttl=original_ttl,
-            now=now,
+        return (
+            self._build_token_pair(
+                user=user,
+                refresh_token=next_refresh_token,
+                refresh_ttl=original_ttl,
+                now=now,
+            ),
+            user,
         )
+
+    async def revoke_refresh_session(self, *, refresh_token: str) -> bool:
+        now = datetime.now(UTC)
+        refresh_token_hash = self.hash_refresh_token(refresh_token)
+        refresh_session_cols = getattr(RefreshSession, "__table__").c
+        session_statement = select(RefreshSession).where(
+            refresh_session_cols.token_hash == refresh_token_hash,
+            refresh_session_cols.revoked_at.is_(None),
+        )
+        session_result = await self.db.exec(session_statement)
+        refresh_session = session_result.first()
+        if refresh_session is None:
+            return False
+
+        refresh_session.revoked_at = now
+        self.db.add(refresh_session)
+        await self.db.commit()
+        return True
