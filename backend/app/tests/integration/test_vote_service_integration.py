@@ -240,6 +240,7 @@ async def test_list_my_voted_projects_orders_and_paginates(db_session):
 
     first_page = await service.list_my_voted_projects(user_id=voter.id, limit=2)
     assert [item.id for item in first_page.items] == [newest.id, middle.id]
+    assert [item.viewer_has_voted for item in first_page.items] == [True, True]
     assert first_page.next_cursor is not None
 
     second_page = await service.list_my_voted_projects(
@@ -248,6 +249,7 @@ async def test_list_my_voted_projects_orders_and_paginates(db_session):
         cursor=first_page.next_cursor,
     )
     assert [item.id for item in second_page.items] == [oldest.id]
+    assert [item.viewer_has_voted for item in second_page.items] == [True]
     assert second_page.next_cursor is None
 
 
