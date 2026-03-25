@@ -49,8 +49,15 @@ function getYouTubeEmbedUrl(url: string): string | null {
       }
     }
 
+    // YouTube video ids are 11 chars using base64url charset: [A-Za-z0-9_-]
+    const VIDEO_ID_REGEX = /^[a-zA-Z0-9_-]{11}$/;
     if (!videoId) return null;
-    return `https://www.youtube.com/embed/${videoId}`;
+    const normalizedVideoId = videoId.trim();
+    if (!VIDEO_ID_REGEX.test(normalizedVideoId)) return null;
+
+    return `https://www.youtube.com/embed/${encodeURIComponent(
+      normalizedVideoId,
+    )}`;
   } catch {
     return null;
   }
