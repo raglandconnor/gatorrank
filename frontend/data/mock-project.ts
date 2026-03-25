@@ -35,7 +35,7 @@ export const mockProject: EditableProject = {
   demoVideoUrl: 'https://youtu.be/TOEawLBhxJU?si=jeWQWAf-y4Oysncm',
 };
 
-/** Resolves mock detail for `/projects/[id]` until the API exists. */
+/** Resolves mock detail for `/projects/[projectId]` until the API exists. */
 export function getProjectDetailById(
   id: string | number,
 ): ProjectDetail | null {
