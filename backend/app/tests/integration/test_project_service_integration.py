@@ -6,7 +6,7 @@ import pytest
 from sqlmodel import select
 from sqlalchemy.sql.dml import Update
 
-from app.models.project import Project, ProjectMember
+from app.models.project import Project, ProjectMember, Vote
 from app.models.user import User
 from app.schemas.project import ProjectCreateRequest, ProjectUpdateRequest
 from app.services.project import (
@@ -65,6 +65,19 @@ async def _seed_member(
         added_at=added_at,
     )
     db_session.add(member)
+    await db_session.flush()
+
+
+async def _seed_vote(
+    db_session, *, project_id, user_id, created_at: datetime | None = None
+) -> None:
+    now = created_at or datetime.now(timezone.utc)
+    vote = Vote(
+        user_id=user_id,
+        project_id=project_id,
+        created_at=now,
+    )
+    db_session.add(vote)
     await db_session.flush()
 
 
@@ -185,6 +198,33 @@ async def test_get_project_detail_returns_none_for_missing_project(db_session):
 
 
 @pytest.mark.asyncio
+async def test_get_project_detail_sets_viewer_has_voted(db_session):
+    now = datetime.now(timezone.utc)
+    owner = await _seed_user(db_session, "owner-voted-detail@ufl.edu", "Owner")
+    voter = await _seed_user(db_session, "voter-voted-detail@ufl.edu", "Voter")
+    project = await _seed_project(
+        db_session,
+        created_by_id=owner.id,
+        title="Detail Voted",
+        vote_count=1,
+        is_published=True,
+        created_at=now,
+    )
+    await _seed_vote(
+        db_session, project_id=project.id, user_id=voter.id, created_at=now
+    )
+
+    service = ProjectService(db_session)
+    authed_detail = await service.get_project_detail(project.id, voter.id)
+    anonymous_detail = await service.get_project_detail(project.id, None)
+
+    assert authed_detail is not None
+    assert authed_detail.viewer_has_voted is True
+    assert anonymous_detail is not None
+    assert anonymous_detail.viewer_has_voted is False
+
+
+@pytest.mark.asyncio
 async def test_list_projects_top_sort_tiebreakers(db_session):
     now = datetime.now(timezone.utc)
     owner = await _seed_user(db_session, "owner4@ufl.edu", "Owner4")
@@ -253,6 +293,47 @@ async def test_list_projects_new_sort_cursor_pagination(db_session):
     )
     assert [item.id for item in page_two.items] == [oldest.id]
     assert page_two.next_cursor is None
+
+
+@pytest.mark.asyncio
+async def test_list_projects_sets_viewer_has_voted_for_authenticated_user(db_session):
+    now = datetime.now(timezone.utc)
+    owner = await _seed_user(db_session, "owner-vote-list@ufl.edu", "Owner")
+    voter = await _seed_user(db_session, "voter-vote-list@ufl.edu", "Voter")
+
+    voted_project = await _seed_project(
+        db_session,
+        created_by_id=owner.id,
+        title="Voted Project",
+        vote_count=1,
+        is_published=True,
+        created_at=now,
+    )
+    unvoted_project = await _seed_project(
+        db_session,
+        created_by_id=owner.id,
+        title="Unvoted Project",
+        vote_count=0,
+        is_published=True,
+        created_at=now - timedelta(minutes=1),
+    )
+    await _seed_vote(
+        db_session,
+        project_id=voted_project.id,
+        user_id=voter.id,
+        created_at=now,
+    )
+
+    service = ProjectService(db_session)
+    result = await service.list_projects(
+        sort="new",
+        limit=10,
+        current_user_id=voter.id,
+    )
+
+    by_id = {item.id: item for item in result.items}
+    assert by_id[voted_project.id].viewer_has_voted is True
+    assert by_id[unvoted_project.id].viewer_has_voted is False
 
 
 @pytest.mark.asyncio
