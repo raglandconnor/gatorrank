@@ -39,8 +39,16 @@ export const mockProject: EditableProject = {
 export function getProjectDetailById(
   id: string | number,
 ): ProjectDetail | null {
-  const numericId = typeof id === 'string' ? Number.parseInt(id, 10) : id;
-  if (Number.isNaN(numericId)) return null;
+  const numericId =
+    typeof id === 'string'
+      ? (() => {
+          // Only accept fully-numeric route params (e.g. "1abc" should not map to 1).
+          if (!/^\d+$/.test(id)) return NaN;
+          return Number(id);
+        })()
+      : id;
+
+  if (!Number.isInteger(numericId)) return null;
 
   const profileMeta = mockProfileProjects.find((p) => p.id === numericId);
 
