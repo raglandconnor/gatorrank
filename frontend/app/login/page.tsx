@@ -1,7 +1,10 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { GatorRankLogo } from '@/components/GatorRankLogo';
+import { useAuth } from '@/components/auth/AuthProvider';
+import { toaster } from '@/components/ui/toaster';
 import {
   Box,
   Button,
@@ -20,15 +23,19 @@ import NextLink from 'next/link';
 import { isValidEduEmail } from '@/lib/validation';
 
 export default function LoginPage() {
+  const router = useRouter();
+  const { login, isReady } = useAuth();
   const [showPassword, setShowPassword] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [rememberMe, setRememberMe] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState<{
     email?: string;
     password?: string;
   }>({});
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     const newErrors: typeof errors = {};
 
@@ -43,8 +50,25 @@ export default function LoginPage() {
     }
 
     setErrors(newErrors);
-    if (Object.keys(newErrors).length === 0) {
-      // Valid - would submit to API
+    if (Object.keys(newErrors).length > 0) return;
+
+    setIsSubmitting(true);
+    try {
+      await login(email.trim(), password, rememberMe);
+      toaster.success({
+        title: 'Signed in',
+        description: 'Welcome back.',
+      });
+      router.push('/profile');
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : 'Could not sign in. Try again.';
+      toaster.error({
+        title: 'Sign in failed',
+        description: message,
+      });
+    } finally {
+      setIsSubmitting(false);
     }
   }
 
@@ -175,6 +199,25 @@ export default function LoginPage() {
               )}
             </Field.Root>
 
+            <Box
+              as="label"
+              display="flex"
+              alignItems="center"
+              gap={2}
+              justifyContent="flex-start"
+              cursor="pointer"
+            >
+              <input
+                type="checkbox"
+                checked={rememberMe}
+                onChange={(e) => setRememberMe(e.target.checked)}
+                style={{ cursor: 'pointer' }}
+              />
+              <Text fontSize="sm" color="gray.700" textAlign="left">
+                Remember me
+              </Text>
+            </Box>
+
             <Button
               type="submit"
               bg="#FF8C38"
@@ -185,8 +228,9 @@ export default function LoginPage() {
               fontWeight="600"
               borderRadius="lg"
               py={6}
+              disabled={!isReady || isSubmitting}
             >
-              Sign In
+              {isSubmitting ? 'Signing in…' : 'Sign In'}
             </Button>
           </Stack>
         </Box>

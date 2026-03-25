@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { Mona_Sans } from 'next/font/google';
+import { AuthProvider } from '@/components/auth/AuthProvider';
 import { Provider } from '@/components/ui/provider';
 import { Toaster } from '@/components/ui/toaster';
 import './globals.css';
@@ -24,8 +25,10 @@ export default function RootLayout({
     <html lang="en" className={monaSans.variable} suppressHydrationWarning>
       <body suppressHydrationWarning>
         <Provider forcedTheme="light" enableSystem={false} defaultTheme="light">
-          {children}
-          <Toaster />
+          <AuthProvider>
+            {children}
+            <Toaster />
+          </AuthProvider>
         </Provider>
       </body>
     </html>
