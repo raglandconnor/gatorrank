@@ -1,3 +1,5 @@
+import { mockProfileProjects } from './mock-profile';
+
 export interface EditableProject {
   id: number;
   name: string;
@@ -9,6 +11,12 @@ export interface EditableProject {
   websiteUrl: string;
   githubUrl: string;
   demoVideoUrl: string;
+}
+
+export interface ProjectDetail extends EditableProject {
+  votes: number;
+  comments: number;
+  category?: string;
 }
 
 export const mockProject: EditableProject = {
@@ -26,3 +34,42 @@ export const mockProject: EditableProject = {
   githubUrl: '',
   demoVideoUrl: '',
 };
+
+/** Resolves mock detail for `/projects/[id]` until the API exists. */
+export function getProjectDetailById(
+  id: string | number,
+): ProjectDetail | null {
+  const numericId = typeof id === 'string' ? Number.parseInt(id, 10) : id;
+  if (Number.isNaN(numericId)) return null;
+
+  const profileMeta = mockProfileProjects.find((p) => p.id === numericId);
+
+  if (numericId === mockProject.id) {
+    return {
+      ...mockProject,
+      votes: profileMeta?.votes ?? 245,
+      comments: profileMeta?.comments ?? 32,
+      category: profileMeta?.category ?? 'Mobile App',
+    };
+  }
+
+  if (profileMeta) {
+    return {
+      id: profileMeta.id,
+      name: profileMeta.name,
+      shortDescription: 'Listed on your profile.',
+      fullDescription:
+        'Full description for this project will appear here once it is connected to the backend.',
+      tags: [],
+      teamMembers: [],
+      websiteUrl: '',
+      githubUrl: '',
+      demoVideoUrl: '',
+      votes: profileMeta.votes,
+      comments: profileMeta.comments,
+      category: profileMeta.category,
+    };
+  }
+
+  return null;
+}
