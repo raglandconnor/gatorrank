@@ -3,7 +3,7 @@ from uuid import UUID, uuid4
 
 from fastapi.testclient import TestClient
 
-from app.api.deps.auth import get_current_user
+from app.api.deps.auth import get_current_user, get_current_user_optional
 from app.db.database import get_db
 from app.main import app
 from app.models.user import User
@@ -284,6 +284,7 @@ def test_list_user_projects():
     assert await_args is not None
     assert await_args.kwargs["created_by_id"] == target_user_id
     assert await_args.kwargs["limit"] == 10
+    assert await_args.kwargs["current_user_id"] is None
 
 
 def test_list_user_projects_user_not_found():
@@ -331,6 +332,95 @@ def test_list_user_projects_invalid_cursor_returns_400():
             response = client.get(
                 f"/api/v1/users/{target_user_id}/projects?cursor=bad-cursor"
             )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Invalid cursor"
+
+
+def test_list_user_projects_passes_current_user_when_authenticated():
+    target_user_id = uuid4()
+    current_user_id = uuid4()
+
+    from datetime import datetime, timezone
+
+    now = datetime.now(timezone.utc)
+    target_user = User(
+        id=target_user_id,
+        email="test@test.com",
+        password_hash="test-password-hash",
+        created_at=now,
+        updated_at=now,
+    )
+    empty_project_list = ProjectListResponse(items=[], next_cursor=None)
+
+    app.dependency_overrides[get_db] = _override_get_db
+    app.dependency_overrides[get_current_user_optional] = _override_current_user(
+        current_user_id
+    )
+    try:
+        with (
+            patch(
+                "app.api.v1.users.UserService.get_user_by_id",
+                new=AsyncMock(return_value=target_user),
+            ),
+            patch(
+                "app.api.v1.users.ProjectService.list_projects",
+                new=AsyncMock(return_value=empty_project_list),
+            ) as mock_list_projects,
+        ):
+            response = client.get(f"/api/v1/users/{target_user_id}/projects?limit=5")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    await_args = mock_list_projects.await_args
+    assert await_args is not None
+    assert await_args.kwargs["current_user_id"] == current_user_id
+
+
+def test_list_my_voted_projects_requires_auth():
+    response = client.get("/api/v1/users/me/votes")
+    assert response.status_code == 401
+    assert response.json()["detail"] == "Not authenticated"
+
+
+def test_list_my_voted_projects_returns_payload_and_calls_service():
+    user_id = uuid4()
+    empty_project_list = ProjectListResponse(items=[], next_cursor=None)
+
+    app.dependency_overrides[get_db] = _override_get_db
+    app.dependency_overrides[get_current_user] = _override_current_user(user_id)
+    try:
+        with patch(
+            "app.api.v1.users.VoteService.list_my_voted_projects",
+            new=AsyncMock(return_value=empty_project_list),
+        ) as mock_list_votes:
+            response = client.get("/api/v1/users/me/votes?limit=7&cursor=abc")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    assert response.json()["items"] == []
+    await_args = mock_list_votes.await_args
+    assert await_args is not None
+    assert await_args.kwargs["user_id"] == user_id
+    assert await_args.kwargs["limit"] == 7
+    assert await_args.kwargs["cursor"] == "abc"
+
+
+def test_list_my_voted_projects_invalid_cursor_returns_400():
+    user_id = uuid4()
+
+    app.dependency_overrides[get_db] = _override_get_db
+    app.dependency_overrides[get_current_user] = _override_current_user(user_id)
+    try:
+        with patch(
+            "app.api.v1.users.VoteService.list_my_voted_projects",
+            new=AsyncMock(side_effect=CursorError("Invalid cursor")),
+        ):
+            response = client.get("/api/v1/users/me/votes?cursor=bad-cursor")
     finally:
         app.dependency_overrides.clear()
 
