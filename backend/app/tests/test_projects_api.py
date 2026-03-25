@@ -1287,6 +1287,12 @@ def test_remove_project_vote_returns_204_and_calls_service():
     assert await_args.kwargs["user_id"] == user_id
 
 
+def test_remove_project_vote_requires_auth():
+    response = client.delete(f"/api/v1/projects/{uuid4()}/vote")
+    assert response.status_code == 401
+    assert response.json()["detail"] == "Not authenticated"
+
+
 def test_remove_project_vote_not_found_returns_404():
     user_id = uuid4()
     project_id = uuid4()
