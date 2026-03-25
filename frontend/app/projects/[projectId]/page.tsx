@@ -173,9 +173,7 @@ export default function ProjectDetailPage() {
   }
 
   const hasLinks =
-    Boolean(project.websiteUrl?.trim()) ||
-    Boolean(project.githubUrl?.trim()) ||
-    Boolean(project.demoVideoUrl?.trim());
+    Boolean(project.websiteUrl?.trim()) || Boolean(project.githubUrl?.trim());
   const youtubeEmbedUrl = getYouTubeEmbedUrl(project.demoVideoUrl ?? '');
   const hasDemoVideo = Boolean(youtubeEmbedUrl);
 
