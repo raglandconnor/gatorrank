@@ -292,6 +292,7 @@ async def test_list_projects_new_sort_cursor_pagination(db_session):
         sort="new", limit=2, cursor=page_one.next_cursor
     )
     assert [item.id for item in page_two.items] == [oldest.id]
+    assert page_two.next_cursor is None
 
 
 @pytest.mark.asyncio
