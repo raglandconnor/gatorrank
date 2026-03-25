@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Box,
@@ -10,10 +10,9 @@ import {
   Text,
   Button,
   Wrap,
-  SimpleGrid,
-  Avatar,
   Input,
   Textarea,
+  Spinner,
 } from '@chakra-ui/react';
 import {
   LuX,
@@ -30,12 +29,58 @@ import {
   LuShieldCheck,
 } from 'react-icons/lu';
 import { Navbar } from '@/components/Navbar';
-import { ProfileProjectCard } from '@/components/ProfileProjectCard';
-import { mockProfile, mockProfileProjects } from '@/data/mock-profile';
 import { toaster } from '@/components/ui/toaster';
 import { RoleBadge } from '@/components/ui/rolebadge';
+import { getMe, patchMe } from '@/lib/api/users';
+import type { UserPrivate } from '@/lib/api/types/user';
+import { useAuth } from '@/components/auth/AuthProvider';
 
-/* ── shared input style ─────────────────────────────────────── */
+function getInitials(name: string): string {
+  const parts = name.trim().split(/\s+/);
+  if (parts.length === 1) return parts[0][0]?.toUpperCase() ?? '';
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
+/* ── Extended profile fields (not yet in backend) ───────────── */
+interface ExtendedProfile {
+  bio: string;
+  socials: { github?: string; linkedin?: string; website?: string };
+  major: string;
+  graduationYear: number;
+  courses: string[];
+  skills: string[];
+}
+
+const EMPTY_EXTENDED: ExtendedProfile = {
+  bio: '',
+  socials: {},
+  major: '',
+  graduationYear: 0,
+  courses: [],
+  skills: [],
+};
+
+function loadExtended(userId: string): ExtendedProfile {
+  if (typeof window === 'undefined') return EMPTY_EXTENDED;
+  try {
+    const raw = localStorage.getItem(`gatorrank_profile_ext_${userId}`);
+    if (raw)
+      return {
+        ...EMPTY_EXTENDED,
+        ...(JSON.parse(raw) as Partial<ExtendedProfile>),
+      };
+  } catch {
+    // ignore
+  }
+  return EMPTY_EXTENDED;
+}
+
+function saveExtended(userId: string, ext: ExtendedProfile): void {
+  if (typeof window === 'undefined') return;
+  localStorage.setItem(`gatorrank_profile_ext_${userId}`, JSON.stringify(ext));
+}
+
+/* ── Shared input style ─────────────────────────────────────── */
 const inputBase = {
   border: '1px solid',
   borderColor: 'gray.300',
@@ -58,7 +103,7 @@ function FieldLabel({ children }: { children: React.ReactNode }) {
   );
 }
 
-/* ── PasswordField (controlled) ─────────────────────────────── */
+/* ── PasswordField ──────────────────────────────────────────── */
 function PasswordField({
   placeholder,
   value,
@@ -111,40 +156,89 @@ function PasswordField({
   );
 }
 
-/* ── main page ──────────────────────────────────────────────── */
+/* ── Main page ──────────────────────────────────────────────── */
 export default function EditProfilePage() {
   const router = useRouter();
-  // Initialize profile from localStorage when available so edits persist across navigations.
-  const getInitialProfile = () => {
-    try {
-      const raw = localStorage.getItem('gatorrank_profile');
-      if (raw) return JSON.parse(raw);
-    } catch {
-      // ignore and fall back to mock
-    }
-    return mockProfile;
-  };
-
-  const initialProfile =
-    typeof window !== 'undefined' ? getInitialProfile() : mockProfile;
-  const profile = initialProfile;
-
-  /* avatar */
+  const { user: authUser, isReady } = useAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  /* Loading state */
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [apiUser, setApiUser] = useState<UserPrivate | null>(null);
+
+  /* Core fields (saved to backend) */
+  const [name, setName] = useState('');
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
 
+  /* Extended fields (saved to localStorage) */
+  const [bio, setBio] = useState('');
+  const [github, setGithub] = useState('');
+  const [linkedin, setLinkedin] = useState('');
+  const [website, setWebsite] = useState('');
+  const [major, setMajor] = useState('');
+  const [gradYear, setGradYear] = useState('');
+  const [courses, setCourses] = useState<string[]>([]);
+  const [courseInput, setCourseInput] = useState('');
+  const [skills, setSkills] = useState<string[]>([]);
+  const [skillInput, setSkillInput] = useState('');
+
+  /* Password change */
+  const [currentPw, setCurrentPw] = useState('');
+  const [newPw, setNewPw] = useState('');
+  const [confirmPw, setConfirmPw] = useState('');
+  const [pwError, setPwError] = useState('');
+  const [pwSuccess, setPwSuccess] = useState(false);
+
+  /* Load data on mount */
+  useEffect(() => {
+    if (!isReady) return;
+    if (!authUser) {
+      router.replace('/login');
+      return;
+    }
+
+    async function load() {
+      try {
+        const user = await getMe();
+        setApiUser(user);
+        setName(user.full_name ?? '');
+        if (user.profile_picture_url) {
+          setAvatarPreview(user.profile_picture_url);
+        }
+
+        const ext = loadExtended(user.id);
+        setBio(ext.bio);
+        setGithub(ext.socials.github ?? '');
+        setLinkedin(ext.socials.linkedin ?? '');
+        setWebsite(ext.socials.website ?? '');
+        setMajor(ext.major);
+        setGradYear(ext.graduationYear > 0 ? String(ext.graduationYear) : '');
+        setCourses(ext.courses);
+        setSkills(ext.skills);
+      } catch {
+        toaster.error({
+          title: 'Could not load profile',
+          description: 'Please try again.',
+        });
+        router.push('/profile');
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    void load();
+  }, [isReady, authUser, router]);
+
+  /* Avatar file pick (local preview only — no upload yet) */
   const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    const MAX_SIZE_BYTES = 5 * 1024 * 1024; // 5MB
+    const MAX_SIZE_BYTES = 5 * 1024 * 1024;
     if (file.size > MAX_SIZE_BYTES) {
-      // Reset input so selecting the same file again still fires onChange
       e.target.value = '';
-      if (fileInputRef.current) {
-        fileInputRef.current.value = '';
-      }
-
+      if (fileInputRef.current) fileInputRef.current.value = '';
       toaster.error({
         id: String(Date.now()),
         title: 'Image too large',
@@ -155,60 +249,32 @@ export default function EditProfilePage() {
       return;
     }
 
-    // Also reset input after a valid selection to allow re-selecting the same file later
     e.target.value = '';
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
-
+    if (fileInputRef.current) fileInputRef.current.value = '';
     setAvatarPreview(URL.createObjectURL(file));
   };
 
-  /* profile form state (initialized from saved profile if present) */
-  const [name, setName] = useState(initialProfile.name);
-  const [bio, setBio] = useState(initialProfile.bio);
-  const [github, setGithub] = useState(initialProfile.socials?.github ?? '');
-  const [linkedin, setLinkedin] = useState(
-    initialProfile.socials?.linkedin ?? '',
-  );
-  const [website, setWebsite] = useState(initialProfile.socials?.website ?? '');
-  const [major, setMajor] = useState(initialProfile.major);
-  const [gradYear, setGradYear] = useState(
-    String(initialProfile.graduationYear),
-  );
-
-  const [courses, setCourses] = useState<string[]>(
-    initialProfile.courses ?? [],
-  );
-  const [courseInput, setCourseInput] = useState('');
+  /* Course management */
   const addCourse = () => {
     if (courseInput.trim()) {
-      setCourses((p: string[]) => [...p, courseInput.trim()]);
+      setCourses((p) => [...p, courseInput.trim()]);
       setCourseInput('');
     }
   };
   const removeCourse = (c: string) =>
-    setCourses((p: string[]) => p.filter((x) => x !== c));
+    setCourses((p) => p.filter((x) => x !== c));
 
-  const [skills, setSkills] = useState<string[]>(initialProfile.skills ?? []);
-  const [skillInput, setSkillInput] = useState('');
+  /* Skill management */
   const addSkill = () => {
     if (skillInput.trim()) {
-      setSkills((p: string[]) => [...p, skillInput.trim()]);
+      setSkills((p) => [...p, skillInput.trim()]);
       setSkillInput('');
     }
   };
   const removeSkill = (s: string) => setSkills((p) => p.filter((x) => x !== s));
 
-  /* password state */
-  const [currentPw, setCurrentPw] = useState('');
-  const [newPw, setNewPw] = useState('');
-  const [confirmPw, setConfirmPw] = useState('');
-  const [pwError, setPwError] = useState('');
-  const [pwSuccess, setPwSuccess] = useState(false);
-
+  /* Password change (TODO: wire to backend change-password endpoint) */
   const pwButtonDisabled = !currentPw || !newPw || !confirmPw;
-
   const handleChangePassword = () => {
     setPwError('');
     setPwSuccess(false);
@@ -216,42 +282,75 @@ export default function EditProfilePage() {
       setPwError('New passwords do not match.');
       return;
     }
-    if (newPw.length < 6) {
-      setPwError('New password must be at least 6 characters.');
+    if (newPw.length < 12) {
+      setPwError('New password must be at least 12 characters.');
       return;
     }
-    // TODO: replace with real API call once auth is set up
-    setPwSuccess(true);
-    setCurrentPw('');
-    setNewPw('');
-    setConfirmPw('');
+    toaster.error({
+      title: 'Not available yet',
+      description: 'Password change requires a backend endpoint.',
+    });
   };
 
-  /* save handler — writes to localStorage then navigates */
-  const handleSave = () => {
-    const updated = {
-      ...profile,
-      name,
-      bio,
-      socials: {
-        github: github || undefined,
-        linkedin: linkedin || undefined,
-        website: website || undefined,
-      },
-      major,
-      graduationYear: Number(gradYear) || profile.graduationYear,
-      courses,
-      skills,
-    };
-    localStorage.setItem('gatorrank_profile', JSON.stringify(updated));
-    router.push('/profile');
+  /* Save handler */
+  const handleSave = async () => {
+    if (!apiUser) return;
+    setSaving(true);
+    try {
+      /* Persist core fields to backend */
+      await patchMe({ full_name: name.trim() || undefined });
+
+      /* Persist extended fields to localStorage */
+      saveExtended(apiUser.id, {
+        bio,
+        socials: {
+          github: github || undefined,
+          linkedin: linkedin || undefined,
+          website: website || undefined,
+        },
+        major,
+        graduationYear: Number(gradYear) || 0,
+        courses,
+        skills,
+      });
+
+      toaster.success({
+        title: 'Profile saved',
+        description: 'Your changes have been saved.',
+      });
+      router.push('/profile');
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : 'Could not save profile.';
+      toaster.error({
+        title: 'Save failed',
+        description: message,
+      });
+    } finally {
+      setSaving(false);
+    }
   };
+
+  /* ── Loading ─────────────────────────────────────────────── */
+  if (loading || !isReady) {
+    return (
+      <Box minH="100vh" bg="white">
+        <Navbar />
+        <Flex justify="center" align="center" minH="60vh">
+          <Spinner size="lg" color="orange.400" />
+        </Flex>
+      </Box>
+    );
+  }
+
+  if (!apiUser) return null;
+
+  const displayName = apiUser.full_name ?? apiUser.email;
 
   return (
     <Box minH="100vh" bg="white">
       <Navbar />
 
-      {/* Hidden file input for avatar upload */}
       <input
         ref={fileInputRef}
         type="file"
@@ -261,9 +360,9 @@ export default function EditProfilePage() {
       />
 
       <Box px="36px" pt="32px" pb="64px" maxW="1280px" mx="auto">
-        {/* ── Profile hero ──────────────────────────────────── */}
+        {/* ── Profile hero ─────────────────────────────────── */}
         <HStack gap="24px" mb="40px" align="flex-start">
-          {/* Avatar with camera overlay */}
+          {/* Avatar */}
           <Box
             position="relative"
             w="96px"
@@ -272,24 +371,33 @@ export default function EditProfilePage() {
             cursor="pointer"
             onClick={() => fileInputRef.current?.click()}
           >
-            <Avatar.Root
-              w="96px"
-              h="96px"
-              borderRadius="full"
-              overflow="hidden"
-            >
-              <Avatar.Fallback
-                name={profile.name}
-                bg="gray.300"
-                color="gray.700"
-                fontSize="xl"
-                fontWeight="bold"
+            {avatarPreview ? (
+              <img
+                src={avatarPreview}
+                alt={displayName}
+                style={{
+                  width: '96px',
+                  height: '96px',
+                  borderRadius: '50%',
+                  objectFit: 'cover',
+                  display: 'block',
+                }}
               />
-              {(avatarPreview ?? profile.avatarUrl) && (
-                <Avatar.Image src={avatarPreview ?? profile.avatarUrl} />
-              )}
-            </Avatar.Root>
-            {/* Upload overlay */}
+            ) : (
+              <Flex
+                w="96px"
+                h="96px"
+                borderRadius="full"
+                bg="orange.400"
+                color="white"
+                align="center"
+                justify="center"
+                fontSize="2xl"
+                fontWeight="bold"
+              >
+                {getInitials(displayName)}
+              </Flex>
+            )}
             <Box
               position="absolute"
               inset={0}
@@ -306,16 +414,15 @@ export default function EditProfilePage() {
               <LuCamera size={22} />
             </Box>
           </Box>
-
           {/* Info VStack */}
           <VStack align="start" gap="10px" flex={1} minW={0}>
-            {/* Name input + role badge */}
             <HStack gap="12px" align="center" w="100%" flexWrap="wrap">
               <Input
                 value={name}
                 onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
                   setName(e.target.value)
                 }
+                placeholder="Your full name"
                 {...inputBase}
                 fontSize="xl"
                 fontWeight="bold"
@@ -323,15 +430,15 @@ export default function EditProfilePage() {
                 maxW="400px"
                 lineHeight="32px"
               />
-              <RoleBadge role={profile.role} />
+              <RoleBadge role={apiUser.role as 'student' | 'faculty'} />
             </HStack>
 
-            {/* Bio textarea */}
             <Textarea
               value={bio}
               onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) =>
                 setBio(e.target.value)
               }
+              placeholder="Tell the community about yourself…"
               {...inputBase}
               h="80px"
               py="10px"
@@ -340,9 +447,7 @@ export default function EditProfilePage() {
               lineHeight="24px"
             />
 
-            {/* Social inputs */}
             <VStack align="start" gap="8px" w="100%" maxW="576px">
-              {/* GitHub */}
               <HStack gap="10px" w="100%">
                 <Box color="gray.500" flexShrink={0}>
                   <LuGithub size={18} />
@@ -358,7 +463,6 @@ export default function EditProfilePage() {
                 />
               </HStack>
 
-              {/* LinkedIn */}
               <HStack gap="10px" w="100%">
                 <Box color="gray.500" flexShrink={0}>
                   <LuLinkedin size={18} />
@@ -374,7 +478,6 @@ export default function EditProfilePage() {
                 />
               </HStack>
 
-              {/* Website */}
               <HStack gap="10px" w="100%">
                 <Box color="gray.500" flexShrink={0}>
                   <LuGlobe size={18} />
@@ -392,7 +495,7 @@ export default function EditProfilePage() {
             </VStack>
           </VStack>
 
-          {/* Action buttons — pinned right, top-aligned */}
+          {/* Buttons */}
           <HStack gap="12px" flexShrink={0} align="flex-start">
             <Button
               onClick={() => router.push('/profile')}
@@ -407,6 +510,7 @@ export default function EditProfilePage() {
               bg="white"
               _hover={{ bg: 'orange.50' }}
               transition="background 0.15s"
+              disabled={saving}
             >
               <HStack gap="6px">
                 <LuX size={16} />
@@ -425,6 +529,7 @@ export default function EditProfilePage() {
               fontWeight="normal"
               _hover={{ bg: 'orange.500' }}
               transition="background 0.15s"
+              loading={saving}
             >
               <HStack gap="6px">
                 <LuSave size={16} />
@@ -434,11 +539,11 @@ export default function EditProfilePage() {
           </HStack>
         </HStack>
 
-        {/* ── Two-column lower section ──────────────────────── */}
+        {/* ── Two-column lower section ───────────────────── */}
         <Flex gap="24px" align="start">
           {/* Left column */}
           <VStack w="344px" flexShrink={0} gap="16px" align="start">
-            {/* Academic Information card */}
+            {/* Academic Information */}
             <Box bg="gray.100" borderRadius="13px" p="24px" w="100%">
               <VStack align="start" gap="16px" w="100%">
                 <Text
@@ -450,7 +555,6 @@ export default function EditProfilePage() {
                   Academic Information
                 </Text>
 
-                {/* Major */}
                 <VStack align="start" gap="4px" w="100%">
                   <FieldLabel>Major</FieldLabel>
                   <Input
@@ -464,7 +568,6 @@ export default function EditProfilePage() {
                   />
                 </VStack>
 
-                {/* Graduation Year */}
                 <VStack align="start" gap="4px" w="100%">
                   <FieldLabel>Graduation Year</FieldLabel>
                   <Input
@@ -479,11 +582,8 @@ export default function EditProfilePage() {
                   />
                 </VStack>
 
-                {/* UF Courses */}
                 <VStack align="start" gap="8px" w="100%">
                   <FieldLabel>UF Courses</FieldLabel>
-
-                  {/* Tag input row */}
                   <HStack gap="8px" w="100%">
                     <Input
                       value={courseInput}
@@ -518,8 +618,6 @@ export default function EditProfilePage() {
                       <LuPlus size={16} />
                     </Button>
                   </HStack>
-
-                  {/* Course pills */}
                   <Wrap gap="8px">
                     {courses.map((course: string) => (
                       <HStack
@@ -555,7 +653,7 @@ export default function EditProfilePage() {
               </VStack>
             </Box>
 
-            {/* Account Settings card */}
+            {/* Account Settings */}
             <Box bg="gray.100" borderRadius="13px" p="24px" w="100%">
               <VStack align="start" gap="16px" w="100%">
                 <Text
@@ -567,7 +665,6 @@ export default function EditProfilePage() {
                   Account Settings
                 </Text>
 
-                {/* Email */}
                 <VStack align="start" gap="4px" w="100%">
                   <FieldLabel>Email Address</FieldLabel>
                   <Box position="relative" w="100%">
@@ -583,7 +680,8 @@ export default function EditProfilePage() {
                     </Box>
                     <Input
                       type="email"
-                      defaultValue="luiscabrera@ufl.edu"
+                      value={apiUser.email}
+                      readOnly
                       disabled
                       {...inputBase}
                       h="43px"
@@ -594,7 +692,6 @@ export default function EditProfilePage() {
                   </Box>
                 </VStack>
 
-                {/* Change Password section */}
                 <VStack align="start" gap="12px" w="100%">
                   <Text
                     fontSize="sm"
@@ -617,7 +714,7 @@ export default function EditProfilePage() {
                   <VStack align="start" gap="4px" w="100%">
                     <FieldLabel>New Password</FieldLabel>
                     <PasswordField
-                      placeholder="Enter new password"
+                      placeholder="Enter new password (min 12 chars)"
                       value={newPw}
                       onChange={setNewPw}
                     />
@@ -632,7 +729,6 @@ export default function EditProfilePage() {
                     />
                   </VStack>
 
-                  {/* Feedback messages */}
                   {pwError && (
                     <Text fontSize="xs" color="red.500" lineHeight="20px">
                       {pwError}
@@ -644,7 +740,6 @@ export default function EditProfilePage() {
                     </Text>
                   )}
 
-                  {/* Change Password button */}
                   <Button
                     onClick={handleChangePassword}
                     disabled={pwButtonDisabled}
@@ -684,7 +779,6 @@ export default function EditProfilePage() {
                 Skills
               </Text>
 
-              {/* Skill tag input */}
               <Box bg="gray.100" borderRadius="13px" p="16px" w="100%">
                 <HStack gap="8px">
                   <Input
@@ -698,7 +792,7 @@ export default function EditProfilePage() {
                         addSkill();
                       }
                     }}
-                    placeholder="Add a skill (e.g., React, Python...)"
+                    placeholder="Add a skill (e.g., React, Python…)"
                     {...inputBase}
                     h="43px"
                     flex={1}
@@ -724,7 +818,6 @@ export default function EditProfilePage() {
                 </HStack>
               </Box>
 
-              {/* Skill pills */}
               <Wrap gap="8px">
                 {skills.map((skill: string) => (
                   <HStack
@@ -758,8 +851,8 @@ export default function EditProfilePage() {
               </Wrap>
             </VStack>
 
-            {/* Projects (read-only) */}
-            <VStack align="start" gap="16px" w="100%">
+            {/* Projects (read-only — edit from individual project pages) */}
+            <VStack align="start" gap="8px" w="100%">
               <Text
                 fontSize="md"
                 fontWeight="bold"
@@ -768,11 +861,10 @@ export default function EditProfilePage() {
               >
                 Projects
               </Text>
-              <SimpleGrid columns={3} gap="16px" w="100%">
-                {mockProfileProjects.map((project) => (
-                  <ProfileProjectCard key={project.id} project={project} />
-                ))}
-              </SimpleGrid>
+              <Text fontSize="sm" color="gray.400" lineHeight="24px">
+                Manage your projects from the profile view or individual project
+                pages.
+              </Text>
             </VStack>
           </VStack>
         </Flex>

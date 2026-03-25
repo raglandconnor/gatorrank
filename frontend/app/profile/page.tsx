@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Box,
@@ -10,9 +10,8 @@ import {
   Text,
   Button,
   Wrap,
-  SimpleGrid,
-  Avatar,
   Link as ChakraLink,
+  Spinner,
 } from '@chakra-ui/react';
 import {
   LuPencil,
@@ -23,10 +22,53 @@ import {
 } from 'react-icons/lu';
 import { Navbar } from '@/components/Navbar';
 import { AcademicInfoCard } from '@/components/AcademicInfoCard';
-import { ProfileProjectCard } from '@/components/ProfileProjectCard';
-import { mockProfile, mockProfileProjects } from '@/data/mock-profile';
 import { RoleBadge } from '@/components/ui/rolebadge';
+import { ProfileUserProjects } from '@/components/ProfileUserProjects';
+import { useAuth } from '@/components/auth/AuthProvider';
+import { getMe } from '@/lib/api/users';
+import type { UserPrivate } from '@/lib/api/types/user';
 
+function getInitials(name: string): string {
+  const parts = name.trim().split(/\s+/);
+  if (parts.length === 1) return parts[0][0]?.toUpperCase() ?? '';
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
+/* ── Extended profile fields not (yet) in the backend ──────── */
+interface ExtendedProfile {
+  bio: string;
+  socials: { github?: string; linkedin?: string; website?: string };
+  major: string;
+  graduationYear: number;
+  courses: string[];
+  skills: string[];
+}
+
+const EMPTY_EXTENDED: ExtendedProfile = {
+  bio: '',
+  socials: {},
+  major: '',
+  graduationYear: 0,
+  courses: [],
+  skills: [],
+};
+
+function loadExtended(userId: string): ExtendedProfile {
+  if (typeof window === 'undefined') return EMPTY_EXTENDED;
+  try {
+    const raw = localStorage.getItem(`gatorrank_profile_ext_${userId}`);
+    if (raw)
+      return {
+        ...EMPTY_EXTENDED,
+        ...(JSON.parse(raw) as Partial<ExtendedProfile>),
+      };
+  } catch {
+    // ignore
+  }
+  return EMPTY_EXTENDED;
+}
+
+/* ── SocialLink ─────────────────────────────────────────────── */
 function SocialLink({
   href,
   icon,
@@ -58,22 +100,96 @@ function SocialLink({
   );
 }
 
+/* ── Profile view-model ─────────────────────────────────────── */
+interface ProfileViewModel {
+  apiUser: UserPrivate;
+  extended: ExtendedProfile;
+}
+
+/* ── Page ───────────────────────────────────────────────────── */
 export default function ProfilePage() {
   const router = useRouter();
-  const getSavedProfile = () => {
-    try {
-      const raw = localStorage.getItem('gatorrank_profile');
-      if (raw) return JSON.parse(raw);
-    } catch {
-      // ignore
-    }
-    return mockProfile;
-  };
+  const { user: authUser, isReady } = useAuth();
+  const [viewModel, setViewModel] = useState<ProfileViewModel | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const [profile, setProfile] = useState(() =>
-    typeof window !== 'undefined' ? getSavedProfile() : mockProfile,
-  );
-  const projects = mockProfileProjects;
+  useEffect(() => {
+    if (!isReady) return;
+    if (!authUser) {
+      router.replace('/login');
+      return;
+    }
+
+    async function load() {
+      try {
+        const apiUser = await getMe();
+        const extended = loadExtended(apiUser.id);
+        setViewModel({ apiUser, extended });
+      } catch {
+        setError('Could not load your profile. Please try again.');
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    void load();
+  }, [isReady, authUser, router]);
+
+  /* ── Derived display name for AcademicInfoCard ─────────────── */
+  const academicProfile = viewModel
+    ? {
+        name: viewModel.apiUser.full_name ?? viewModel.apiUser.email,
+        role: viewModel.apiUser.role as 'student' | 'faculty',
+        avatarUrl: viewModel.apiUser.profile_picture_url ?? undefined,
+        bio: viewModel.extended.bio,
+        socials: viewModel.extended.socials,
+        major: viewModel.extended.major,
+        graduationYear: viewModel.extended.graduationYear,
+        courses: viewModel.extended.courses,
+        skills: viewModel.extended.skills,
+      }
+    : null;
+
+  /* ── Loading state ──────────────────────────────────────────── */
+  if (loading || !isReady) {
+    return (
+      <Box minH="100vh" bg="white">
+        <Navbar />
+        <Flex justify="center" align="center" minH="60vh">
+          <Spinner size="lg" color="orange.400" />
+        </Flex>
+      </Box>
+    );
+  }
+
+  if (error || !viewModel || !academicProfile) {
+    return (
+      <Box minH="100vh" bg="white">
+        <Navbar />
+        <Flex
+          justify="center"
+          align="center"
+          minH="60vh"
+          direction="column"
+          gap="12px"
+        >
+          <Text color="gray.600">{error ?? 'Profile unavailable.'}</Text>
+          <Button
+            bg="orange.400"
+            color="white"
+            _hover={{ bg: 'orange.500' }}
+            onClick={() => router.refresh()}
+          >
+            Try again
+          </Button>
+        </Flex>
+      </Box>
+    );
+  }
+
+  const { apiUser, extended } = viewModel;
+  const displayName = apiUser.full_name ?? apiUser.email;
 
   return (
     <Box minH="100vh" bg="white">
@@ -83,22 +199,35 @@ export default function ProfilePage() {
         {/* Profile hero */}
         <HStack gap="24px" mb="40px" align="flex-start">
           {/* Avatar */}
-          <Avatar.Root
-            w="96px"
-            h="96px"
-            flexShrink={0}
-            borderRadius="full"
-            overflow="hidden"
-          >
-            <Avatar.Fallback
-              name={profile.name}
-              bg="gray.300"
-              color="gray.700"
-              fontSize="xl"
-              fontWeight="bold"
+          {apiUser.profile_picture_url ? (
+            <img
+              src={apiUser.profile_picture_url}
+              alt={displayName}
+              style={{
+                width: '96px',
+                height: '96px',
+                borderRadius: '50%',
+                objectFit: 'cover',
+                flexShrink: 0,
+                display: 'block',
+              }}
             />
-            {profile.avatarUrl && <Avatar.Image src={profile.avatarUrl} />}
-          </Avatar.Root>
+          ) : (
+            <Flex
+              w="96px"
+              h="96px"
+              borderRadius="full"
+              bg="orange.400"
+              color="white"
+              align="center"
+              justify="center"
+              fontSize="2xl"
+              fontWeight="bold"
+              flexShrink={0}
+            >
+              {getInitials(displayName)}
+            </Flex>
+          )}
 
           {/* Info */}
           <VStack align="start" gap="8px" flex={1}>
@@ -110,35 +239,51 @@ export default function ProfilePage() {
                 color="gray.900"
                 lineHeight="32px"
               >
-                {profile.name}
+                {displayName}
               </Text>
-              <RoleBadge role={profile.role} />
+              <RoleBadge role={apiUser.role as 'student' | 'faculty'} />
             </HStack>
 
             {/* Bio */}
-            <Text fontSize="sm" color="gray.600" lineHeight="24px" maxW="640px">
-              {profile.bio}
-            </Text>
+            {extended.bio ? (
+              <Text
+                fontSize="sm"
+                color="gray.600"
+                lineHeight="24px"
+                maxW="640px"
+              >
+                {extended.bio}
+              </Text>
+            ) : (
+              <Text
+                fontSize="sm"
+                color="gray.400"
+                lineHeight="24px"
+                maxW="640px"
+              >
+                No bio yet — edit your profile to add one.
+              </Text>
+            )}
 
             {/* Social links */}
             <HStack gap="8px" mt="4px">
-              {profile.socials.github && (
+              {extended.socials.github && (
                 <SocialLink
-                  href={profile.socials.github}
+                  href={extended.socials.github}
                   icon={<LuGithub size={18} />}
                   label="GitHub"
                 />
               )}
-              {profile.socials.linkedin && (
+              {extended.socials.linkedin && (
                 <SocialLink
-                  href={profile.socials.linkedin}
+                  href={extended.socials.linkedin}
                   icon={<LuLinkedin size={18} />}
                   label="LinkedIn"
                 />
               )}
-              {profile.socials.website && (
+              {extended.socials.website && (
                 <SocialLink
-                  href={profile.socials.website}
+                  href={extended.socials.website}
                   icon={<LuGlobe size={18} />}
                   label="Website"
                 />
@@ -146,9 +291,8 @@ export default function ProfilePage() {
             </HStack>
           </VStack>
 
-          {/* Action buttons — pinned right, top-aligned */}
+          {/* Action buttons */}
           <HStack gap="12px" flexShrink={0} align="flex-start">
-            {/* Use router.push to avoid nested anchor issues */}
             <Button
               onClick={() => router.push('/profile/edit')}
               variant="outline"
@@ -192,7 +336,7 @@ export default function ProfilePage() {
         {/* Two-column lower section */}
         <Flex gap="24px" align="start">
           {/* Left: Academic Information */}
-          <AcademicInfoCard profile={profile} />
+          <AcademicInfoCard profile={academicProfile} />
 
           {/* Right: Skills + Projects */}
           <VStack flex={1} align="start" gap="32px" minW={0}>
@@ -206,45 +350,33 @@ export default function ProfilePage() {
               >
                 Skills
               </Text>
-              <Wrap gap="8px">
-                {profile.skills.map((skill: string) => (
-                  <Box
-                    key={skill}
-                    bg="rgba(251,146,60,0.1)"
-                    border="1.6px solid"
-                    borderColor="orange.400"
-                    borderRadius="10px"
-                    px="16px"
-                    py="8px"
-                  >
-                    <Text fontSize="sm" color="orange.400" lineHeight="24px">
-                      {skill}
-                    </Text>
-                  </Box>
-                ))}
-              </Wrap>
+              {extended.skills.length > 0 ? (
+                <Wrap gap="8px">
+                  {extended.skills.map((skill: string) => (
+                    <Box
+                      key={skill}
+                      bg="rgba(251,146,60,0.1)"
+                      border="1.6px solid"
+                      borderColor="orange.400"
+                      borderRadius="10px"
+                      px="16px"
+                      py="8px"
+                    >
+                      <Text fontSize="sm" color="orange.400" lineHeight="24px">
+                        {skill}
+                      </Text>
+                    </Box>
+                  ))}
+                </Wrap>
+              ) : (
+                <Text fontSize="sm" color="gray.400" lineHeight="24px">
+                  No skills added yet — edit your profile to add skills.
+                </Text>
+              )}
             </VStack>
 
             {/* Projects */}
-            <VStack align="start" gap="16px" w="100%">
-              <Text
-                fontSize="md"
-                fontWeight="bold"
-                color="gray.900"
-                lineHeight="30px"
-              >
-                Projects
-              </Text>
-              <SimpleGrid columns={3} gap="16px" w="100%">
-                {projects.map((project) => (
-                  <ProfileProjectCard
-                    key={project.id}
-                    project={project}
-                    onEdit={() => router.push('/projects/edit')}
-                  />
-                ))}
-              </SimpleGrid>
-            </VStack>
+            <ProfileUserProjects userId={apiUser.id} />
           </VStack>
         </Flex>
       </Box>
