@@ -3,18 +3,13 @@ from uuid import UUID
 
 import sqlalchemy as sa
 from sqlalchemy import delete, update
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from app.models.project import Project, ProjectMember, Vote
-from app.models.project_roles import cast_project_member_role
-from app.models.user import User
-from app.schemas.project import (
-    ProjectListItemResponse,
-    ProjectListResponse,
-    ProjectMemberInfo,
-)
+from app.models.project import Project, Vote
+from app.schemas.project import ProjectListItemResponse, ProjectListResponse
+from app.services.project_members import get_members_for_projects
 from app.utils.pagination import (
     CursorError,
     decode_cursor_payload,
@@ -38,20 +33,22 @@ class VoteService:
         if project is None:
             raise VoteTargetNotFoundError("Project not found")
 
-        vote = Vote(  # pyright: ignore[reportCallIssue]
-            user_id=user_id,
-            project_id=project_id,
+        vote_cols = getattr(Vote, "__table__").c
+        insert_statement = (
+            pg_insert(Vote)
+            .values(user_id=user_id, project_id=project_id)
+            .on_conflict_do_nothing(index_elements=["user_id", "project_id"])
+            .returning(vote_cols.id)
         )
         try:
-            async with self.db.begin_nested():
-                self.db.add(vote)
-                await self.db.flush()
-                await self._increment_vote_count(project_id)
+            inserted_vote_id = (await self.db.exec(insert_statement)).one_or_none()
+            if inserted_vote_id is None:
+                await self.db.commit()
+                return False
+
+            await self._increment_vote_count(project_id)
             await self.db.commit()
             return True
-        except IntegrityError:
-            await self.db.commit()
-            return False
         except Exception:
             await self.db.rollback()
             raise
@@ -104,7 +101,6 @@ class VoteService:
             )
         )
 
-        cursor_payload: dict[str, str] | None = None
         if cursor is not None:
             cursor_payload = self._decode_recent_votes_cursor(cursor)
             cursor_voted_at = self._parse_datetime(cursor_payload["voted_at"])
@@ -127,8 +123,8 @@ class VoteService:
         page_rows = rows[:limit]
         projects = [project for _, project in page_rows]
 
-        members_by_project = await self._get_members_for_projects(
-            [p.id for p in projects]
+        members_by_project = await get_members_for_projects(
+            self.db, [project.id for project in projects]
         )
         items = [
             ProjectListItemResponse(
@@ -179,39 +175,6 @@ class VoteService:
             )
         )
         await self.db.exec(statement)
-
-    async def _get_members_for_projects(
-        self, project_ids: list[UUID]
-    ) -> dict[UUID, list[ProjectMemberInfo]]:
-        if not project_ids:
-            return {}
-
-        project_member_cols = getattr(ProjectMember, "__table__").c
-        user_cols = getattr(User, "__table__").c
-        statement = (
-            select(ProjectMember, User)
-            .join(User, user_cols.id == project_member_cols.user_id)
-            .where(project_member_cols.project_id.in_(project_ids))
-            .order_by(
-                project_member_cols.project_id.asc(),
-                project_member_cols.added_at.asc(),
-            )
-        )
-        result = await self.db.exec(statement)
-
-        members_by_project: dict[UUID, list[ProjectMemberInfo]] = {
-            project_id: [] for project_id in project_ids
-        }
-        for member, user in result.all():
-            members_by_project[member.project_id].append(
-                ProjectMemberInfo(
-                    user_id=user.id,
-                    role=cast_project_member_role(member.role),
-                    full_name=user.full_name,
-                    profile_picture_url=user.profile_picture_url,
-                )
-            )
-        return members_by_project
 
     def _encode_recent_votes_cursor(
         self, *, voted_at: datetime, project_id: UUID

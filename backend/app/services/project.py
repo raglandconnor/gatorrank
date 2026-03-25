@@ -25,6 +25,7 @@ from app.schemas.project import (
     ProjectMemberUpdateRequest,
     ProjectUpdateRequest,
 )
+from app.services.project_members import get_members_for_projects
 from app.utils.pagination import (
     CursorError,
     decode_cursor_payload,
@@ -671,35 +672,7 @@ class ProjectService:
     async def _get_members_for_projects(
         self, project_ids: list[UUID]
     ) -> dict[UUID, list[ProjectMemberInfo]]:
-        if not project_ids:
-            return {}
-
-        project_member_cols = getattr(ProjectMember, "__table__").c
-        user_cols = getattr(User, "__table__").c
-        statement = (
-            select(ProjectMember, User)
-            .join(User, user_cols.id == project_member_cols.user_id)
-            .where(project_member_cols.project_id.in_(project_ids))
-            .order_by(
-                project_member_cols.project_id.asc(), project_member_cols.added_at.asc()
-            )
-        )
-        result = await self.db.exec(statement)
-
-        members_by_project: dict[UUID, list[ProjectMemberInfo]] = {
-            pid: [] for pid in project_ids
-        }
-        for member, user in result.all():
-            members_by_project[member.project_id].append(
-                ProjectMemberInfo(
-                    user_id=user.id,
-                    role=self._coerce_member_role(member.role),
-                    full_name=user.full_name,
-                    profile_picture_url=user.profile_picture_url,
-                )
-            )
-
-        return members_by_project
+        return await get_members_for_projects(self.db, project_ids)
 
     @staticmethod
     def _to_project_list_item(
