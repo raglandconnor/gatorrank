@@ -25,6 +25,7 @@ from app.services.project import (
     ProjectService,
     ProjectValidationError,
 )
+from app.services.vote import VoteService, VoteTargetNotFoundError
 
 router = APIRouter()
 
@@ -415,6 +416,10 @@ async def unpublish_project(
     "/projects",
     summary="List projects",
     response_model=ProjectListResponse,
+    responses={
+        400: {"description": "Invalid cursor"},
+        401: {"description": "Invalid or expired bearer token"},
+    },
 )
 async def list_projects(
     limit: int = Query(
@@ -449,6 +454,7 @@ async def list_projects(
         ),
     ),
     db: AsyncSession = Depends(get_db),
+    current_user: User | None = Depends(get_current_user_optional),
 ) -> ProjectListResponse:
     """Return the published projects feed with cursor pagination.
 
@@ -468,6 +474,61 @@ async def list_projects(
             cursor=cursor,
             published_from=published_from,
             published_to=published_to,
+            current_user_id=current_user.id if current_user else None,
         )
     except CursorError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post(
+    "/projects/{project_id}/vote",
+    summary="Vote for a project",
+    description=(
+        "Add the authenticated user's vote for a published project. "
+        "This endpoint is idempotent and returns `204` even if the vote already exists."
+    ),
+    status_code=status.HTTP_204_NO_CONTENT,
+    responses={
+        401: {"description": "Authentication required"},
+        404: {"description": "Project not found"},
+        422: {"description": "Validation error"},
+    },
+)
+async def add_project_vote(
+    project_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> None:
+    """Vote for a published project as the authenticated user."""
+    service = VoteService(db)
+    try:
+        await service.add_vote(project_id=project_id, user_id=current_user.id)
+    except VoteTargetNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="Project not found") from exc
+
+
+@router.delete(
+    "/projects/{project_id}/vote",
+    summary="Remove project vote",
+    description=(
+        "Remove the authenticated user's vote for a published project. "
+        "This endpoint is idempotent and returns `204` even if no vote exists."
+    ),
+    status_code=status.HTTP_204_NO_CONTENT,
+    responses={
+        401: {"description": "Authentication required"},
+        404: {"description": "Project not found"},
+        422: {"description": "Validation error"},
+    },
+)
+async def remove_project_vote(
+    project_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> None:
+    """Remove a vote for a published project as the authenticated user."""
+    service = VoteService(db)
+    try:
+        await service.remove_vote(project_id=project_id, user_id=current_user.id)
+    except VoteTargetNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="Project not found") from exc
