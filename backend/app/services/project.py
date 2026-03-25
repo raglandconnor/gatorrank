@@ -8,7 +8,7 @@ from sqlalchemy import update
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from app.models.project import Project, ProjectMember
+from app.models.project import Project, ProjectMember, Vote
 from app.models.project_roles import (
     PROJECT_ROLE_OWNER,
     ProjectMemberRole,
@@ -334,9 +334,13 @@ class ProjectService:
             return None
 
         members = await self.get_project_members(project.id)
+        viewer_has_voted = False
+        if project.is_published and current_user_id is not None:
+            viewer_has_voted = await self._viewer_has_voted(project.id, current_user_id)
         return ProjectDetailResponse(
             **project.model_dump(),
             members=members,
+            viewer_has_voted=viewer_has_voted,
         )
 
     async def get_project_members(self, project_id: UUID) -> list[ProjectMemberInfo]:
@@ -519,6 +523,7 @@ class ProjectService:
         published_from: date | None = None,
         published_to: date | None = None,
         created_by_id: UUID | None = None,
+        current_user_id: UUID | None = None,
     ) -> ProjectListResponse:
         limit = max(1, min(limit, 100))
 
@@ -601,9 +606,19 @@ class ProjectService:
         members_by_project = await self._get_members_for_projects(
             [p.id for p in projects]
         )
+        voted_project_ids: set[UUID] = set()
+        if current_user_id is not None:
+            voted_project_ids = await self._get_voted_project_ids(
+                user_id=current_user_id,
+                project_ids=[project.id for project in projects],
+            )
 
         items = [
-            self._to_project_list_item(project, members_by_project.get(project.id, []))
+            self._to_project_list_item(
+                project,
+                members_by_project.get(project.id, []),
+                viewer_has_voted=project.id in voted_project_ids,
+            )
             for project in projects
         ]
 
@@ -676,9 +691,35 @@ class ProjectService:
 
     @staticmethod
     def _to_project_list_item(
-        project: Project, members: list[ProjectMemberInfo]
+        project: Project, members: list[ProjectMemberInfo], *, viewer_has_voted: bool
     ) -> ProjectListItemResponse:
-        return ProjectListItemResponse(**project.model_dump(), members=members)
+        return ProjectListItemResponse(
+            **project.model_dump(),
+            members=members,
+            viewer_has_voted=viewer_has_voted,
+        )
+
+    async def _viewer_has_voted(self, project_id: UUID, user_id: UUID) -> bool:
+        vote_cols = getattr(Vote, "__table__").c
+        statement = select(Vote).where(
+            vote_cols.project_id == project_id,
+            vote_cols.user_id == user_id,
+        )
+        result = await self.db.exec(statement)
+        return result.one_or_none() is not None
+
+    async def _get_voted_project_ids(
+        self, *, user_id: UUID, project_ids: list[UUID]
+    ) -> set[UUID]:
+        if not project_ids:
+            return set()
+        vote_cols = getattr(Vote, "__table__").c
+        statement = select(vote_cols.project_id).where(
+            vote_cols.user_id == user_id,
+            vote_cols.project_id.in_(project_ids),
+        )
+        result = await self.db.exec(statement)
+        return {row for row in result.all()}
 
     def _encode_cursor(
         self,

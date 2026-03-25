@@ -213,6 +213,7 @@ class ProjectBaseResponse(BaseModel):
     vote_count: int
     is_group_project: bool
     is_published: bool
+    viewer_has_voted: bool = False
     published_at: datetime | None = None
     created_at: datetime
     updated_at: datetime
