@@ -15,7 +15,6 @@ import {
 } from '@chakra-ui/react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  LuArrowLeft,
   LuGlobe,
   LuGithub,
   LuVideo,
@@ -28,6 +27,34 @@ import { Navbar } from '@/components/Navbar';
 import { getProjectDetailById } from '@/data/mock-project';
 import { mockProfile } from '@/data/mock-profile';
 import { RoleBadge } from '@/components/ui/rolebadge';
+
+function getYouTubeEmbedUrl(url: string): string | null {
+  const trimmed = url.trim();
+  if (!trimmed) return null;
+
+  try {
+    const parsed = new URL(trimmed);
+    const host = parsed.hostname.replace(/^www\./, '').toLowerCase();
+    let videoId = '';
+
+    if (host === 'youtu.be') {
+      videoId = parsed.pathname.split('/').filter(Boolean)[0] ?? '';
+    } else if (host === 'youtube.com' || host === 'm.youtube.com') {
+      if (parsed.pathname === '/watch') {
+        videoId = parsed.searchParams.get('v') ?? '';
+      } else if (parsed.pathname.startsWith('/shorts/')) {
+        videoId = parsed.pathname.split('/')[2] ?? '';
+      } else if (parsed.pathname.startsWith('/embed/')) {
+        videoId = parsed.pathname.split('/')[2] ?? '';
+      }
+    }
+
+    if (!videoId) return null;
+    return `https://www.youtube.com/embed/${videoId}`;
+  } catch {
+    return null;
+  }
+}
 
 function UpvoteBox({ votes }: { votes: number }) {
   const [isVoted, setIsVoted] = useState(false);
@@ -42,10 +69,10 @@ function UpvoteBox({ votes }: { votes: number }) {
         direction="column"
         align="center"
         justify="center"
-        gap="6px"
-        w="92px"
-        minW="92px"
-        h="92px"
+        gap="8px"
+        w="108px"
+        minW="108px"
+        h="108px"
         overflow="hidden"
         bg={isVoted ? 'orange.50' : 'white'}
         border="2px solid"
@@ -60,9 +87,9 @@ function UpvoteBox({ votes }: { votes: number }) {
         role="button"
       >
         <Box color={isVoted ? 'orange.500' : 'gray.800'}>
-          <LuChevronUp size={20} />
+          <LuChevronUp size={24} />
         </Box>
-        <Box position="relative" h="22px" w="100%" overflow="hidden">
+        <Box position="relative" h="24px" w="100%" overflow="hidden">
           <AnimatePresence mode="sync" initial={false}>
             <motion.span
               key={voteCount}
@@ -76,9 +103,9 @@ function UpvoteBox({ votes }: { votes: number }) {
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                fontSize: '1.05rem',
+                fontSize: '1.2rem',
                 fontWeight: 700,
-                lineHeight: '22px',
+                lineHeight: '24px',
                 color: isVoted ? 'rgb(234,88,12)' : 'rgb(17,24,39)',
               }}
             >
@@ -87,7 +114,7 @@ function UpvoteBox({ votes }: { votes: number }) {
           </AnimatePresence>
         </Box>
         <Text
-          fontSize="2xs"
+          fontSize="xs"
           letterSpacing="0.08em"
           color={isVoted ? 'orange.600' : 'gray.600'}
           lineHeight="14px"
@@ -142,11 +169,20 @@ export default function ProjectDetailPage() {
     Boolean(project.websiteUrl?.trim()) ||
     Boolean(project.githubUrl?.trim()) ||
     Boolean(project.demoVideoUrl?.trim());
+  const youtubeEmbedUrl = getYouTubeEmbedUrl(project.demoVideoUrl ?? '');
+  const hasDemoVideo = Boolean(youtubeEmbedUrl);
 
   return (
     <Box minH="100vh" bg="gray.50">
       <Navbar />
-      <Box px="36px" pt="32px" pb="64px" maxW="1120px" mx="auto" w="100%">
+      <Box
+        px={{ base: '20px', md: '32px' }}
+        pt="32px"
+        pb="64px"
+        maxW="1200px"
+        mx="auto"
+        w="100%"
+      >
         {/* Top project card */}
         <Box
           bg="gray.100"
@@ -156,35 +192,16 @@ export default function ProjectDetailPage() {
           overflow="hidden"
         >
           <Box
-            px={{ base: '18px', md: '24px' }}
-            pt={{ base: '18px', md: '22px' }}
-            pb={{ base: '18px', md: '22px' }}
+            px={{ base: '20px', md: '28px' }}
+            pt={{ base: '20px', md: '28px' }}
+            pb={{ base: '20px', md: '26px' }}
           >
-            {/* Back row (dedicated) */}
-            <HStack justify="flex-start" mb="14px">
-              <Button
-                type="button"
-                variant="ghost"
-                color="gray.700"
-                h="36px"
-                px="10px"
-                borderRadius="12px"
-                _hover={{ bg: 'gray.200' }}
-                onClick={() => router.push('/profile')}
-              >
-                <HStack gap="8px">
-                  <LuArrowLeft size={16} />
-                  <Text>Back</Text>
-                </HStack>
-              </Button>
-            </HStack>
-
-            <Flex align="flex-start" justify="space-between" gap="18px">
+            <Flex align="flex-start" justify="space-between" gap="24px">
               {/* Left content */}
-              <HStack align="flex-start" gap="16px" flex="1" minW={0}>
+              <HStack align="flex-start" gap="20px" flex="1" minW={0}>
                 <Box
-                  w="64px"
-                  h="64px"
+                  w={{ base: '104px', md: '128px' }}
+                  h={{ base: '104px', md: '128px' }}
                   borderRadius="12px"
                   overflow="hidden"
                   bg="gray.200"
@@ -205,13 +222,13 @@ export default function ProjectDetailPage() {
                   ) : null}
                 </Box>
 
-                <VStack align="start" gap="10px" flex="1" minW={0}>
+                <VStack align="start" gap="12px" flex="1" minW={0}>
                   <HStack gap="10px" align="center" flexWrap="wrap">
                     <Text
-                      fontSize={{ base: 'lg', md: 'xl' }}
+                      fontSize={{ base: 'xl', md: '2xl' }}
                       fontWeight="bold"
                       color="gray.900"
-                      lineHeight="28px"
+                      lineHeight={{ base: '34px', md: '40px' }}
                       lineClamp={2}
                     >
                       {project.name}
@@ -221,13 +238,13 @@ export default function ProjectDetailPage() {
                       bg="orange.400"
                       color="white"
                       borderRadius="full"
-                      px="10px"
-                      py="4px"
+                      px="12px"
+                      py="5px"
                     >
-                      <LuTrophy size={14} />
+                      <LuTrophy size={16} />
                       <Text
-                        fontSize="xs"
-                        lineHeight="16px"
+                        fontSize="sm"
+                        lineHeight="18px"
                         fontWeight="semibold"
                         whiteSpace="nowrap"
                       >
@@ -237,10 +254,10 @@ export default function ProjectDetailPage() {
                   </HStack>
 
                   <Text
-                    fontSize="sm"
+                    fontSize="md"
                     color="gray.600"
-                    lineHeight="22px"
-                    maxW="640px"
+                    lineHeight="26px"
+                    maxW="760px"
                     lineClamp={2}
                   >
                     {project.shortDescription}
@@ -248,7 +265,7 @@ export default function ProjectDetailPage() {
 
                   {/* Tags */}
                   {project.tags.length > 0 ? (
-                    <Wrap gap="8px">
+                    <Wrap gap="10px">
                       {project.tags.map((tag) => (
                         <Box
                           key={tag}
@@ -256,13 +273,13 @@ export default function ProjectDetailPage() {
                           border="1px solid"
                           borderColor="orange.200"
                           borderRadius="10px"
-                          px="12px"
-                          py="6px"
+                          px="14px"
+                          py="7px"
                         >
                           <Text
-                            fontSize="xs"
+                            fontSize="sm"
                             color="gray.700"
-                            lineHeight="18px"
+                            lineHeight="20px"
                           >
                             {tag}
                           </Text>
@@ -272,7 +289,7 @@ export default function ProjectDetailPage() {
                   ) : null}
 
                   {/* Actions */}
-                  <HStack gap="10px" pt="2px" flexWrap="wrap">
+                  <HStack gap="12px" pt="4px" flexWrap="wrap">
                     {project.websiteUrl?.trim() ? (
                       <ChakraLink
                         href={project.websiteUrl}
@@ -284,9 +301,9 @@ export default function ProjectDetailPage() {
                           bg="orange.400"
                           color="white"
                           borderRadius="12px"
-                          h="40px"
-                          px="16px"
-                          fontSize="sm"
+                          h="44px"
+                          px="18px"
+                          fontSize="md"
                           fontWeight="semibold"
                           _hover={{ bg: 'orange.500' }}
                         >
@@ -301,9 +318,9 @@ export default function ProjectDetailPage() {
                         bg="orange.400"
                         color="white"
                         borderRadius="12px"
-                        h="40px"
-                        px="16px"
-                        fontSize="sm"
+                        h="44px"
+                        px="18px"
+                        fontSize="md"
                         fontWeight="semibold"
                         opacity={0.6}
                         cursor="not-allowed"
@@ -324,9 +341,9 @@ export default function ProjectDetailPage() {
                       borderColor="gray.300"
                       bg="white"
                       borderRadius="12px"
-                      h="40px"
-                      px="16px"
-                      fontSize="sm"
+                      h="44px"
+                      px="18px"
+                      fontSize="md"
                       color="gray.800"
                       _hover={{ bg: 'gray.50' }}
                       onClick={() => router.push('/projects/edit')}
@@ -341,20 +358,20 @@ export default function ProjectDetailPage() {
               </HStack>
 
               {/* Right upvote */}
-              <Box pt="2px" flexShrink={0}>
+              <Box pt="4px" flexShrink={0}>
                 <UpvoteBox votes={project.votes} />
               </Box>
             </Flex>
 
             {/* Divider */}
-            <Box h="1px" bg="gray.200" my="18px" />
+            <Box h="1px" bg="gray.200" my="22px" />
 
             {/* Creator row */}
-            <HStack justify="space-between" flexWrap="wrap" gap="12px">
-              <HStack gap="12px">
+            <HStack justify="space-between" flexWrap="wrap" gap="16px">
+              <HStack gap="14px">
                 <Avatar.Root
-                  w="44px"
-                  h="44px"
+                  w="52px"
+                  h="52px"
                   borderRadius="full"
                   overflow="hidden"
                 >
@@ -373,16 +390,16 @@ export default function ProjectDetailPage() {
                 <VStack align="start" gap="2px">
                   <HStack gap="8px" flexWrap="wrap">
                     <Text
-                      fontSize="sm"
+                      fontSize="md"
                       fontWeight="bold"
                       color="gray.900"
-                      lineHeight="20px"
+                      lineHeight="22px"
                     >
                       {mockProfile.name}
                     </Text>
                     <RoleBadge role={mockProfile.role} />
                   </HStack>
-                  <Text fontSize="xs" color="gray.600" lineHeight="16px">
+                  <Text fontSize="sm" color="gray.600" lineHeight="18px">
                     Project Creator
                   </Text>
                 </VStack>
@@ -390,7 +407,7 @@ export default function ProjectDetailPage() {
 
               {/* Optional links (small, like design usually keeps them minimal) */}
               {hasLinks ? (
-                <HStack gap="14px" flexWrap="wrap">
+                <HStack gap="16px" flexWrap="wrap">
                   {project.websiteUrl?.trim() ? (
                     <ChakraLink
                       href={project.websiteUrl}
@@ -399,7 +416,7 @@ export default function ProjectDetailPage() {
                       display="inline-flex"
                       alignItems="center"
                       gap="6px"
-                      fontSize="sm"
+                      fontSize="md"
                       color="gray.700"
                       _hover={{
                         color: 'gray.900',
@@ -418,7 +435,7 @@ export default function ProjectDetailPage() {
                       display="inline-flex"
                       alignItems="center"
                       gap="6px"
-                      fontSize="sm"
+                      fontSize="md"
                       color="gray.700"
                       _hover={{
                         color: 'gray.900',
@@ -429,25 +446,6 @@ export default function ProjectDetailPage() {
                       GitHub
                     </ChakraLink>
                   ) : null}
-                  {project.demoVideoUrl?.trim() ? (
-                    <ChakraLink
-                      href={project.demoVideoUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      display="inline-flex"
-                      alignItems="center"
-                      gap="6px"
-                      fontSize="sm"
-                      color="gray.700"
-                      _hover={{
-                        color: 'gray.900',
-                        textDecoration: 'underline',
-                      }}
-                    >
-                      <LuVideo size={16} />
-                      Demo video
-                    </ChakraLink>
-                  ) : null}
                 </HStack>
               ) : null}
             </HStack>
@@ -456,7 +454,7 @@ export default function ProjectDetailPage() {
 
         {/* About card */}
         <Box
-          mt="22px"
+          mt="26px"
           bg="gray.100"
           borderRadius="16px"
           border="1px solid"
@@ -465,25 +463,114 @@ export default function ProjectDetailPage() {
         >
           <Box
             px={{ base: '18px', md: '24px' }}
-            py={{ base: '18px', md: '22px' }}
+            py={{ base: '22px', md: '28px' }}
           >
             <Text
-              fontSize="lg"
+              fontSize="2xl"
               fontWeight="bold"
               color="gray.900"
-              lineHeight="28px"
-              mb="10px"
+              lineHeight="34px"
+              mb="14px"
             >
               About This Project
             </Text>
             <Text
-              fontSize="sm"
+              fontSize="md"
               color="gray.700"
-              lineHeight="24px"
+              lineHeight="28px"
               whiteSpace="pre-wrap"
             >
               {project.fullDescription}
             </Text>
+          </Box>
+        </Box>
+
+        {/* Project Video card */}
+        <Box
+          mt="26px"
+          bg="gray.100"
+          borderRadius="16px"
+          border="1px solid"
+          borderColor="gray.200"
+          overflow="hidden"
+        >
+          <Box
+            px={{ base: '18px', md: '24px' }}
+            py={{ base: '22px', md: '28px' }}
+          >
+            <HStack mb="14px" gap="10px" align="center">
+              <Box color="gray.800">
+                <LuVideo size={22} />
+              </Box>
+              <Text
+                fontSize="2xl"
+                fontWeight="bold"
+                color="gray.900"
+                lineHeight="34px"
+              >
+                Project Video
+              </Text>
+            </HStack>
+
+            {hasDemoVideo ? (
+              <Box
+                borderRadius="14px"
+                overflow="hidden"
+                border="1px solid"
+                borderColor="gray.300"
+                bg="black"
+              >
+                <iframe
+                  src={youtubeEmbedUrl ?? undefined}
+                  title={`${project.name} demo video`}
+                  style={{
+                    width: '100%',
+                    aspectRatio: '16 / 9',
+                    display: 'block',
+                    border: 0,
+                  }}
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                  allowFullScreen
+                />
+              </Box>
+            ) : (
+              <Flex
+                direction="column"
+                align="center"
+                justify="center"
+                gap="12px"
+                minH={{ base: '180px', md: '220px' }}
+                border="1px dashed"
+                borderColor="gray.300"
+                borderRadius="14px"
+                bg="white"
+                px="20px"
+                py="24px"
+                textAlign="center"
+              >
+                <Text fontSize="md" color="gray.700">
+                  {project.demoVideoUrl?.trim()
+                    ? 'Video link is not a valid YouTube URL.'
+                    : 'No project video yet.'}
+                </Text>
+                <Text fontSize="sm" color="gray.600">
+                  Add a YouTube link from the edit page to embed it here.
+                </Text>
+                <Button
+                  type="button"
+                  bg="orange.400"
+                  color="white"
+                  borderRadius="12px"
+                  h="42px"
+                  px="18px"
+                  fontSize="sm"
+                  _hover={{ bg: 'orange.500' }}
+                  onClick={() => router.push('/projects/edit')}
+                >
+                  Add Video
+                </Button>
+              </Flex>
+            )}
           </Box>
         </Box>
       </Box>

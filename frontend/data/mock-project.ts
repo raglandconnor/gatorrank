@@ -32,7 +32,7 @@ export const mockProject: EditableProject = {
   teamMembers: [],
   websiteUrl: '',
   githubUrl: '',
-  demoVideoUrl: '',
+  demoVideoUrl: 'https://youtu.be/TOEawLBhxJU?si=jeWQWAf-y4Oysncm',
 };
 
 /** Resolves mock detail for `/projects/[id]` until the API exists. */
