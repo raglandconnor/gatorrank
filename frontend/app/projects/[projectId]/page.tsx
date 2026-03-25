@@ -72,10 +72,14 @@ function UpvoteBox({ votes }: { votes: number }) {
       whileTap={{ scale: 1.2, y: -3 }}
       style={{ display: 'contents' }}
     >
-      <Flex
-        direction="column"
-        align="center"
-        justify="center"
+      <Button
+        type="button"
+        variant="plain"
+        display="flex"
+        flexDirection="column"
+        alignItems="center"
+        justifyContent="center"
+        p="0"
         gap="8px"
         w="108px"
         minW="108px"
@@ -88,10 +92,14 @@ function UpvoteBox({ votes }: { votes: number }) {
         cursor="pointer"
         userSelect="none"
         _hover={{ bg: isVoted ? 'orange.100' : 'orange.50' }}
-        transition="background 0.15s, border-color 0.15s"
+        _focusVisible={{
+          borderColor: 'orange.400',
+          boxShadow: '0 0 0 3px rgba(251,146,60,0.35)',
+        }}
+        transition="background 0.15s, border-color 0.15s, box-shadow 0.15s"
         onClick={() => setIsVoted((v) => !v)}
         aria-label="Upvote"
-        role="button"
+        aria-pressed={isVoted}
       >
         <Box color={isVoted ? 'orange.500' : 'gray.800'}>
           <LuChevronUp size={24} />
@@ -128,7 +136,7 @@ function UpvoteBox({ votes }: { votes: number }) {
         >
           UPVOTE
         </Text>
-      </Flex>
+      </Button>
     </motion.div>
   );
 }
