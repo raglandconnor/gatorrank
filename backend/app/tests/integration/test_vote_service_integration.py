@@ -4,8 +4,9 @@ from uuid import uuid4
 
 import pytest
 from sqlalchemy import update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncEngine
-from sqlmodel import select
+from sqlmodel import delete, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.models.project import Project, Vote
@@ -115,6 +116,45 @@ async def test_add_vote_rejects_draft_project(db_session):
     service = VoteService(db_session)
     with pytest.raises(VoteTargetNotFoundError, match="Project not found"):
         await service.add_vote(project_id=draft.id, user_id=voter.id)
+
+
+@pytest.mark.asyncio
+async def test_add_vote_invalid_user_id_raises_integrity_error(
+    async_engine: AsyncEngine,
+):
+    unique = uuid4().hex[:8]
+    owner_id = None
+    project_id = None
+    try:
+        async with AsyncSession(async_engine, expire_on_commit=False) as seed_session:
+            owner = await _seed_user(
+                seed_session, f"vote-owner-invalid-{unique}@ufl.edu", "Owner"
+            )
+            project = await _seed_project(
+                seed_session,
+                created_by_id=owner.id,
+                title="Invalid User Vote Target",
+            )
+            await seed_session.commit()
+            owner_id = owner.id
+            project_id = project.id
+
+        async with AsyncSession(async_engine, expire_on_commit=False) as session:
+            service = VoteService(session)
+            with pytest.raises(IntegrityError):
+                await service.add_vote(project_id=project_id, user_id=uuid4())
+    finally:
+        if owner_id is not None and project_id is not None:
+            async with AsyncSession(async_engine, expire_on_commit=False) as cleanup:
+                vote_cols = getattr(Vote, "__table__").c
+                project_cols = getattr(Project, "__table__").c
+                user_cols = getattr(User, "__table__").c
+                await cleanup.exec(
+                    delete(Vote).where(vote_cols.project_id == project_id)
+                )
+                await cleanup.exec(delete(Project).where(project_cols.id == project_id))
+                await cleanup.exec(delete(User).where(user_cols.id == owner_id))
+                await cleanup.commit()
 
 
 @pytest.mark.asyncio
@@ -234,35 +274,57 @@ async def test_add_vote_concurrent_duplicate_requests_one_effective_vote(
     owner_email = f"vote-owner-race-{unique}@ufl.edu"
     voter_email = f"vote-voter-race-{unique}@ufl.edu"
 
-    async with AsyncSession(async_engine, expire_on_commit=False) as seed_session:
-        owner = await _seed_user(seed_session, owner_email, "Owner")
-        voter = await _seed_user(seed_session, voter_email, "Voter")
-        project = await _seed_project(
-            seed_session,
-            created_by_id=owner.id,
-            title=f"Vote Race {unique}",
-        )
-        await seed_session.commit()
-        voter_id = voter.id
-        project_id = project.id
+    owner_id = None
+    voter_id = None
+    project_id = None
+    try:
+        async with AsyncSession(async_engine, expire_on_commit=False) as seed_session:
+            owner = await _seed_user(seed_session, owner_email, "Owner")
+            voter = await _seed_user(seed_session, voter_email, "Voter")
+            project = await _seed_project(
+                seed_session,
+                created_by_id=owner.id,
+                title=f"Vote Race {unique}",
+            )
+            await seed_session.commit()
+            owner_id = owner.id
+            voter_id = voter.id
+            project_id = project.id
 
-    async def attempt_vote() -> bool:
-        async with AsyncSession(async_engine, expire_on_commit=False) as session:
-            service = VoteService(session)
-            return await service.add_vote(project_id=project_id, user_id=voter_id)
+        async def attempt_vote() -> bool:
+            async with AsyncSession(async_engine, expire_on_commit=False) as session:
+                service = VoteService(session)
+                return await service.add_vote(project_id=project_id, user_id=voter_id)
 
-    first, second = await asyncio.gather(attempt_vote(), attempt_vote())
-    assert sorted([first, second]) == [False, True]
+        first, second = await asyncio.gather(attempt_vote(), attempt_vote())
+        assert sorted([first, second]) == [False, True]
 
-    async with AsyncSession(async_engine, expire_on_commit=False) as verify_session:
-        project_result = await verify_session.exec(
-            select(Project).where(Project.id == project_id)
-        )
-        updated_project = project_result.one()
-        assert updated_project.vote_count == 1
+        async with AsyncSession(async_engine, expire_on_commit=False) as verify_session:
+            project_result = await verify_session.exec(
+                select(Project).where(Project.id == project_id)
+            )
+            updated_project = project_result.one()
+            assert updated_project.vote_count == 1
 
-        votes_result = await verify_session.exec(
-            select(Vote).where(Vote.project_id == project_id, Vote.user_id == voter_id)
-        )
-        all_votes = votes_result.all()
-        assert len(all_votes) == 1
+            votes_result = await verify_session.exec(
+                select(Vote).where(
+                    Vote.project_id == project_id,
+                    Vote.user_id == voter_id,
+                )
+            )
+            all_votes = votes_result.all()
+            assert len(all_votes) == 1
+    finally:
+        if owner_id is not None and voter_id is not None and project_id is not None:
+            async with AsyncSession(async_engine, expire_on_commit=False) as cleanup:
+                vote_cols = getattr(Vote, "__table__").c
+                project_cols = getattr(Project, "__table__").c
+                user_cols = getattr(User, "__table__").c
+                await cleanup.exec(
+                    delete(Vote).where(vote_cols.project_id == project_id)
+                )
+                await cleanup.exec(delete(Project).where(project_cols.id == project_id))
+                await cleanup.exec(
+                    delete(User).where(user_cols.id.in_([owner_id, voter_id]))
+                )
+                await cleanup.commit()
