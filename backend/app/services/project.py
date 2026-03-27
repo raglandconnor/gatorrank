@@ -31,8 +31,13 @@ class ProjectService:
     def __init__(self, db: AsyncSession):
         self.db = db
 
-    async def get_project_by_id(self, project_id: UUID) -> Project | None:
-        statement = select(Project).where(Project.id == project_id)
+    async def get_project_by_id(
+        self, project_id: UUID, *, include_deleted: bool = False
+    ) -> Project | None:
+        project_cols = getattr(Project, "__table__").c
+        statement = select(Project).where(project_cols.id == project_id)
+        if not include_deleted:
+            statement = statement.where(project_cols.deleted_at.is_(None))
         result = await self.db.exec(statement)
         return result.first()
 
@@ -53,6 +58,7 @@ class ProjectService:
             vote_count=0,
             is_published=False,
             published_at=None,
+            deleted_at=None,
         )
         owner_member = ProjectMember(  # pyright: ignore[reportCallIssue]
             project_id=project.id,
@@ -72,6 +78,29 @@ class ProjectService:
         if created is None:
             raise RuntimeError("Created project could not be loaded")
         return created
+
+    async def soft_delete_project(
+        self, project_id: UUID, current_user_id: UUID
+    ) -> bool:
+        project = await self.get_project_by_id(project_id, include_deleted=True)
+        if project is None:
+            return False
+
+        if project.deleted_at is not None:
+            return project.created_by_id == current_user_id
+
+        if project.created_by_id != current_user_id:
+            raise ProjectAccessForbiddenError("Project access forbidden")
+
+        project.deleted_at = datetime.now(UTC)
+        try:
+            self.db.add(project)
+            await self.db.commit()
+        except Exception:
+            await self.db.rollback()
+            raise
+
+        return True
 
     async def get_member_role(self, project_id: UUID, user_id: UUID) -> str | None:
         statement = select(ProjectMember).where(
@@ -93,6 +122,8 @@ class ProjectService:
         current_user_id: UUID | None,
         member_role: str | None = None,
     ) -> bool:
+        if project.deleted_at is not None:
+            return False
         if project.is_published:
             return True
         if current_user_id is None:
@@ -266,7 +297,10 @@ class ProjectService:
     @staticmethod
     def _base_published_projects_query(created_by_id: UUID | None = None):
         project_cols = getattr(Project, "__table__").c
-        stmt = select(Project).where(project_cols.is_published.is_(True))
+        stmt = select(Project).where(
+            project_cols.is_published.is_(True),
+            project_cols.deleted_at.is_(None),
+        )
         if created_by_id:
             stmt = stmt.where(project_cols.created_by_id == created_by_id)
         return stmt

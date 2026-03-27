@@ -585,3 +585,64 @@ def test_list_projects_invalid_cursor_returns_400():
 
     assert response.status_code == 400
     assert response.json()["detail"] == "Invalid cursor"
+
+
+def test_delete_project_owner_returns_204():
+    project_id = uuid4()
+    owner_id = uuid4()
+
+    app.dependency_overrides[get_db] = _override_get_db
+    app.dependency_overrides[get_current_user] = _override_current_user(owner_id)
+    try:
+        with patch(
+            "app.api.v1.projects.ProjectService.soft_delete_project",
+            new=AsyncMock(return_value=True),
+        ) as mock_delete_project:
+            response = client.delete(f"/api/v1/projects/{project_id}")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 204
+    await_args = mock_delete_project.await_args
+    assert await_args is not None
+    assert await_args.args == (project_id, owner_id)
+
+
+def test_delete_project_non_owner_returns_403():
+    project_id = uuid4()
+    owner_id = uuid4()
+
+    app.dependency_overrides[get_db] = _override_get_db
+    app.dependency_overrides[get_current_user] = _override_current_user(owner_id)
+    try:
+        with patch(
+            "app.api.v1.projects.ProjectService.soft_delete_project",
+            new=AsyncMock(
+                side_effect=ProjectAccessForbiddenError("Project access forbidden")
+            ),
+        ):
+            response = client.delete(f"/api/v1/projects/{project_id}")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 403
+    assert response.json()["detail"] == "Project access forbidden"
+
+
+def test_delete_project_missing_returns_404():
+    project_id = uuid4()
+    owner_id = uuid4()
+
+    app.dependency_overrides[get_db] = _override_get_db
+    app.dependency_overrides[get_current_user] = _override_current_user(owner_id)
+    try:
+        with patch(
+            "app.api.v1.projects.ProjectService.soft_delete_project",
+            new=AsyncMock(return_value=False),
+        ):
+            response = client.delete(f"/api/v1/projects/{project_id}")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Project not found"

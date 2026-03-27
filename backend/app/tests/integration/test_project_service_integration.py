@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import pytest
 from sqlmodel import select
@@ -409,3 +409,98 @@ async def test_create_project_rolls_back_when_commit_fails(db_session, monkeypat
         await service.create_project(created_by_id=creator.id, payload=payload)
 
     assert rollback_spy.await_count == 1
+
+
+@pytest.mark.asyncio
+async def test_soft_delete_project_marks_deleted_and_hides_detail_and_listings(
+    db_session,
+):
+    now = datetime.now(timezone.utc)
+    owner = await _seed_user(db_session, "owner-soft-delete@ufl.edu", "Owner Delete")
+    project = await _seed_project(
+        db_session,
+        created_by_id=owner.id,
+        title="Soft Delete Project",
+        vote_count=25,
+        is_published=True,
+        created_at=now,
+    )
+
+    service = ProjectService(db_session)
+
+    deleted = await service.soft_delete_project(project.id, owner.id)
+    assert deleted is True
+
+    project_result = await db_session.exec(
+        select(Project).where(Project.id == project.id)
+    )
+    stored_project = project_result.one()
+    assert stored_project.deleted_at is not None
+
+    assert await service.get_project_detail(project.id, None) is None
+
+    listing = await service.list_projects(sort="new", limit=10)
+    assert [item.id for item in listing.items] == []
+
+
+@pytest.mark.asyncio
+async def test_soft_delete_project_is_idempotent_for_owner(db_session):
+    now = datetime.now(timezone.utc)
+    owner = await _seed_user(
+        db_session, "owner-soft-delete-repeat@ufl.edu", "Owner Delete Repeat"
+    )
+    project = await _seed_project(
+        db_session,
+        created_by_id=owner.id,
+        title="Soft Delete Repeat Project",
+        vote_count=3,
+        is_published=True,
+        created_at=now,
+    )
+
+    service = ProjectService(db_session)
+
+    assert await service.soft_delete_project(project.id, owner.id) is True
+    project_result = await db_session.exec(
+        select(Project).where(Project.id == project.id)
+    )
+    first_deleted_at = project_result.one().deleted_at
+    assert first_deleted_at is not None
+
+    assert await service.soft_delete_project(project.id, owner.id) is True
+    project_result = await db_session.exec(
+        select(Project).where(Project.id == project.id)
+    )
+    second_deleted_at = project_result.one().deleted_at
+    assert second_deleted_at == first_deleted_at
+
+
+@pytest.mark.asyncio
+async def test_soft_delete_project_forbids_non_owner(db_session):
+    now = datetime.now(timezone.utc)
+    owner = await _seed_user(
+        db_session, f"owner-soft-delete-forbid-{uuid4().hex[:8]}@ufl.edu", "Owner"
+    )
+    stranger = await _seed_user(
+        db_session,
+        f"stranger-soft-delete-forbid-{uuid4().hex[:8]}@ufl.edu",
+        "Stranger",
+    )
+    project = await _seed_project(
+        db_session,
+        created_by_id=owner.id,
+        title="Soft Delete Forbidden Project",
+        vote_count=4,
+        is_published=True,
+        created_at=now,
+    )
+
+    service = ProjectService(db_session)
+
+    with pytest.raises(ProjectAccessForbiddenError):
+        await service.soft_delete_project(project.id, stranger.id)
+
+    project_result = await db_session.exec(
+        select(Project).where(Project.id == project.id)
+    )
+    assert project_result.one().deleted_at is None

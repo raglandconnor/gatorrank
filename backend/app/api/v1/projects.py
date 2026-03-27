@@ -2,7 +2,7 @@ from datetime import date
 from typing import Literal
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.api.deps.auth import get_current_user, get_current_user_optional
@@ -76,6 +76,33 @@ async def get_project_detail(
     if project is None:
         raise HTTPException(status_code=404, detail="Project not found")
     return project
+
+
+@router.delete(
+    "/projects/{project_id}",
+    summary="Soft delete project",
+    status_code=status.HTTP_204_NO_CONTENT,
+    responses={
+        401: {"description": "Authentication required"},
+        403: {"description": "Only the owner can delete this project"},
+        404: {"description": "Project not found"},
+    },
+)
+async def delete_project(
+    project_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> Response:
+    service = ProjectService(db)
+    try:
+        deleted = await service.soft_delete_project(project_id, current_user.id)
+    except ProjectAccessForbiddenError as exc:
+        raise HTTPException(status_code=403, detail="Project access forbidden") from exc
+
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.get(
