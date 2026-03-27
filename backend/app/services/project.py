@@ -85,6 +85,8 @@ class ProjectService:
             demo_url=payload.demo_url,
             github_url=payload.github_url,
             video_url=payload.video_url,
+            timeline_start_date=payload.timeline_start_date,
+            timeline_end_date=payload.timeline_end_date,
             is_group_project=False,
             vote_count=0,
             is_published=False,
@@ -141,9 +143,31 @@ class ProjectService:
             if "video_url" in payload.model_fields_set
             else project.video_url
         )
+        final_timeline_start_date = (
+            payload.timeline_start_date
+            if "timeline_start_date" in payload.model_fields_set
+            else project.timeline_start_date
+        )
+        final_timeline_end_date = (
+            payload.timeline_end_date
+            if "timeline_end_date" in payload.model_fields_set
+            else project.timeline_end_date
+        )
         if not any([final_demo_url, final_github_url, final_video_url]):
             raise ProjectValidationError(
                 "Provide at least one of demo_url, github_url, or video_url."
+            )
+        if final_timeline_end_date is not None and final_timeline_start_date is None:
+            raise ProjectValidationError(
+                "timeline_end_date requires timeline_start_date."
+            )
+        if (
+            final_timeline_start_date is not None
+            and final_timeline_end_date is not None
+            and final_timeline_start_date > final_timeline_end_date
+        ):
+            raise ProjectValidationError(
+                "timeline_start_date must be on or before timeline_end_date."
             )
 
         if "title" in payload.model_fields_set:
@@ -162,6 +186,10 @@ class ProjectService:
             project.github_url = payload.github_url
         if "video_url" in payload.model_fields_set:
             project.video_url = payload.video_url
+        if "timeline_start_date" in payload.model_fields_set:
+            project.timeline_start_date = payload.timeline_start_date
+        if "timeline_end_date" in payload.model_fields_set:
+            project.timeline_end_date = payload.timeline_end_date
 
         try:
             self.db.add(project)
