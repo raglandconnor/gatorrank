@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 from urllib.parse import urlparse
 from uuid import UUID
 
@@ -78,6 +78,20 @@ class ProjectCreateRequest(BaseModel):
             "github_url, or video_url must be provided."
         ),
     )
+    timeline_start_date: date | None = Field(
+        default=None,
+        description=(
+            "Optional project timeline start date (`YYYY-MM-DD`). Required when "
+            "`timeline_end_date` is provided."
+        ),
+    )
+    timeline_end_date: date | None = Field(
+        default=None,
+        description=(
+            "Optional project timeline end date (`YYYY-MM-DD`). Use `null` for in-progress "
+            "timelines."
+        ),
+    )
 
     @field_validator("title", "short_description", "long_description", mode="before")
     @classmethod
@@ -99,6 +113,16 @@ class ProjectCreateRequest(BaseModel):
     @model_validator(mode="after")
     def _require_at_least_one_project_url(self) -> "ProjectCreateRequest":
         if any([self.demo_url, self.github_url, self.video_url]):
+            if self.timeline_end_date is not None and self.timeline_start_date is None:
+                raise ValueError("timeline_end_date requires timeline_start_date.")
+            if (
+                self.timeline_start_date is not None
+                and self.timeline_end_date is not None
+                and self.timeline_start_date > self.timeline_end_date
+            ):
+                raise ValueError(
+                    "timeline_start_date must be on or before timeline_end_date."
+                )
             return self
         raise ValueError("Provide at least one of demo_url, github_url, or video_url.")
 
@@ -137,6 +161,18 @@ class ProjectUpdateRequest(BaseModel):
         default=None,
         max_length=2048,
         description="Updated video URL (`http` or `https`), or `null` to clear it.",
+    )
+    timeline_start_date: date | None = Field(
+        default=None,
+        description=(
+            "Updated timeline start date (`YYYY-MM-DD`), or `null` to clear timeline start."
+        ),
+    )
+    timeline_end_date: date | None = Field(
+        default=None,
+        description=(
+            "Updated timeline end date (`YYYY-MM-DD`), or `null` to indicate in-progress."
+        ),
     )
 
     @field_validator("title", "short_description", "long_description", mode="before")
@@ -210,6 +246,8 @@ class ProjectBaseResponse(BaseModel):
     demo_url: str | None = None
     github_url: str | None = None
     video_url: str | None = None
+    timeline_start_date: date | None = None
+    timeline_end_date: date | None = None
     vote_count: int
     is_group_project: bool
     is_published: bool
