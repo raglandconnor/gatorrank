@@ -10,7 +10,7 @@ import {
   ProjectFormValues,
   ProjectPayload,
 } from '@/components/projects/ProjectForm';
-import { toaster } from '@/components/ui/toaster';
+import { toast } from '@/lib/ui/toast';
 
 export default function CreateProjectPage() {
   const router = useRouter();
@@ -30,10 +30,9 @@ export default function CreateProjectPage() {
 
   const handleSubmit = (payload: ProjectPayload) => {
     // For now, just log payload for future backend integration.
-    // eslint-disable-next-line no-console
     console.log('Create project payload:', payload);
 
-    toaster.success({
+    toast.success({
       title: 'Project created',
       description: `"${payload.name}" has been successfully created.`,
     });
