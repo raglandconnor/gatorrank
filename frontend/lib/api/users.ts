@@ -1,7 +1,9 @@
 import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
+import { apiUrl } from '@/lib/api/client';
 import type {
   ProjectListResponse,
   UserPrivate,
+  UserPublic,
   UserUpdate,
 } from '@/lib/api/types/user';
 
@@ -29,6 +31,17 @@ export async function patchMe(payload: UserUpdate): Promise<UserPrivate> {
     throw new Error(detail);
   }
   return res.json() as Promise<UserPrivate>;
+}
+
+export async function getUserPublic(userId: string): Promise<UserPublic> {
+  const res = await fetch(apiUrl(`/api/v1/users/${userId}`));
+  if (res.status === 404) {
+    const err = new Error('User not found') as Error & { status: number };
+    err.status = 404;
+    throw err;
+  }
+  if (!res.ok) throw new Error('Failed to fetch user profile');
+  return res.json() as Promise<UserPublic>;
 }
 
 export async function getUserProjects(

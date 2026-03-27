@@ -43,6 +43,8 @@ export interface AuthContextValue {
   }) => Promise<void>;
   logout: () => Promise<void>;
   refreshSession: () => Promise<boolean>;
+  /** Updates in-memory user + localStorage (e.g. after PATCH /users/me). */
+  updateCachedUser: (next: AuthUser) => void;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -168,6 +170,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
+  const updateCachedUser = useCallback((next: AuthUser) => {
+    setStoredUser(next);
+    setUser(next);
+  }, []);
+
   const value = useMemo<AuthContextValue>(
     () => ({
       user,
@@ -177,8 +184,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       signup,
       logout,
       refreshSession,
+      updateCachedUser,
     }),
-    [user, accessToken, isReady, login, signup, logout, refreshSession],
+    [
+      user,
+      accessToken,
+      isReady,
+      login,
+      signup,
+      logout,
+      refreshSession,
+      updateCachedUser,
+    ],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

@@ -82,7 +82,7 @@ export function Navbar() {
                   cursor="pointer"
                   _hover={{ opacity: 0.8 }}
                   transition="opacity 0.15s"
-                  onClick={() => router.push('/profile')}
+                  onClick={() => router.push(`/profile/${user.id}`)}
                 >
                   {user.profile_picture_url ? (
                     <img

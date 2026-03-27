@@ -1,3 +1,11 @@
+export interface UserPublic {
+  id: string;
+  role: string;
+  full_name: string | null;
+  profile_picture_url: string | null;
+  created_at: string;
+}
+
 export interface UserPrivate {
   id: string;
   email: string;
