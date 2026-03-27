@@ -58,9 +58,10 @@ class ProjectService:
     async def get_project_by_id(
         self, project_id: UUID, *, include_deleted: bool = False
     ) -> Project | None:
-        statement = select(Project).where(Project.id == project_id)
+        project_cols = getattr(Project, "__table__").c
+        statement = select(Project).where(project_cols.id == project_id)
         if not include_deleted:
-            statement = statement.where(Project.deleted_at.is_(None))
+            statement = statement.where(project_cols.deleted_at.is_(None))
         result = await self.db.exec(statement)
         return result.first()
 
