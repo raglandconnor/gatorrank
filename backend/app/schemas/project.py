@@ -113,18 +113,22 @@ class ProjectCreateRequest(BaseModel):
     @model_validator(mode="after")
     def _require_at_least_one_project_url(self) -> "ProjectCreateRequest":
         if any([self.demo_url, self.github_url, self.video_url]):
-            if self.timeline_end_date is not None and self.timeline_start_date is None:
-                raise ValueError("timeline_end_date requires timeline_start_date.")
-            if (
-                self.timeline_start_date is not None
-                and self.timeline_end_date is not None
-                and self.timeline_start_date > self.timeline_end_date
-            ):
-                raise ValueError(
-                    "timeline_start_date must be on or before timeline_end_date."
-                )
             return self
         raise ValueError("Provide at least one of demo_url, github_url, or video_url.")
+
+    @model_validator(mode="after")
+    def _validate_timeline_dates(self) -> "ProjectCreateRequest":
+        if self.timeline_end_date is not None and self.timeline_start_date is None:
+            raise ValueError("timeline_end_date requires timeline_start_date.")
+        if (
+            self.timeline_start_date is not None
+            and self.timeline_end_date is not None
+            and self.timeline_start_date > self.timeline_end_date
+        ):
+            raise ValueError(
+                "timeline_start_date must be on or before timeline_end_date."
+            )
+        return self
 
 
 class ProjectUpdateRequest(BaseModel):
