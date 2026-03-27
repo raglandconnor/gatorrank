@@ -240,9 +240,6 @@ export default function ProfileUserPage() {
   // Owner: show complete-your-profile banner when everything is empty
   const showOwnerBanner = isOwn && extendedIsEmpty && projectsLoadedEmpty;
 
-  // Visitor: show one consolidated message when the entire profile body is empty
-  const showVisitorEmpty = !isOwn && extendedIsEmpty && projectsLoadedEmpty;
-
   return (
     <Box minH="100vh" bg="white">
       <Navbar />
@@ -295,7 +292,7 @@ export default function ProfileUserPage() {
               <RoleBadge role={publicUser.role as 'student' | 'faculty'} />
             </HStack>
 
-            {/* Bio: always shown when filled; owner sees prompt unless banner covers it */}
+            {/* Bio: filled content shown for everyone; empty hint shown for everyone */}
             {extended.bio ? (
               <Text
                 fontSize="sm"
@@ -305,16 +302,18 @@ export default function ProfileUserPage() {
               >
                 {extended.bio}
               </Text>
-            ) : isOwn && !showOwnerBanner ? (
+            ) : (
               <Text
                 fontSize="sm"
                 color="gray.400"
                 lineHeight="24px"
                 maxW="640px"
               >
-                No bio yet — edit your profile to add one.
+                {isOwn
+                  ? 'No bio yet — edit your profile to add one.'
+                  : 'No bio added yet.'}
               </Text>
-            ) : null}
+            )}
 
             {/* Social links */}
             <HStack gap="8px" mt="4px">
@@ -415,69 +414,47 @@ export default function ProfileUserPage() {
           </Box>
         )}
 
-        {/* Visitor: consolidated empty message */}
-        {showVisitorEmpty && (
-          <Text fontSize="sm" color="gray.400" lineHeight="24px" mb="32px">
-            This member has not added profile details or projects yet.
-          </Text>
-        )}
-
-        {/*
-          Two-column body: always rendered so ProfileUserProjects stays mounted and
-          can fire onLoadComplete. Content inside is conditionally shown/hidden.
-          When showVisitorEmpty is true the section is visually hidden via display:none.
-        */}
-        <Flex
-          gap="24px"
-          align="start"
-          display={showVisitorEmpty ? 'none' : 'flex'}
-        >
+        {/* Two-column body */}
+        <Flex gap="24px" align="start">
           <AcademicInfoCard profile={academicProfile} isOwn={isOwn} />
 
           <VStack flex={1} align="start" gap="32px" minW={0}>
-            {/* Skills: always shown for owner; for visitors only when non-empty */}
-            {(isOwn || extended.skills.length > 0) && (
-              <VStack align="start" gap="16px" w="100%">
-                <Text
-                  fontSize="md"
-                  fontWeight="bold"
-                  color="gray.900"
-                  lineHeight="30px"
-                >
-                  Skills
+            {/* Skills: always shown */}
+            <VStack align="start" gap="16px" w="100%">
+              <Text
+                fontSize="md"
+                fontWeight="bold"
+                color="gray.900"
+                lineHeight="30px"
+              >
+                Skills
+              </Text>
+              {extended.skills.length > 0 ? (
+                <Wrap gap="8px">
+                  {extended.skills.map((skill: string) => (
+                    <Box
+                      key={skill}
+                      bg="rgba(251,146,60,0.1)"
+                      border="1.6px solid"
+                      borderColor="orange.400"
+                      borderRadius="10px"
+                      px="16px"
+                      py="8px"
+                    >
+                      <Text fontSize="sm" color="orange.400" lineHeight="24px">
+                        {skill}
+                      </Text>
+                    </Box>
+                  ))}
+                </Wrap>
+              ) : (
+                <Text fontSize="sm" color="gray.400" lineHeight="24px">
+                  {isOwn
+                    ? 'No skills added yet — edit your profile to add skills.'
+                    : 'No skills added yet.'}
                 </Text>
-                {extended.skills.length > 0 ? (
-                  <Wrap gap="8px">
-                    {extended.skills.map((skill: string) => (
-                      <Box
-                        key={skill}
-                        bg="rgba(251,146,60,0.1)"
-                        border="1.6px solid"
-                        borderColor="orange.400"
-                        borderRadius="10px"
-                        px="16px"
-                        py="8px"
-                      >
-                        <Text
-                          fontSize="sm"
-                          color="orange.400"
-                          lineHeight="24px"
-                        >
-                          {skill}
-                        </Text>
-                      </Box>
-                    ))}
-                  </Wrap>
-                ) : (
-                  // Only reached when isOwn (visitor case is excluded by the condition above)
-                  !showOwnerBanner && (
-                    <Text fontSize="sm" color="gray.400" lineHeight="24px">
-                      No skills added yet — edit your profile to add skills.
-                    </Text>
-                  )
-                )}
-              </VStack>
-            )}
+              )}
+            </VStack>
 
             {/* Projects — always mounted to ensure onLoadComplete fires */}
             <ProfileUserProjects
