@@ -2251,35 +2251,40 @@ async def test_add_project_member_concurrent_duplicate_requests_one_success_one_
 
     app.dependency_overrides[get_db] = override_get_db
     app.dependency_overrides[get_current_user] = lambda: CurrentUser()
-    try:
-        first_response, second_response = await asyncio.gather(
-            api_client.post(
-                f"/api/v1/projects/{project_id}/members",
-                json={"email": target_email, "role": "contributor"},
-            ),
-            api_client.post(
-                f"/api/v1/projects/{project_id}/members",
-                json={"email": target_email, "role": "contributor"},
-            ),
-        )
-    finally:
-        app.dependency_overrides.clear()
-
-    status_codes = sorted([first_response.status_code, second_response.status_code])
-    assert status_codes == [201, 409]
-
     project_member_cols = getattr(ProjectMember, "__table__").c
     project_cols = getattr(Project, "__table__").c
     user_cols = getattr(User, "__table__").c
-    async with session_factory() as cleanup_session:
-        await cleanup_session.exec(
-            delete(ProjectMember).where(project_member_cols.project_id == project_id)
-        )
-        await cleanup_session.exec(delete(Project).where(project_cols.id == project_id))
-        await cleanup_session.exec(
-            delete(User).where(user_cols.id.in_([owner_id, target_id]))
-        )
-        await cleanup_session.commit()
+    try:
+        try:
+            first_response, second_response = await asyncio.gather(
+                api_client.post(
+                    f"/api/v1/projects/{project_id}/members",
+                    json={"email": target_email, "role": "contributor"},
+                ),
+                api_client.post(
+                    f"/api/v1/projects/{project_id}/members",
+                    json={"email": target_email, "role": "contributor"},
+                ),
+            )
+        finally:
+            app.dependency_overrides.clear()
+
+        status_codes = sorted([first_response.status_code, second_response.status_code])
+        assert status_codes == [201, 409]
+    finally:
+        async with session_factory() as cleanup_session:
+            await cleanup_session.exec(
+                delete(ProjectMember).where(
+                    project_member_cols.project_id == project_id
+                )
+            )
+            await cleanup_session.exec(
+                delete(Project).where(project_cols.id == project_id)
+            )
+            await cleanup_session.exec(
+                delete(User).where(user_cols.id.in_([owner_id, target_id]))
+            )
+            await cleanup_session.commit()
 
 
 @pytest.mark.asyncio
@@ -2758,41 +2763,44 @@ async def test_add_project_vote_concurrent_requests_one_effective_vote(
 
     app.dependency_overrides[get_db] = override_get_db
     app.dependency_overrides[get_current_user] = lambda: CurrentUser()
-    try:
-        first_response, second_response = await asyncio.gather(
-            api_client.post(f"/api/v1/projects/{project_id}/vote"),
-            api_client.post(f"/api/v1/projects/{project_id}/vote"),
-        )
-    finally:
-        app.dependency_overrides.clear()
-
-    assert first_response.status_code == 204
-    assert second_response.status_code == 204
-
     project_cols = getattr(Project, "__table__").c
     vote_cols = getattr(Vote, "__table__").c
     user_cols = getattr(User, "__table__").c
-    async with session_factory() as verify_session:
-        project_result = await verify_session.exec(
-            select(Project).where(project_cols.id == project_id)
-        )
-        refreshed = project_result.one()
-        assert refreshed.vote_count == 1
-
-        votes_result = await verify_session.exec(
-            select(Vote).where(
-                vote_cols.project_id == project_id,
-                vote_cols.user_id == voter_id,
+    try:
+        try:
+            first_response, second_response = await asyncio.gather(
+                api_client.post(f"/api/v1/projects/{project_id}/vote"),
+                api_client.post(f"/api/v1/projects/{project_id}/vote"),
             )
-        )
-        assert len(votes_result.all()) == 1
+        finally:
+            app.dependency_overrides.clear()
 
-    async with session_factory() as cleanup_session:
-        await cleanup_session.exec(
-            delete(Vote).where(vote_cols.project_id == project_id)
-        )
-        await cleanup_session.exec(delete(Project).where(project_cols.id == project_id))
-        await cleanup_session.exec(
-            delete(User).where(user_cols.id.in_([owner_id, voter_id]))
-        )
-        await cleanup_session.commit()
+        assert first_response.status_code == 204
+        assert second_response.status_code == 204
+
+        async with session_factory() as verify_session:
+            project_result = await verify_session.exec(
+                select(Project).where(project_cols.id == project_id)
+            )
+            refreshed = project_result.one()
+            assert refreshed.vote_count == 1
+
+            votes_result = await verify_session.exec(
+                select(Vote).where(
+                    vote_cols.project_id == project_id,
+                    vote_cols.user_id == voter_id,
+                )
+            )
+            assert len(votes_result.all()) == 1
+    finally:
+        async with session_factory() as cleanup_session:
+            await cleanup_session.exec(
+                delete(Vote).where(vote_cols.project_id == project_id)
+            )
+            await cleanup_session.exec(
+                delete(Project).where(project_cols.id == project_id)
+            )
+            await cleanup_session.exec(
+                delete(User).where(user_cols.id.in_([owner_id, voter_id]))
+            )
+            await cleanup_session.commit()
