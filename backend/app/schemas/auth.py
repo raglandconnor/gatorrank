@@ -3,6 +3,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
+from app.models.user_roles import UserRole
+
 
 class AuthUserResponse(BaseModel):
     """Public user fields returned in auth token bootstrap responses."""
@@ -11,7 +13,9 @@ class AuthUserResponse(BaseModel):
 
     id: UUID
     email: EmailStr
-    role: str
+    role: UserRole = Field(
+        description="System role for authorization (`student`, `faculty`, or `admin`)."
+    )
     full_name: str | None = None
     profile_picture_url: str | None = None
 
@@ -98,7 +102,9 @@ class AuthMeResponse(BaseModel):
 
     id: UUID
     email: EmailStr
-    role: str
+    role: UserRole = Field(
+        description="System role for authorization (`student`, `faculty`, or `admin`)."
+    )
     full_name: str | None = None
     profile_picture_url: str | None = None
     created_at: datetime
