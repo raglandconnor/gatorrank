@@ -7,4 +7,5 @@ Thumbs.db
 
 # Supabase
 supabase/
-checkpoints/
+checkpoints/*
+!checkpoints/report_2026-03-26_soft_delete.md

@@ -25,6 +25,9 @@ class Project(SQLModel, table=True):
     published_at: datetime | None = Field(
         default=None, sa_column=sa.Column(sa.DateTime(timezone=True), nullable=True)
     )
+    deleted_at: datetime | None = Field(
+        default=None, sa_column=sa.Column(sa.DateTime(timezone=True), nullable=True)
+    )
     created_at: datetime = Field(
         sa_column=sa.Column(
             sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()
