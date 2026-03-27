@@ -2,7 +2,6 @@ from uuid import UUID
 
 import jwt
 from fastapi import Depends, HTTPException, Request, status
-from sqlalchemy.dialects.postgresql import insert as pg_insert
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
@@ -21,23 +20,23 @@ async def _resolve_authenticated_user(
     token: str,
     db: AsyncSession,
 ) -> User:
-    """Validate a bearer token, sync request auth state, and return/upsert the user."""
+    """Validate a bearer token, sync request auth state, and return the user."""
     try:
         payload = jwt.decode(
             token,
             settings.DATABASE_JWT_SECRET,
             algorithms=["HS256"],
             audience="authenticated",
+            options={"require": ["sub", "email", "aud", "exp", "iat"]},
         )
         user_id_str = payload.get("sub")
-        email = payload.get("email")
+        raw_email = payload.get("email")
 
-        if not user_id_str or not email:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token payload"
-            )
+        if not user_id_str or not isinstance(raw_email, str) or not raw_email.strip():
+            raise ValueError("Invalid token payload")
 
         user_id = UUID(user_id_str)
+        email = raw_email.strip().lower()
 
     except jwt.ExpiredSignatureError:
         raise HTTPException(
@@ -49,29 +48,19 @@ async def _resolve_authenticated_user(
         )
     except ValueError:
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token payload"
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token"
         )
 
     # Shared Contract: Set auth context in backend request state
     request.state.current_user_id = user_id
     request.state.current_user_email = email
 
-    user_table = getattr(User, "__table__")
-    upsert_stmt = (
-        pg_insert(user_table)
-        .values(id=user_id, email=email)
-        .on_conflict_do_update(
-            index_elements=[user_table.c.id],
-            set_={"email": email},
-        )
-    )
-    await db.exec(upsert_stmt)
-    await db.commit()
-
     result = await db.exec(select(User).where(User.id == user_id))
     user = result.one_or_none()
     if user is None:
-        raise RuntimeError("Upserted user could not be loaded")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token"
+        )
 
     return user
 

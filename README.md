@@ -128,6 +128,8 @@ Docker Compose lets you run both the backend and frontend with a single command 
   - Backend: `http://localhost:8000`
   - API docs (Swagger UI): `http://localhost:8000/docs`
 
+  **Live reload (editing on your machine):** The frontend service bind-mounts `./frontend` into the container and runs the dev server with `--hostname 0.0.0.0`, file-watcher polling (`WATCHPACK_POLLING`, `CHOKIDAR_USEPOLLING`), and Webpack mode (`dev:webpack`) so hot reload works reliably with Docker Desktop—especially on Windows. After changing dependencies, rebuild with `docker compose up --build`.
+
 3. Stop all services:
   ```bash
   docker compose down

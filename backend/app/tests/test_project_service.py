@@ -1,10 +1,17 @@
 from datetime import datetime, timezone
 from typing import cast
+from unittest.mock import AsyncMock
 from uuid import uuid4
 
 import pytest
 from app.models.project import Project
-from app.services.project import CursorError, ProjectService
+from app.services.project import (
+    CursorError,
+    ProjectAccessForbiddenError,
+    ProjectConflictError,
+    ProjectResourceNotFoundError,
+    ProjectService,
+)
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 
@@ -18,7 +25,8 @@ def make_project(*, is_published: bool, created_by_id=None) -> Project:
         id=uuid4(),
         created_by_id=created_by_id or uuid4(),
         title="Test Project",
-        description="Description",
+        short_description="Description",
+        long_description=None,
         demo_url=None,
         github_url=None,
         video_url=None,
@@ -80,14 +88,14 @@ def test_can_edit_project_allows_owner():
     assert service.can_edit_project(project, current_user_id=owner_id) is True
 
 
-def test_can_edit_project_allows_maintainer():
+def test_can_edit_project_rejects_maintainer():
     service = ProjectService(cast(AsyncSession, DummySession()))
     project = make_project(is_published=False)
 
     can_edit = service.can_edit_project(
         project, current_user_id=uuid4(), member_role="maintainer"
     )
-    assert can_edit is True
+    assert can_edit is False
 
 
 def test_can_edit_project_rejects_contributor():
@@ -118,3 +126,71 @@ def test_decode_cursor_rejects_sort_mismatch():
 
     with pytest.raises(CursorError, match="Invalid cursor"):
         service._decode_cursor(top_cursor, "new")
+
+
+@pytest.mark.asyncio
+async def test_assert_owner_access_rejects_non_owner():
+    service = ProjectService(cast(AsyncSession, DummySession()))
+    project = make_project(is_published=False)
+    non_owner_id = uuid4()
+
+    service.get_member_role = AsyncMock(return_value="maintainer")  # type: ignore[method-assign]
+
+    with pytest.raises(
+        ProjectAccessForbiddenError, match="Project member management forbidden"
+    ):
+        await service._assert_owner_access(
+            project=project, current_user_id=non_owner_id
+        )
+
+
+@pytest.mark.asyncio
+async def test_list_project_members_rejects_draft_non_member():
+    service = ProjectService(cast(AsyncSession, DummySession()))
+    project = make_project(is_published=False)
+
+    service.get_project_by_id = AsyncMock(return_value=project)  # type: ignore[method-assign]
+    service.get_member_role = AsyncMock(return_value=None)  # type: ignore[method-assign]
+
+    with pytest.raises(
+        ProjectAccessForbiddenError, match="Project members access forbidden"
+    ):
+        await service.list_project_members(
+            project_id=project.id,
+            current_user_id=uuid4(),
+        )
+
+
+@pytest.mark.asyncio
+async def test_leave_project_non_member_raises_not_found():
+    service = ProjectService(cast(AsyncSession, DummySession()))
+    project = make_project(is_published=False)
+
+    service.get_project_by_id = AsyncMock(return_value=project)  # type: ignore[method-assign]
+    service.get_project_member = AsyncMock(return_value=None)  # type: ignore[method-assign]
+
+    with pytest.raises(
+        ProjectResourceNotFoundError, match="Project membership not found"
+    ):
+        await service.leave_project(project_id=project.id, current_user_id=uuid4())
+
+
+@pytest.mark.asyncio
+async def test_leave_project_last_owner_raises_conflict():
+    service = ProjectService(cast(AsyncSession, DummySession()))
+    owner_id = uuid4()
+    project = make_project(is_published=False, created_by_id=owner_id)
+    owner_member = type(
+        "M",
+        (),
+        {"role": "owner", "project_id": project.id, "user_id": owner_id},
+    )()
+
+    service.get_project_by_id = AsyncMock(return_value=project)  # type: ignore[method-assign]
+    service.get_project_member = AsyncMock(return_value=owner_member)  # type: ignore[method-assign]
+    service._count_members_by_role = AsyncMock(return_value=1)  # type: ignore[method-assign]
+
+    with pytest.raises(
+        ProjectConflictError, match="Last owner cannot leave the project"
+    ):
+        await service.leave_project(project_id=project.id, current_user_id=owner_id)
