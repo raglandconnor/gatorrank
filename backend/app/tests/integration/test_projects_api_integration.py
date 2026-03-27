@@ -13,7 +13,7 @@ from sqlmodel.ext.asyncio.session import AsyncSession as SQLModelAsyncSession
 from app.api.deps.auth import get_current_user, get_current_user_optional
 from app.db.database import get_db
 from app.main import app
-from app.models.project import Project, ProjectMember
+from app.models.project import Project, ProjectMember, Vote
 from app.models.user import User
 
 
@@ -72,6 +72,24 @@ async def _seed_member(db_session, *, project_id, user_id, role: str) -> None:
     )
     db_session.add(member)
     await db_session.flush()
+
+
+async def _seed_vote(
+    db_session,
+    *,
+    project_id,
+    user_id,
+    created_at: datetime | None = None,
+) -> Vote:
+    now = created_at or datetime.now(timezone.utc)
+    vote = Vote(
+        project_id=project_id,
+        user_id=user_id,
+        created_at=now,
+    )
+    db_session.add(vote)
+    await db_session.flush()
+    return vote
 
 
 def _create_project_payload(**overrides):
@@ -2233,35 +2251,40 @@ async def test_add_project_member_concurrent_duplicate_requests_one_success_one_
 
     app.dependency_overrides[get_db] = override_get_db
     app.dependency_overrides[get_current_user] = lambda: CurrentUser()
-    try:
-        first_response, second_response = await asyncio.gather(
-            api_client.post(
-                f"/api/v1/projects/{project_id}/members",
-                json={"email": target_email, "role": "contributor"},
-            ),
-            api_client.post(
-                f"/api/v1/projects/{project_id}/members",
-                json={"email": target_email, "role": "contributor"},
-            ),
-        )
-    finally:
-        app.dependency_overrides.clear()
-
-    status_codes = sorted([first_response.status_code, second_response.status_code])
-    assert status_codes == [201, 409]
-
     project_member_cols = getattr(ProjectMember, "__table__").c
     project_cols = getattr(Project, "__table__").c
     user_cols = getattr(User, "__table__").c
-    async with session_factory() as cleanup_session:
-        await cleanup_session.exec(
-            delete(ProjectMember).where(project_member_cols.project_id == project_id)
-        )
-        await cleanup_session.exec(delete(Project).where(project_cols.id == project_id))
-        await cleanup_session.exec(
-            delete(User).where(user_cols.id.in_([owner_id, target_id]))
-        )
-        await cleanup_session.commit()
+    try:
+        try:
+            first_response, second_response = await asyncio.gather(
+                api_client.post(
+                    f"/api/v1/projects/{project_id}/members",
+                    json={"email": target_email, "role": "contributor"},
+                ),
+                api_client.post(
+                    f"/api/v1/projects/{project_id}/members",
+                    json={"email": target_email, "role": "contributor"},
+                ),
+            )
+        finally:
+            app.dependency_overrides.clear()
+
+        status_codes = sorted([first_response.status_code, second_response.status_code])
+        assert status_codes == [201, 409]
+    finally:
+        async with session_factory() as cleanup_session:
+            await cleanup_session.exec(
+                delete(ProjectMember).where(
+                    project_member_cols.project_id == project_id
+                )
+            )
+            await cleanup_session.exec(
+                delete(Project).where(project_cols.id == project_id)
+            )
+            await cleanup_session.exec(
+                delete(User).where(user_cols.id.in_([owner_id, target_id]))
+            )
+            await cleanup_session.commit()
 
 
 @pytest.mark.asyncio
@@ -2360,3 +2383,424 @@ async def test_get_project_members_smoke_with_large_member_count(
     assert len(payload) == total_members + 1
     # Smoke bound to catch obvious regressions, not strict benchmarking.
     assert elapsed < 2.5
+
+
+@pytest.mark.asyncio
+async def test_add_project_vote_idempotent_and_count_consistent(api_client, db_session):
+    owner = await _seed_user(db_session, "owner_vote_add@ufl.edu", "Owner Vote Add")
+    voter = await _seed_user(db_session, "voter_vote_add@ufl.edu", "Voter Vote Add")
+    project = await _seed_project(
+        db_session,
+        created_by_id=owner.id,
+        title="Vote Add Target",
+        is_published=True,
+    )
+
+    async def override_get_db():
+        yield db_session
+
+    app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_current_user] = _override_authed_user(voter)
+    try:
+        first = await api_client.post(f"/api/v1/projects/{project.id}/vote")
+        second = await api_client.post(f"/api/v1/projects/{project.id}/vote")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert first.status_code == 204
+    assert second.status_code == 204
+
+    project_result = await db_session.exec(
+        select(Project).where(Project.id == project.id)
+    )
+    refreshed = project_result.one()
+    assert refreshed.vote_count == 1
+
+    votes_result = await db_session.exec(
+        select(Vote).where(Vote.project_id == project.id, Vote.user_id == voter.id)
+    )
+    assert len(votes_result.all()) == 1
+
+
+@pytest.mark.asyncio
+async def test_remove_project_vote_idempotent_and_count_consistent(
+    api_client, db_session
+):
+    owner = await _seed_user(
+        db_session, "owner_vote_remove@ufl.edu", "Owner Vote Remove"
+    )
+    voter = await _seed_user(
+        db_session, "voter_vote_remove@ufl.edu", "Voter Vote Remove"
+    )
+    project = await _seed_project(
+        db_session,
+        created_by_id=owner.id,
+        title="Vote Remove Target",
+        is_published=True,
+    )
+    project.vote_count = 1
+    await _seed_vote(db_session, project_id=project.id, user_id=voter.id)
+    await db_session.flush()
+
+    async def override_get_db():
+        yield db_session
+
+    app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_current_user] = _override_authed_user(voter)
+    try:
+        first = await api_client.delete(f"/api/v1/projects/{project.id}/vote")
+        second = await api_client.delete(f"/api/v1/projects/{project.id}/vote")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert first.status_code == 204
+    assert second.status_code == 204
+
+    project_result = await db_session.exec(
+        select(Project).where(Project.id == project.id)
+    )
+    refreshed = project_result.one()
+    assert refreshed.vote_count == 0
+
+    votes_result = await db_session.exec(
+        select(Vote).where(Vote.project_id == project.id, Vote.user_id == voter.id)
+    )
+    assert len(votes_result.all()) == 0
+
+
+@pytest.mark.asyncio
+async def test_vote_endpoints_draft_project_returns_404(api_client, db_session):
+    owner = await _seed_user(db_session, "owner_vote_draft@ufl.edu", "Owner Vote Draft")
+    voter = await _seed_user(db_session, "voter_vote_draft@ufl.edu", "Voter Vote Draft")
+    draft_project = await _seed_project(
+        db_session,
+        created_by_id=owner.id,
+        title="Draft Vote Target",
+        is_published=False,
+    )
+
+    async def override_get_db():
+        yield db_session
+
+    app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_current_user] = _override_authed_user(voter)
+    try:
+        add_response = await api_client.post(
+            f"/api/v1/projects/{draft_project.id}/vote"
+        )
+        remove_response = await api_client.delete(
+            f"/api/v1/projects/{draft_project.id}/vote"
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert add_response.status_code == 404
+    assert remove_response.status_code == 404
+    assert add_response.json()["detail"] == "Project not found"
+    assert remove_response.json()["detail"] == "Project not found"
+
+
+@pytest.mark.asyncio
+async def test_vote_endpoints_and_my_votes_require_auth_integration(
+    api_client, db_session
+):
+    owner = await _seed_user(db_session, "owner_vote_auth@ufl.edu", "Owner Vote Auth")
+    project = await _seed_project(
+        db_session,
+        created_by_id=owner.id,
+        title="Vote Auth Target",
+        is_published=True,
+    )
+
+    async def override_get_db():
+        yield db_session
+
+    app.dependency_overrides[get_db] = override_get_db
+    try:
+        add_response = await api_client.post(f"/api/v1/projects/{project.id}/vote")
+        remove_response = await api_client.delete(f"/api/v1/projects/{project.id}/vote")
+        my_votes_response = await api_client.get("/api/v1/users/me/votes")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert add_response.status_code == 401
+    assert remove_response.status_code == 401
+    assert my_votes_response.status_code == 401
+    assert add_response.json()["detail"] == "Not authenticated"
+    assert remove_response.json()["detail"] == "Not authenticated"
+    assert my_votes_response.json()["detail"] == "Not authenticated"
+
+
+@pytest.mark.asyncio
+async def test_my_votes_contract_order_cursor_and_filtering(api_client, db_session):
+    owner = await _seed_user(db_session, "owner_my_votes@ufl.edu", "Owner My Votes")
+    voter = await _seed_user(db_session, "voter_my_votes@ufl.edu", "Voter My Votes")
+    now = datetime.now(timezone.utc)
+
+    oldest = await _seed_project(
+        db_session,
+        created_by_id=owner.id,
+        title="Oldest Voted Project",
+        is_published=True,
+    )
+    middle = await _seed_project(
+        db_session,
+        created_by_id=owner.id,
+        title="Middle Voted Project",
+        is_published=True,
+    )
+    newest = await _seed_project(
+        db_session,
+        created_by_id=owner.id,
+        title="Newest Voted Project",
+        is_published=True,
+    )
+    draft = await _seed_project(
+        db_session,
+        created_by_id=owner.id,
+        title="Draft Voted Project",
+        is_published=False,
+    )
+
+    await _seed_vote(
+        db_session,
+        project_id=oldest.id,
+        user_id=voter.id,
+        created_at=now - timedelta(minutes=3),
+    )
+    await _seed_vote(
+        db_session,
+        project_id=middle.id,
+        user_id=voter.id,
+        created_at=now - timedelta(minutes=2),
+    )
+    await _seed_vote(
+        db_session,
+        project_id=newest.id,
+        user_id=voter.id,
+        created_at=now - timedelta(minutes=1),
+    )
+    # Simulate stale data edge case: voted draft should still be excluded.
+    await _seed_vote(
+        db_session,
+        project_id=draft.id,
+        user_id=voter.id,
+        created_at=now,
+    )
+    await db_session.flush()
+
+    async def override_get_db():
+        yield db_session
+
+    app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_current_user] = _override_authed_user(voter)
+    try:
+        page_one = await api_client.get("/api/v1/users/me/votes?limit=2")
+        assert page_one.status_code == 200
+        payload_one = page_one.json()
+        assert [item["id"] for item in payload_one["items"]] == [
+            str(newest.id),
+            str(middle.id),
+        ]
+        assert [item["viewer_has_voted"] for item in payload_one["items"]] == [
+            True,
+            True,
+        ]
+        assert payload_one["next_cursor"] is not None
+
+        page_two = await api_client.get(
+            f"/api/v1/users/me/votes?limit=2&cursor={payload_one['next_cursor']}"
+        )
+        assert page_two.status_code == 200
+        payload_two = page_two.json()
+    finally:
+        app.dependency_overrides.clear()
+
+    assert [item["id"] for item in payload_two["items"]] == [str(oldest.id)]
+    assert [item["viewer_has_voted"] for item in payload_two["items"]] == [True]
+    assert payload_two["next_cursor"] is None
+    combined_ids = [item["id"] for item in payload_one["items"]] + [
+        item["id"] for item in payload_two["items"]
+    ]
+    assert str(draft.id) not in combined_ids
+
+
+@pytest.mark.asyncio
+async def test_viewer_has_voted_project_endpoints_authenticated_vs_anonymous(
+    api_client, db_session
+):
+    owner = await _seed_user(db_session, "owner_viewer_state@ufl.edu", "Owner Viewer")
+    viewer = await _seed_user(db_session, "viewer_viewer_state@ufl.edu", "Viewer State")
+    voted_project = await _seed_project(
+        db_session,
+        created_by_id=owner.id,
+        title="Viewer Voted Project",
+        is_published=True,
+    )
+    unvoted_project = await _seed_project(
+        db_session,
+        created_by_id=owner.id,
+        title="Viewer Unvoted Project",
+        is_published=True,
+    )
+    await _seed_vote(db_session, project_id=voted_project.id, user_id=viewer.id)
+    await db_session.flush()
+
+    async def override_get_db():
+        yield db_session
+
+    app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_current_user_optional] = _override_authed_user(viewer)
+    try:
+        list_response = await api_client.get("/api/v1/projects?sort=new&limit=10")
+        voted_detail = await api_client.get(f"/api/v1/projects/{voted_project.id}")
+        unvoted_detail = await api_client.get(f"/api/v1/projects/{unvoted_project.id}")
+        user_projects = await api_client.get(
+            f"/api/v1/users/{owner.id}/projects?sort=new&limit=10"
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert list_response.status_code == 200
+    list_items = {item["id"]: item for item in list_response.json()["items"]}
+    assert list_items[str(voted_project.id)]["viewer_has_voted"] is True
+    assert list_items[str(unvoted_project.id)]["viewer_has_voted"] is False
+
+    assert voted_detail.status_code == 200
+    assert voted_detail.json()["viewer_has_voted"] is True
+    assert unvoted_detail.status_code == 200
+    assert unvoted_detail.json()["viewer_has_voted"] is False
+
+    assert user_projects.status_code == 200
+    user_items = {item["id"]: item for item in user_projects.json()["items"]}
+    assert user_items[str(voted_project.id)]["viewer_has_voted"] is True
+    assert user_items[str(unvoted_project.id)]["viewer_has_voted"] is False
+
+    app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_current_user_optional] = lambda: None
+    try:
+        anonymous_list = await api_client.get("/api/v1/projects?sort=new&limit=10")
+        anonymous_detail = await api_client.get(f"/api/v1/projects/{voted_project.id}")
+        anonymous_user_projects = await api_client.get(
+            f"/api/v1/users/{owner.id}/projects?sort=new&limit=10"
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert anonymous_list.status_code == 200
+    anonymous_list_items = {item["id"]: item for item in anonymous_list.json()["items"]}
+    assert anonymous_list_items[str(voted_project.id)]["viewer_has_voted"] is False
+    assert anonymous_list_items[str(unvoted_project.id)]["viewer_has_voted"] is False
+
+    assert anonymous_detail.status_code == 200
+    assert anonymous_detail.json()["viewer_has_voted"] is False
+
+    assert anonymous_user_projects.status_code == 200
+    anonymous_user_items = {
+        item["id"]: item for item in anonymous_user_projects.json()["items"]
+    }
+    assert anonymous_user_items[str(voted_project.id)]["viewer_has_voted"] is False
+    assert anonymous_user_items[str(unvoted_project.id)]["viewer_has_voted"] is False
+
+
+@pytest.mark.asyncio
+async def test_add_project_vote_concurrent_requests_one_effective_vote(
+    api_client, async_engine
+):
+    now = datetime.now(timezone.utc)
+    unique = uuid4().hex[:8]
+    owner_email = f"owner_vote_concurrent_{unique}@ufl.edu"
+    voter_email = f"voter_vote_concurrent_{unique}@ufl.edu"
+    session_factory = async_sessionmaker(
+        async_engine,
+        expire_on_commit=False,
+        class_=SQLModelAsyncSession,
+    )
+
+    async with session_factory() as setup_session:
+        owner = User(
+            email=owner_email,
+            password_hash="integration-password-hash",
+            full_name="Owner Vote Concurrent",
+            created_at=now,
+            updated_at=now,
+        )
+        voter = User(
+            email=voter_email,
+            password_hash="integration-password-hash",
+            full_name="Voter Vote Concurrent",
+            created_at=now,
+            updated_at=now,
+        )
+        setup_session.add(owner)
+        setup_session.add(voter)
+        await setup_session.flush()
+
+        project = Project(
+            created_by_id=owner.id,
+            title="Concurrent Vote API",
+            short_description="Concurrent vote endpoint coverage",
+            vote_count=0,
+            is_group_project=False,
+            is_published=True,
+            published_at=now,
+            created_at=now,
+            updated_at=now,
+        )
+        setup_session.add(project)
+        await setup_session.commit()
+        project_id = project.id
+        owner_id = owner.id
+        voter_id = voter.id
+
+    async def override_get_db():
+        async with session_factory() as session:
+            yield session
+
+    class CurrentUser:
+        id = voter_id
+        email = voter_email
+
+    app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_current_user] = lambda: CurrentUser()
+    project_cols = getattr(Project, "__table__").c
+    vote_cols = getattr(Vote, "__table__").c
+    user_cols = getattr(User, "__table__").c
+    try:
+        try:
+            first_response, second_response = await asyncio.gather(
+                api_client.post(f"/api/v1/projects/{project_id}/vote"),
+                api_client.post(f"/api/v1/projects/{project_id}/vote"),
+            )
+        finally:
+            app.dependency_overrides.clear()
+
+        assert first_response.status_code == 204
+        assert second_response.status_code == 204
+
+        async with session_factory() as verify_session:
+            project_result = await verify_session.exec(
+                select(Project).where(project_cols.id == project_id)
+            )
+            refreshed = project_result.one()
+            assert refreshed.vote_count == 1
+
+            votes_result = await verify_session.exec(
+                select(Vote).where(
+                    vote_cols.project_id == project_id,
+                    vote_cols.user_id == voter_id,
+                )
+            )
+            assert len(votes_result.all()) == 1
+    finally:
+        async with session_factory() as cleanup_session:
+            await cleanup_session.exec(
+                delete(Vote).where(vote_cols.project_id == project_id)
+            )
+            await cleanup_session.exec(
+                delete(Project).where(project_cols.id == project_id)
+            )
+            await cleanup_session.exec(
+                delete(User).where(user_cols.id.in_([owner_id, voter_id]))
+            )
+            await cleanup_session.commit()
