@@ -1,5 +1,5 @@
 import asyncio
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from time import perf_counter
 from uuid import uuid4
 
@@ -304,6 +304,58 @@ async def test_create_project_invalid_url_returns_422(api_client, db_session):
         response = await api_client.post(
             "/api/v1/projects",
             json=_create_project_payload(github_url="not-a-url"),
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_create_project_rejects_timeline_end_without_start(
+    api_client, db_session
+):
+    creator = await _seed_user(
+        db_session, "creator_timeline_end_only@ufl.edu", "Creator Timeline End Only"
+    )
+
+    async def override_get_db():
+        yield db_session
+
+    app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_current_user] = _override_authed_user(creator)
+    try:
+        response = await api_client.post(
+            "/api/v1/projects",
+            json=_create_project_payload(
+                timeline_start_date=None,
+                timeline_end_date="2026-03-31",
+            ),
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_create_project_rejects_timeline_start_after_end(api_client, db_session):
+    creator = await _seed_user(
+        db_session, "creator_timeline_order@ufl.edu", "Creator Timeline Order"
+    )
+
+    async def override_get_db():
+        yield db_session
+
+    app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_current_user] = _override_authed_user(creator)
+    try:
+        response = await api_client.post(
+            "/api/v1/projects",
+            json=_create_project_payload(
+                timeline_start_date="2026-04-01",
+                timeline_end_date="2026-03-31",
+            ),
         )
     finally:
         app.dependency_overrides.clear()
@@ -650,6 +702,81 @@ async def test_patch_project_invalid_url_returns_422(api_client, db_session):
         app.dependency_overrides.clear()
 
     assert response.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_patch_project_rejects_timeline_end_without_start(api_client, db_session):
+    owner = await _seed_user(
+        db_session, "owner_patch_timeline_end_only@ufl.edu", "Owner Patch Timeline End"
+    )
+    project = await _seed_project(
+        db_session,
+        created_by_id=owner.id,
+        title="Patch Timeline End Without Start",
+        is_published=False,
+    )
+    project.github_url = "https://github.com/example/patch-timeline-end"
+    await db_session.flush()
+
+    async def override_get_db():
+        yield db_session
+
+    app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_current_user] = _override_authed_user(owner)
+    try:
+        response = await api_client.patch(
+            f"/api/v1/projects/{project.id}",
+            json={"timeline_end_date": "2026-03-31"},
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 422
+    assert (
+        response.json()["detail"] == "timeline_end_date requires timeline_start_date."
+    )
+
+
+@pytest.mark.asyncio
+async def test_patch_project_allows_clearing_timeline_end(api_client, db_session):
+    owner = await _seed_user(
+        db_session, "owner_patch_timeline_clear@ufl.edu", "Owner Patch Timeline Clear"
+    )
+    project = await _seed_project(
+        db_session,
+        created_by_id=owner.id,
+        title="Patch Timeline Clear End",
+        is_published=False,
+    )
+    project.github_url = "https://github.com/example/patch-timeline-clear"
+    project.timeline_start_date = date(2026, 3, 1)
+    project.timeline_end_date = date(2026, 3, 31)
+    await db_session.flush()
+
+    async def override_get_db():
+        yield db_session
+
+    app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_current_user] = _override_authed_user(owner)
+    try:
+        response = await api_client.patch(
+            f"/api/v1/projects/{project.id}",
+            json={"timeline_end_date": None},
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["timeline_start_date"] == "2026-03-01"
+    assert payload["timeline_end_date"] is None
+
+    project_result = await db_session.exec(
+        select(Project).where(Project.id == project.id)
+    )
+    updated = project_result.one()
+    assert updated.timeline_start_date == date(2026, 3, 1)
+    assert updated.timeline_end_date is None
 
 
 @pytest.mark.asyncio
