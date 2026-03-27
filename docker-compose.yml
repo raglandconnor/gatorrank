@@ -17,6 +17,10 @@ services:
       - "3000:3000"
     env_file:
       - ./frontend/.env
+    environment:
+      WATCHPACK_POLLING: "true"
+      CHOKIDAR_USEPOLLING: "true"
+    command: ["bun", "run", "dev:webpack"]
     volumes:
       - ./frontend:/app
       - /app/node_modules

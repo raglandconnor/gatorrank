@@ -44,6 +44,10 @@ class Settings(BaseSettings):
     def async_database_url(self) -> str:
         """Return DATABASE_URL normalized for async SQLAlchemy runtime."""
         value = self.DATABASE_URL.strip()
+        if value.startswith("postgresql+psycopg2://"):
+            return value.replace("postgresql+psycopg2://", "postgresql+asyncpg://", 1)
+        if value.startswith("postgresql+psycopg://"):
+            return value.replace("postgresql+psycopg://", "postgresql+asyncpg://", 1)
         if value.startswith("postgresql://"):
             return value.replace("postgresql://", "postgresql+asyncpg://", 1)
         return value
@@ -52,6 +56,8 @@ class Settings(BaseSettings):
     def sync_database_url(self) -> str:
         """Return DATABASE_URL normalized for sync migration tooling."""
         value = self.DATABASE_URL.strip()
+        if value.startswith("postgresql+psycopg2://"):
+            return value.replace("postgresql+psycopg2://", "postgresql+psycopg://", 1)
         if value.startswith("postgresql+asyncpg://"):
             return value.replace("postgresql+asyncpg://", "postgresql+psycopg://", 1)
         if value.startswith("postgresql://"):
