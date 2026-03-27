@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import {
   Box,
@@ -113,6 +113,9 @@ export default function ProfileUserPage() {
     isUuid(userId) ? { status: 'loading' } : { status: 'notfound' },
   );
 
+  // null = projects not yet loaded; -1 = error; >= 0 = item count
+  const [projectCount, setProjectCount] = useState<number | null>(null);
+
   const isOwn = isReady && authUser?.id === userId;
 
   useEffect(() => {
@@ -141,6 +144,10 @@ export default function ProfileUserPage() {
 
     void load();
   }, [userId, authUser?.id]);
+
+  const handleProjectsLoaded = useCallback((count: number) => {
+    setProjectCount(count);
+  }, []);
 
   if (state.status === 'loading') {
     return (
@@ -220,6 +227,22 @@ export default function ProfileUserPage() {
     skills: extended.skills,
   };
 
+  const extendedIsEmpty =
+    !extended.bio &&
+    extended.skills.length === 0 &&
+    !extended.major &&
+    extended.graduationYear <= 0 &&
+    extended.courses.length === 0;
+
+  // Projects have finished loading with zero items (not an error)
+  const projectsLoadedEmpty = projectCount !== null && projectCount === 0;
+
+  // Owner: show complete-your-profile banner when everything is empty
+  const showOwnerBanner = isOwn && extendedIsEmpty && projectsLoadedEmpty;
+
+  // Visitor: show one consolidated message when the entire profile body is empty
+  const showVisitorEmpty = !isOwn && extendedIsEmpty && projectsLoadedEmpty;
+
   return (
     <Box minH="100vh" bg="white">
       <Navbar />
@@ -272,6 +295,7 @@ export default function ProfileUserPage() {
               <RoleBadge role={publicUser.role as 'student' | 'faculty'} />
             </HStack>
 
+            {/* Bio: always shown when filled; owner sees prompt unless banner covers it */}
             {extended.bio ? (
               <Text
                 fontSize="sm"
@@ -281,19 +305,18 @@ export default function ProfileUserPage() {
               >
                 {extended.bio}
               </Text>
-            ) : (
+            ) : isOwn && !showOwnerBanner ? (
               <Text
                 fontSize="sm"
                 color="gray.400"
                 lineHeight="24px"
                 maxW="640px"
               >
-                {isOwn
-                  ? 'No bio yet — edit your profile to add one.'
-                  : 'No bio added yet.'}
+                No bio yet — edit your profile to add one.
               </Text>
-            )}
+            ) : null}
 
+            {/* Social links */}
             <HStack gap="8px" mt="4px">
               {extended.socials.github && (
                 <SocialLink
@@ -363,50 +386,105 @@ export default function ProfileUserPage() {
           )}
         </HStack>
 
-        {/* Two-column lower section */}
-        <Flex gap="24px" align="start">
-          <AcademicInfoCard profile={academicProfile} />
+        {/* Owner: complete-your-profile banner */}
+        {showOwnerBanner && (
+          <Box
+            bg="orange.50"
+            border="1px solid"
+            borderColor="orange.200"
+            borderRadius="13px"
+            p="24px"
+            mb="32px"
+          >
+            <VStack align="start" gap="12px">
+              <Text fontSize="sm" fontWeight="medium" color="gray.700">
+                Your profile is looking sparse — fill in your bio, skills, and
+                academic info so others can learn about you.
+              </Text>
+              <Button
+                size="sm"
+                bg="orange.400"
+                color="white"
+                borderRadius="10px"
+                _hover={{ bg: 'orange.500' }}
+                onClick={() => router.push(`/profile/${userId}/edit`)}
+              >
+                Complete your profile
+              </Button>
+            </VStack>
+          </Box>
+        )}
+
+        {/* Visitor: consolidated empty message */}
+        {showVisitorEmpty && (
+          <Text fontSize="sm" color="gray.400" lineHeight="24px" mb="32px">
+            This member has not added profile details or projects yet.
+          </Text>
+        )}
+
+        {/*
+          Two-column body: always rendered so ProfileUserProjects stays mounted and
+          can fire onLoadComplete. Content inside is conditionally shown/hidden.
+          When showVisitorEmpty is true the section is visually hidden via display:none.
+        */}
+        <Flex
+          gap="24px"
+          align="start"
+          display={showVisitorEmpty ? 'none' : 'flex'}
+        >
+          <AcademicInfoCard profile={academicProfile} isOwn={isOwn} />
 
           <VStack flex={1} align="start" gap="32px" minW={0}>
-            {/* Skills */}
-            <VStack align="start" gap="16px" w="100%">
-              <Text
-                fontSize="md"
-                fontWeight="bold"
-                color="gray.900"
-                lineHeight="30px"
-              >
-                Skills
-              </Text>
-              {extended.skills.length > 0 ? (
-                <Wrap gap="8px">
-                  {extended.skills.map((skill: string) => (
-                    <Box
-                      key={skill}
-                      bg="rgba(251,146,60,0.1)"
-                      border="1.6px solid"
-                      borderColor="orange.400"
-                      borderRadius="10px"
-                      px="16px"
-                      py="8px"
-                    >
-                      <Text fontSize="sm" color="orange.400" lineHeight="24px">
-                        {skill}
-                      </Text>
-                    </Box>
-                  ))}
-                </Wrap>
-              ) : (
-                <Text fontSize="sm" color="gray.400" lineHeight="24px">
-                  {isOwn
-                    ? 'No skills added yet — edit your profile to add skills.'
-                    : 'No skills added yet.'}
+            {/* Skills: always shown for owner; for visitors only when non-empty */}
+            {(isOwn || extended.skills.length > 0) && (
+              <VStack align="start" gap="16px" w="100%">
+                <Text
+                  fontSize="md"
+                  fontWeight="bold"
+                  color="gray.900"
+                  lineHeight="30px"
+                >
+                  Skills
                 </Text>
-              )}
-            </VStack>
+                {extended.skills.length > 0 ? (
+                  <Wrap gap="8px">
+                    {extended.skills.map((skill: string) => (
+                      <Box
+                        key={skill}
+                        bg="rgba(251,146,60,0.1)"
+                        border="1.6px solid"
+                        borderColor="orange.400"
+                        borderRadius="10px"
+                        px="16px"
+                        py="8px"
+                      >
+                        <Text
+                          fontSize="sm"
+                          color="orange.400"
+                          lineHeight="24px"
+                        >
+                          {skill}
+                        </Text>
+                      </Box>
+                    ))}
+                  </Wrap>
+                ) : (
+                  // Only reached when isOwn (visitor case is excluded by the condition above)
+                  !showOwnerBanner && (
+                    <Text fontSize="sm" color="gray.400" lineHeight="24px">
+                      No skills added yet — edit your profile to add skills.
+                    </Text>
+                  )
+                )}
+              </VStack>
+            )}
 
-            {/* Projects */}
-            <ProfileUserProjects userId={publicUser.id} />
+            {/* Projects — always mounted to ensure onLoadComplete fires */}
+            <ProfileUserProjects
+              userId={publicUser.id}
+              isOwn={isOwn}
+              onLoadComplete={handleProjectsLoaded}
+            />
           </VStack>
         </Flex>
       </Box>
