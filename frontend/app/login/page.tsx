@@ -4,7 +4,8 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { GatorRankLogo } from '@/components/GatorRankLogo';
 import { useAuth } from '@/components/auth/AuthProvider';
-import { toaster } from '@/components/ui/toaster';
+import { toast } from '@/lib/ui/toast';
+import { loginErrorToast } from '@/lib/auth/toastMessages';
 import {
   Box,
   Button,
@@ -55,18 +56,13 @@ export default function LoginPage() {
     setIsSubmitting(true);
     try {
       await login(email.trim(), password, rememberMe);
-      toaster.success({
+      toast.success({
         title: 'Signed in',
-        description: 'Welcome back.',
+        description: 'Welcome back. Taking you to your profile…',
       });
       router.push('/profile');
     } catch (err) {
-      const message =
-        err instanceof Error ? err.message : 'Could not sign in. Try again.';
-      toaster.error({
-        title: 'Sign in failed',
-        description: message,
-      });
+      toast.error(loginErrorToast(err));
     } finally {
       setIsSubmitting(false);
     }

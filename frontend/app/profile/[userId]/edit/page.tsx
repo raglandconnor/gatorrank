@@ -29,7 +29,7 @@ import {
   LuShieldCheck,
 } from 'react-icons/lu';
 import { Navbar } from '@/components/Navbar';
-import { toaster } from '@/components/ui/toaster';
+import { toast } from '@/lib/ui/toast';
 import { RoleBadge } from '@/components/ui/rolebadge';
 import { getMe, patchMe } from '@/lib/api/users';
 import type { AuthUser } from '@/lib/api/types/auth';
@@ -214,7 +214,7 @@ export default function EditProfilePage() {
         setCourses(ext.courses);
         setSkills(ext.skills);
       } catch {
-        toaster.error({
+        toast.error({
           title: 'Could not load profile',
           description: 'Please try again.',
         });
@@ -235,12 +235,11 @@ export default function EditProfilePage() {
     if (file.size > MAX_SIZE_BYTES) {
       e.target.value = '';
       if (fileInputRef.current) fileInputRef.current.value = '';
-      toaster.error({
+      toast.error({
         id: String(Date.now()),
         title: 'Image too large',
         description: 'Please choose a file smaller than 5MB.',
         duration: 3000,
-        closable: true,
       });
       return;
     }
@@ -279,7 +278,7 @@ export default function EditProfilePage() {
       setPwError('New password must be at least 12 characters.');
       return;
     }
-    toaster.error({
+    toast.error({
       title: 'Not available yet',
       description: 'Password change requires a backend endpoint.',
     });
@@ -313,7 +312,7 @@ export default function EditProfilePage() {
         skills,
       });
 
-      toaster.success({
+      toast.success({
         title: 'Profile saved',
         description: 'Your changes have been saved.',
       });
@@ -321,7 +320,7 @@ export default function EditProfilePage() {
     } catch (err) {
       const message =
         err instanceof Error ? err.message : 'Could not save profile.';
-      toaster.error({ title: 'Save failed', description: message });
+      toast.error({ title: 'Save failed', description: message });
     } finally {
       setSaving(false);
     }

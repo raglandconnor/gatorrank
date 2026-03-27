@@ -4,7 +4,8 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { GatorRankLogo } from '@/components/GatorRankLogo';
 import { useAuth } from '@/components/auth/AuthProvider';
-import { toaster } from '@/components/ui/toaster';
+import { toast } from '@/lib/ui/toast';
+import { signupErrorToast } from '@/lib/auth/toastMessages';
 import {
   Box,
   Button,
@@ -85,18 +86,13 @@ export default function SignupPage() {
         fullName: fullName.trim(),
         rememberMe,
       });
-      toaster.success({
+      toast.success({
         title: 'Account created',
-        description: 'You are signed in.',
+        description: 'Welcome to GatorRank. Taking you to your profile…',
       });
       router.push('/profile');
     } catch (err) {
-      const message =
-        err instanceof Error ? err.message : 'Could not create account.';
-      toaster.error({
-        title: 'Sign up failed',
-        description: message,
-      });
+      toast.error(signupErrorToast(err));
     } finally {
       setIsSubmitting(false);
     }
