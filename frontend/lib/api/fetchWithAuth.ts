@@ -12,6 +12,22 @@ export interface FetchWithAuthOptions extends Omit<RequestInit, 'headers'> {
 }
 
 /**
+ * Single in-flight refresh so parallel 401s (e.g. profile + projects) do not
+ * both POST /auth/refresh — the second would use a token already rotated by the first.
+ */
+let refreshAccessTokenPromise: Promise<string> | null = null;
+
+async function refreshAccessToken(): Promise<string> {
+  const refresh = getStoredRefreshToken();
+  if (!refresh) {
+    throw new Error('Missing refresh token');
+  }
+  const tokens = await authRefresh({ refresh_token: refresh });
+  updateTokens(tokens.access_token, tokens.refresh_token);
+  return tokens.access_token;
+}
+
+/**
  * GET/POST/etc. to `/api/v1/...` with Bearer access token.
  * On 401, tries one refresh via stored refresh_token, then retries once.
  * If still unauthorized, clears session and redirects to /login.
@@ -52,9 +68,12 @@ export async function fetchWithAuth(
   }
 
   try {
-    const tokens = await authRefresh({ refresh_token: refresh });
-    updateTokens(tokens.access_token, tokens.refresh_token);
-    access = tokens.access_token;
+    if (!refreshAccessTokenPromise) {
+      refreshAccessTokenPromise = refreshAccessToken().finally(() => {
+        refreshAccessTokenPromise = null;
+      });
+    }
+    access = await refreshAccessTokenPromise;
     res = await doFetch(access);
     if (res.status === 401) {
       clearAuthSession();
