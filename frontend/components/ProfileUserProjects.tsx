@@ -214,9 +214,16 @@ function UserProjectCard({
 /* ── ProfileUserProjects ─────────────────────────────────────── */
 interface ProfileUserProjectsProps {
   userId: string;
+  isOwn: boolean;
+  /** Called once projects finish loading (error or success). Receives item count (-1 on error). */
+  onLoadComplete?: (count: number) => void;
 }
 
-export function ProfileUserProjects({ userId }: ProfileUserProjectsProps) {
+export function ProfileUserProjects({
+  userId,
+  isOwn,
+  onLoadComplete,
+}: ProfileUserProjectsProps) {
   const router = useRouter();
   const [projects, setProjects] = useState<ProjectListItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -227,15 +234,17 @@ export function ProfileUserProjects({ userId }: ProfileUserProjectsProps) {
       try {
         const data = await getUserProjects(userId);
         setProjects(data.items);
+        onLoadComplete?.(data.items.length);
       } catch {
         setError('Could not load projects.');
+        onLoadComplete?.(-1);
       } finally {
         setLoading(false);
       }
     }
 
     void load();
-  }, [userId]);
+  }, [userId, onLoadComplete]);
 
   return (
     <VStack align="start" gap="16px" w="100%">
@@ -260,7 +269,9 @@ export function ProfileUserProjects({ userId }: ProfileUserProjectsProps) {
 
       {!loading && !error && projects.length === 0 && (
         <Text fontSize="sm" color="gray.400" lineHeight="24px">
-          No projects yet. Share your work with the GatorRank community!
+          {isOwn
+            ? 'No projects yet — add your first one to get noticed on GatorRank.'
+            : 'No projects shared yet.'}
         </Text>
       )}
 
@@ -270,7 +281,9 @@ export function ProfileUserProjects({ userId }: ProfileUserProjectsProps) {
             <UserProjectCard
               key={project.id}
               project={project}
-              onEdit={(id) => router.push(`/projects/${id}/edit`)}
+              onEdit={
+                isOwn ? (id) => router.push(`/projects/${id}/edit`) : undefined
+              }
             />
           ))}
         </SimpleGrid>
