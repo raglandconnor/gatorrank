@@ -10,6 +10,7 @@ settings = get_settings()
 
 connect_args: dict[str, object] = {
     "timeout": settings.DATABASE_CONNECT_TIMEOUT,
+    "statement_cache_size": 0,
 }
 
 if settings.DATABASE_SSL:

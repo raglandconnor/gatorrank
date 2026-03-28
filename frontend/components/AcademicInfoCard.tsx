@@ -1,8 +1,14 @@
 import { Box, VStack, Text, Wrap } from '@chakra-ui/react';
-import type { UserProfile } from '@/data/mock-profile';
+
+export interface AcademicProfile {
+  major: string;
+  graduationYear: number;
+  courses: string[];
+}
 
 interface AcademicInfoCardProps {
-  profile: UserProfile;
+  profile: AcademicProfile;
+  isOwn: boolean;
 }
 
 export function AcademicInfoCard({ profile }: AcademicInfoCardProps) {
@@ -25,7 +31,11 @@ export function AcademicInfoCard({ profile }: AcademicInfoCardProps) {
               Major
             </Text>
             <Text fontSize="sm" color="gray.900" lineHeight="24px">
-              {profile.major}
+              {profile.major || (
+                <Text as="span" color="gray.400">
+                  Not set
+                </Text>
+              )}
             </Text>
           </VStack>
 
@@ -35,7 +45,13 @@ export function AcademicInfoCard({ profile }: AcademicInfoCardProps) {
               Graduation Year
             </Text>
             <Text fontSize="sm" color="gray.900" lineHeight="24px">
-              {profile.graduationYear}
+              {profile.graduationYear > 0 ? (
+                profile.graduationYear
+              ) : (
+                <Text as="span" color="gray.400">
+                  Not set
+                </Text>
+              )}
             </Text>
           </VStack>
 
@@ -44,23 +60,29 @@ export function AcademicInfoCard({ profile }: AcademicInfoCardProps) {
             <Text fontSize="sm" color="gray.500" lineHeight="24px">
               UF Courses
             </Text>
-            <Wrap gap="8px">
-              {profile.courses.map((course) => (
-                <Box
-                  key={course}
-                  bg="white"
-                  border="1.6px solid"
-                  borderColor="orange.200"
-                  borderRadius="8px"
-                  px="10px"
-                  py="6px"
-                >
-                  <Text fontSize="sm" color="gray.900" lineHeight="24px">
-                    {course}
-                  </Text>
-                </Box>
-              ))}
-            </Wrap>
+            {profile.courses.length > 0 ? (
+              <Wrap gap="8px">
+                {profile.courses.map((course) => (
+                  <Box
+                    key={course}
+                    bg="white"
+                    border="1.6px solid"
+                    borderColor="orange.200"
+                    borderRadius="8px"
+                    px="10px"
+                    py="6px"
+                  >
+                    <Text fontSize="sm" color="gray.900" lineHeight="24px">
+                      {course}
+                    </Text>
+                  </Box>
+                ))}
+              </Wrap>
+            ) : (
+              <Text fontSize="sm" color="gray.400" lineHeight="24px">
+                No courses added yet.
+              </Text>
+            )}
           </VStack>
         </VStack>
       </VStack>

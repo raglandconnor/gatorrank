@@ -20,7 +20,7 @@ import {
   LuPlay,
   LuImage,
 } from 'react-icons/lu';
-import { toaster } from '@/components/ui/toaster';
+import { toast } from '@/lib/ui/toast';
 
 const PROJECT_NAME_MAX = 50;
 const SHORT_DESCRIPTION_MAX = 70;
@@ -210,7 +210,7 @@ export function ProjectForm({
 
     const normalized = raw.toLowerCase();
     if (!isValidUflEmail(normalized)) {
-      toaster.error({
+      toast.error({
         title: 'Invalid email',
         description: 'Team members must use a valid @ufl.edu email address.',
       });
@@ -316,7 +316,7 @@ export function ProjectForm({
       nextErrors.githubUrl ??
       nextErrors.demoVideoUrl;
     if (firstError) {
-      toaster.error({
+      toast.error({
         title: 'Validation error',
         description: firstError,
       });
