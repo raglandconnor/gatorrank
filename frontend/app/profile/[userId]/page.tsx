@@ -416,7 +416,7 @@ export default function ProfileUserPage() {
 
         {/* Two-column body */}
         <Flex gap="24px" align="start">
-          <AcademicInfoCard profile={academicProfile} isOwn={isOwn} />
+          <AcademicInfoCard profile={academicProfile} />
 
           <VStack flex={1} align="start" gap="32px" minW={0}>
             {/* Skills: always shown */}

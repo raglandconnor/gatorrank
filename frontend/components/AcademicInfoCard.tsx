@@ -8,7 +8,6 @@ export interface AcademicProfile {
 
 interface AcademicInfoCardProps {
   profile: AcademicProfile;
-  isOwn: boolean;
 }
 
 export function AcademicInfoCard({ profile }: AcademicInfoCardProps) {

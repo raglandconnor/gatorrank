@@ -1,10 +1,11 @@
 /**
  * Thin wrappers around the Chakra toaster that apply consistent defaults:
- *   - closable: true  — the X button is always shown
- *   - duration: 6000  — 6 s for errors/warnings; 4 s for success/info
+ *   - closable: true by default — spread `opts` after so callers may pass
+ *     closable: false when a non-dismissible toast is required.
+ *   - duration: 6 s for errors/warnings; 4 s for success/info
  *
- * Import these helpers instead of `toaster` directly so every toast is
- * dismissible and callers do not have to repeat options.
+ * Import these helpers instead of `toaster` directly so callers do not
+ * have to repeat options.
  */
 import type { ToastOptions } from '@chakra-ui/react';
 import { toaster } from '@/components/ui/toaster';
