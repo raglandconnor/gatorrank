@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from unittest.mock import AsyncMock
 from uuid import UUID
 
@@ -6,7 +6,7 @@ import pytest
 from sqlmodel import select
 from sqlalchemy.sql.dml import Update
 
-from app.models.project import Project, ProjectMember
+from app.models.project import Project, ProjectMember, Vote
 from app.models.user import User
 from app.schemas.project import ProjectCreateRequest, ProjectUpdateRequest
 from app.services.project import (
@@ -65,6 +65,19 @@ async def _seed_member(
         added_at=added_at,
     )
     db_session.add(member)
+    await db_session.flush()
+
+
+async def _seed_vote(
+    db_session, *, project_id, user_id, created_at: datetime | None = None
+) -> None:
+    now = created_at or datetime.now(timezone.utc)
+    vote = Vote(
+        user_id=user_id,
+        project_id=project_id,
+        created_at=now,
+    )
+    db_session.add(vote)
     await db_session.flush()
 
 
@@ -185,6 +198,33 @@ async def test_get_project_detail_returns_none_for_missing_project(db_session):
 
 
 @pytest.mark.asyncio
+async def test_get_project_detail_sets_viewer_has_voted(db_session):
+    now = datetime.now(timezone.utc)
+    owner = await _seed_user(db_session, "owner-voted-detail@ufl.edu", "Owner")
+    voter = await _seed_user(db_session, "voter-voted-detail@ufl.edu", "Voter")
+    project = await _seed_project(
+        db_session,
+        created_by_id=owner.id,
+        title="Detail Voted",
+        vote_count=1,
+        is_published=True,
+        created_at=now,
+    )
+    await _seed_vote(
+        db_session, project_id=project.id, user_id=voter.id, created_at=now
+    )
+
+    service = ProjectService(db_session)
+    authed_detail = await service.get_project_detail(project.id, voter.id)
+    anonymous_detail = await service.get_project_detail(project.id, None)
+
+    assert authed_detail is not None
+    assert authed_detail.viewer_has_voted is True
+    assert anonymous_detail is not None
+    assert anonymous_detail.viewer_has_voted is False
+
+
+@pytest.mark.asyncio
 async def test_list_projects_top_sort_tiebreakers(db_session):
     now = datetime.now(timezone.utc)
     owner = await _seed_user(db_session, "owner4@ufl.edu", "Owner4")
@@ -253,6 +293,47 @@ async def test_list_projects_new_sort_cursor_pagination(db_session):
     )
     assert [item.id for item in page_two.items] == [oldest.id]
     assert page_two.next_cursor is None
+
+
+@pytest.mark.asyncio
+async def test_list_projects_sets_viewer_has_voted_for_authenticated_user(db_session):
+    now = datetime.now(timezone.utc)
+    owner = await _seed_user(db_session, "owner-vote-list@ufl.edu", "Owner")
+    voter = await _seed_user(db_session, "voter-vote-list@ufl.edu", "Voter")
+
+    voted_project = await _seed_project(
+        db_session,
+        created_by_id=owner.id,
+        title="Voted Project",
+        vote_count=1,
+        is_published=True,
+        created_at=now,
+    )
+    unvoted_project = await _seed_project(
+        db_session,
+        created_by_id=owner.id,
+        title="Unvoted Project",
+        vote_count=0,
+        is_published=True,
+        created_at=now - timedelta(minutes=1),
+    )
+    await _seed_vote(
+        db_session,
+        project_id=voted_project.id,
+        user_id=voter.id,
+        created_at=now,
+    )
+
+    service = ProjectService(db_session)
+    result = await service.list_projects(
+        sort="new",
+        limit=10,
+        current_user_id=voter.id,
+    )
+
+    by_id = {item.id: item for item in result.items}
+    assert by_id[voted_project.id].viewer_has_voted is True
+    assert by_id[unvoted_project.id].viewer_has_voted is False
 
 
 @pytest.mark.asyncio
@@ -531,6 +612,76 @@ async def test_update_project_requires_at_least_one_resulting_url(db_session):
             current_user_id=owner.id,
             payload=payload,
         )
+
+
+@pytest.mark.asyncio
+async def test_update_project_rejects_timeline_end_without_start(db_session):
+    now = datetime.now(timezone.utc)
+    owner = await _seed_user(
+        db_session, "owner-update-timeline-1@ufl.edu", "Owner Timeline 1"
+    )
+    project = await _seed_project(
+        db_session,
+        created_by_id=owner.id,
+        title="Timeline Rule 1",
+        vote_count=0,
+        is_published=False,
+        created_at=now,
+    )
+    project.github_url = "https://github.com/example/timeline-rule-1"
+    await db_session.flush()
+
+    service = ProjectService(db_session)
+    payload = ProjectUpdateRequest(timeline_end_date=date(2026, 4, 1))
+
+    with pytest.raises(
+        ProjectValidationError,
+        match="timeline_end_date requires timeline_start_date.",
+    ):
+        await service.update_project(
+            project_id=project.id,
+            current_user_id=owner.id,
+            payload=payload,
+        )
+
+
+@pytest.mark.asyncio
+async def test_update_project_allows_clearing_timeline_end_for_in_progress(db_session):
+    now = datetime.now(timezone.utc)
+    owner = await _seed_user(
+        db_session, "owner-update-timeline-2@ufl.edu", "Owner Timeline 2"
+    )
+    project = await _seed_project(
+        db_session,
+        created_by_id=owner.id,
+        title="Timeline Rule 2",
+        vote_count=0,
+        is_published=False,
+        created_at=now,
+    )
+    project.github_url = "https://github.com/example/timeline-rule-2"
+    project.timeline_start_date = date(2026, 3, 1)
+    project.timeline_end_date = date(2026, 3, 31)
+    await db_session.flush()
+
+    service = ProjectService(db_session)
+    payload = ProjectUpdateRequest(timeline_end_date=None)
+    updated = await service.update_project(
+        project_id=project.id,
+        current_user_id=owner.id,
+        payload=payload,
+    )
+
+    assert updated is not None
+    assert updated.timeline_start_date == date(2026, 3, 1)
+    assert updated.timeline_end_date is None
+
+    refreshed_result = await db_session.exec(
+        select(Project).where(Project.id == project.id)
+    )
+    refreshed = refreshed_result.one()
+    assert refreshed.timeline_start_date == date(2026, 3, 1)
+    assert refreshed.timeline_end_date is None
 
 
 @pytest.mark.asyncio
