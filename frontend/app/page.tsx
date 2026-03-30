@@ -18,16 +18,19 @@ export default function Home() {
             title="Top Overall UF Projects"
             projects={topOverallProjects}
             ctaLabel="See all top UF projects"
+            ctaHref="/projects/top/top-overall"
           />
           <ProjectSection
             title="Trending UF Projects This Month"
             projects={trendingThisMonthProjects}
             ctaLabel="See all trending UF projects this month"
+            ctaHref="/projects/top/trending-this-month"
           />
           <ProjectSection
             title="Trending UF Projects Last Month"
             projects={trendingLastMonthProjects}
             ctaLabel="See all trending UF projects last month"
+            ctaHref="/projects/top/trending-last-month"
           />
         </VStack>
       </Container>
