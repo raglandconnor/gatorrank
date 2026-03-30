@@ -3,6 +3,8 @@ from uuid import UUID
 
 from pydantic import AnyHttpUrl, BaseModel, ConfigDict, Field, model_validator
 
+from app.models.user_roles import UserRole
+
 
 class UserBase(BaseModel):
     full_name: str | None = Field(default=None, max_length=255)
@@ -25,7 +27,9 @@ class UserUpdate(BaseModel):
 class UserPublic(UserBase):
     model_config = ConfigDict(from_attributes=True)
     id: UUID
-    role: str
+    role: UserRole = Field(
+        description="System role for authorization (`student`, `faculty`, or `admin`)."
+    )
     created_at: datetime
 
 

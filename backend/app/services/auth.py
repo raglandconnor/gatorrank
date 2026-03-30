@@ -16,6 +16,7 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 from app.core.config import get_settings
 from app.models.auth import RefreshSession
 from app.models.user import User
+from app.models.user_roles import USER_ROLE_STUDENT
 
 ACCESS_TOKEN_TTL = timedelta(minutes=30)
 REFRESH_TOKEN_TTL_DEFAULT = timedelta(days=14)
@@ -136,7 +137,7 @@ class AuthService:
             email=normalized_email,
             password_hash=self.hash_password(password),
             full_name=normalized_full_name,
-            role="student",
+            role=USER_ROLE_STUDENT,
         )
         try:
             self.db.add(user)

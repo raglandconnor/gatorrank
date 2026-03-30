@@ -4,6 +4,8 @@ from uuid import UUID, uuid4
 import sqlalchemy as sa
 from sqlmodel import Field, SQLModel
 
+from app.models.user_roles import USER_ROLE_STUDENT
+
 
 class User(SQLModel, table=True):
     __tablename__ = "users"  # pyright: ignore[reportAssignmentType]
@@ -13,7 +15,7 @@ class User(SQLModel, table=True):
     password_hash: str = Field(
         sa_column=sa.Column(sa.String(length=255), nullable=False)
     )
-    role: str = Field(default="student", nullable=False, max_length=32)
+    role: str = Field(default=USER_ROLE_STUDENT, nullable=False, max_length=32)
     full_name: str | None = Field(default=None, max_length=255)
     profile_picture_url: str | None = Field(default=None, max_length=2048)
     created_at: datetime = Field(
