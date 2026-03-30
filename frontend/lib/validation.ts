@@ -11,11 +11,10 @@ export function isValidName(name: string): boolean {
   return NAME_REGEX.test(name.trim());
 }
 
-/** Matches backend password policy: 12–128 chars, not whitespace-only. */
+/** Matches backend `AuthService.validate_password_policy` (auth.py). */
 export function isValidPassword(password: string): boolean {
-  const t = password.trim();
-  if (t.length === 0) return false;
-  if (t.length < 12) return false;
-  if (t.length > 128) return false;
+  if (password.trim() === '') return false;
+  if (password.length < 12) return false;
+  if (password.length > 128) return false;
   return true;
 }

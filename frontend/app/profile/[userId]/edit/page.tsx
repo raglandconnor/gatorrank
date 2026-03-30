@@ -158,6 +158,8 @@ export default function EditProfilePage() {
   const { userId } = useParams<{ userId: string }>();
   const { user: authUser, isReady, updateCachedUser } = useAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  /** Tracks blob: URLs from file picks only (not remote profile_picture_url). */
+  const avatarObjectUrlRef = useRef<string | null>(null);
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -201,6 +203,7 @@ export default function EditProfilePage() {
         const user = await getMe();
         setApiUser(user);
         setName(user.full_name ?? '');
+        avatarObjectUrlRef.current = null;
         if (user.profile_picture_url)
           setAvatarPreview(user.profile_picture_url);
 
@@ -227,6 +230,14 @@ export default function EditProfilePage() {
     void load();
   }, [isReady, authUser, userId, router]);
 
+  useEffect(() => {
+    return () => {
+      if (avatarObjectUrlRef.current) {
+        URL.revokeObjectURL(avatarObjectUrlRef.current);
+      }
+    };
+  }, []);
+
   const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -246,7 +257,12 @@ export default function EditProfilePage() {
 
     e.target.value = '';
     if (fileInputRef.current) fileInputRef.current.value = '';
-    setAvatarPreview(URL.createObjectURL(file));
+    if (avatarObjectUrlRef.current) {
+      URL.revokeObjectURL(avatarObjectUrlRef.current);
+    }
+    const url = URL.createObjectURL(file);
+    avatarObjectUrlRef.current = url;
+    setAvatarPreview(url);
   };
 
   const addCourse = () => {
