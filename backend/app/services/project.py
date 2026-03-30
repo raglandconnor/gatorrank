@@ -8,7 +8,7 @@ from sqlalchemy import update
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from app.models.project import Project, ProjectMember
+from app.models.project import Project, ProjectMember, Vote
 from app.models.project_roles import (
     PROJECT_ROLE_OWNER,
     ProjectMemberRole,
@@ -25,6 +25,7 @@ from app.schemas.project import (
     ProjectMemberUpdateRequest,
     ProjectUpdateRequest,
 )
+from app.services.project_members import get_members_for_projects
 from app.utils.pagination import (
     CursorError,
     decode_cursor_payload,
@@ -84,6 +85,8 @@ class ProjectService:
             demo_url=payload.demo_url,
             github_url=payload.github_url,
             video_url=payload.video_url,
+            timeline_start_date=payload.timeline_start_date,
+            timeline_end_date=payload.timeline_end_date,
             is_group_project=False,
             vote_count=0,
             is_published=False,
@@ -140,9 +143,31 @@ class ProjectService:
             if "video_url" in payload.model_fields_set
             else project.video_url
         )
+        final_timeline_start_date = (
+            payload.timeline_start_date
+            if "timeline_start_date" in payload.model_fields_set
+            else project.timeline_start_date
+        )
+        final_timeline_end_date = (
+            payload.timeline_end_date
+            if "timeline_end_date" in payload.model_fields_set
+            else project.timeline_end_date
+        )
         if not any([final_demo_url, final_github_url, final_video_url]):
             raise ProjectValidationError(
                 "Provide at least one of demo_url, github_url, or video_url."
+            )
+        if final_timeline_end_date is not None and final_timeline_start_date is None:
+            raise ProjectValidationError(
+                "timeline_end_date requires timeline_start_date."
+            )
+        if (
+            final_timeline_start_date is not None
+            and final_timeline_end_date is not None
+            and final_timeline_start_date > final_timeline_end_date
+        ):
+            raise ProjectValidationError(
+                "timeline_start_date must be on or before timeline_end_date."
             )
 
         if "title" in payload.model_fields_set:
@@ -161,6 +186,10 @@ class ProjectService:
             project.github_url = payload.github_url
         if "video_url" in payload.model_fields_set:
             project.video_url = payload.video_url
+        if "timeline_start_date" in payload.model_fields_set:
+            project.timeline_start_date = payload.timeline_start_date
+        if "timeline_end_date" in payload.model_fields_set:
+            project.timeline_end_date = payload.timeline_end_date
 
         try:
             self.db.add(project)
@@ -333,9 +362,13 @@ class ProjectService:
             return None
 
         members = await self.get_project_members(project.id)
+        viewer_has_voted = False
+        if project.is_published and current_user_id is not None:
+            viewer_has_voted = await self._viewer_has_voted(project.id, current_user_id)
         return ProjectDetailResponse(
             **project.model_dump(),
             members=members,
+            viewer_has_voted=viewer_has_voted,
         )
 
     async def get_project_members(self, project_id: UUID) -> list[ProjectMemberInfo]:
@@ -518,6 +551,7 @@ class ProjectService:
         published_from: date | None = None,
         published_to: date | None = None,
         created_by_id: UUID | None = None,
+        current_user_id: UUID | None = None,
     ) -> ProjectListResponse:
         limit = max(1, min(limit, 100))
 
@@ -600,9 +634,19 @@ class ProjectService:
         members_by_project = await self._get_members_for_projects(
             [p.id for p in projects]
         )
+        voted_project_ids: set[UUID] = set()
+        if current_user_id is not None:
+            voted_project_ids = await self._get_voted_project_ids(
+                user_id=current_user_id,
+                project_ids=[project.id for project in projects],
+            )
 
         items = [
-            self._to_project_list_item(project, members_by_project.get(project.id, []))
+            self._to_project_list_item(
+                project,
+                members_by_project.get(project.id, []),
+                viewer_has_voted=project.id in voted_project_ids,
+            )
             for project in projects
         ]
 
@@ -671,41 +715,39 @@ class ProjectService:
     async def _get_members_for_projects(
         self, project_ids: list[UUID]
     ) -> dict[UUID, list[ProjectMemberInfo]]:
-        if not project_ids:
-            return {}
-
-        project_member_cols = getattr(ProjectMember, "__table__").c
-        user_cols = getattr(User, "__table__").c
-        statement = (
-            select(ProjectMember, User)
-            .join(User, user_cols.id == project_member_cols.user_id)
-            .where(project_member_cols.project_id.in_(project_ids))
-            .order_by(
-                project_member_cols.project_id.asc(), project_member_cols.added_at.asc()
-            )
-        )
-        result = await self.db.exec(statement)
-
-        members_by_project: dict[UUID, list[ProjectMemberInfo]] = {
-            pid: [] for pid in project_ids
-        }
-        for member, user in result.all():
-            members_by_project[member.project_id].append(
-                ProjectMemberInfo(
-                    user_id=user.id,
-                    role=self._coerce_member_role(member.role),
-                    full_name=user.full_name,
-                    profile_picture_url=user.profile_picture_url,
-                )
-            )
-
-        return members_by_project
+        return await get_members_for_projects(self.db, project_ids)
 
     @staticmethod
     def _to_project_list_item(
-        project: Project, members: list[ProjectMemberInfo]
+        project: Project, members: list[ProjectMemberInfo], *, viewer_has_voted: bool
     ) -> ProjectListItemResponse:
-        return ProjectListItemResponse(**project.model_dump(), members=members)
+        return ProjectListItemResponse(
+            **project.model_dump(),
+            members=members,
+            viewer_has_voted=viewer_has_voted,
+        )
+
+    async def _viewer_has_voted(self, project_id: UUID, user_id: UUID) -> bool:
+        vote_cols = getattr(Vote, "__table__").c
+        statement = select(Vote).where(
+            vote_cols.project_id == project_id,
+            vote_cols.user_id == user_id,
+        )
+        result = await self.db.exec(statement)
+        return result.one_or_none() is not None
+
+    async def _get_voted_project_ids(
+        self, *, user_id: UUID, project_ids: list[UUID]
+    ) -> set[UUID]:
+        if not project_ids:
+            return set()
+        vote_cols = getattr(Vote, "__table__").c
+        statement = select(vote_cols.project_id).where(
+            vote_cols.user_id == user_id,
+            vote_cols.project_id.in_(project_ids),
+        )
+        result = await self.db.exec(statement)
+        return {row for row in result.all()}
 
     def _encode_cursor(
         self,

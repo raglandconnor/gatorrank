@@ -22,6 +22,7 @@ from app.services.project import (
     ProjectResourceNotFoundError,
     ProjectValidationError,
 )
+from app.services.vote import VoteTargetNotFoundError
 
 
 client = TestClient(app)
@@ -369,6 +370,54 @@ def test_create_project_validation_invalid_url_returns_422():
             response = client.post(
                 "/api/v1/projects",
                 json=_build_create_project_payload(github_url="not-a-url"),
+            )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 422
+    assert mock_create_project.await_count == 0
+
+
+def test_create_project_validation_rejects_timeline_end_without_start():
+    user_id = uuid4()
+
+    app.dependency_overrides[get_db] = _override_get_db
+    app.dependency_overrides[get_current_user] = _override_current_user(user_id)
+    try:
+        with patch(
+            "app.api.v1.projects.ProjectService.create_project",
+            new=AsyncMock(),
+        ) as mock_create_project:
+            response = client.post(
+                "/api/v1/projects",
+                json=_build_create_project_payload(
+                    timeline_start_date=None,
+                    timeline_end_date="2026-03-30",
+                ),
+            )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 422
+    assert mock_create_project.await_count == 0
+
+
+def test_create_project_validation_rejects_timeline_start_after_end():
+    user_id = uuid4()
+
+    app.dependency_overrides[get_db] = _override_get_db
+    app.dependency_overrides[get_current_user] = _override_current_user(user_id)
+    try:
+        with patch(
+            "app.api.v1.projects.ProjectService.create_project",
+            new=AsyncMock(),
+        ) as mock_create_project:
+            response = client.post(
+                "/api/v1/projects",
+                json=_build_create_project_payload(
+                    timeline_start_date="2026-04-01",
+                    timeline_end_date="2026-03-30",
+                ),
             )
     finally:
         app.dependency_overrides.clear()
@@ -1213,3 +1262,99 @@ def test_update_project_member_validation_rejects_invalid_payload_shapes():
             assert mock_update_member.await_count == 0
     finally:
         app.dependency_overrides.clear()
+
+
+def test_add_project_vote_returns_204_and_calls_service():
+    user_id = uuid4()
+    project_id = uuid4()
+
+    app.dependency_overrides[get_db] = _override_get_db
+    app.dependency_overrides[get_current_user] = _override_current_user(user_id)
+    try:
+        with patch(
+            "app.api.v1.projects.VoteService.add_vote",
+            new=AsyncMock(return_value=True),
+        ) as mock_add_vote:
+            response = client.post(f"/api/v1/projects/{project_id}/vote")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 204
+    assert response.content == b""
+    await_args = mock_add_vote.await_args
+    assert await_args is not None
+    assert await_args.kwargs["project_id"] == project_id
+    assert await_args.kwargs["user_id"] == user_id
+
+
+def test_add_project_vote_requires_auth():
+    response = client.post(f"/api/v1/projects/{uuid4()}/vote")
+    assert response.status_code == 401
+    assert response.json()["detail"] == "Not authenticated"
+
+
+def test_add_project_vote_not_found_returns_404():
+    user_id = uuid4()
+    project_id = uuid4()
+
+    app.dependency_overrides[get_db] = _override_get_db
+    app.dependency_overrides[get_current_user] = _override_current_user(user_id)
+    try:
+        with patch(
+            "app.api.v1.projects.VoteService.add_vote",
+            new=AsyncMock(side_effect=VoteTargetNotFoundError("Project not found")),
+        ):
+            response = client.post(f"/api/v1/projects/{project_id}/vote")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Project not found"
+
+
+def test_remove_project_vote_returns_204_and_calls_service():
+    user_id = uuid4()
+    project_id = uuid4()
+
+    app.dependency_overrides[get_db] = _override_get_db
+    app.dependency_overrides[get_current_user] = _override_current_user(user_id)
+    try:
+        with patch(
+            "app.api.v1.projects.VoteService.remove_vote",
+            new=AsyncMock(return_value=False),
+        ) as mock_remove_vote:
+            response = client.delete(f"/api/v1/projects/{project_id}/vote")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 204
+    assert response.content == b""
+    await_args = mock_remove_vote.await_args
+    assert await_args is not None
+    assert await_args.kwargs["project_id"] == project_id
+    assert await_args.kwargs["user_id"] == user_id
+
+
+def test_remove_project_vote_requires_auth():
+    response = client.delete(f"/api/v1/projects/{uuid4()}/vote")
+    assert response.status_code == 401
+    assert response.json()["detail"] == "Not authenticated"
+
+
+def test_remove_project_vote_not_found_returns_404():
+    user_id = uuid4()
+    project_id = uuid4()
+
+    app.dependency_overrides[get_db] = _override_get_db
+    app.dependency_overrides[get_current_user] = _override_current_user(user_id)
+    try:
+        with patch(
+            "app.api.v1.projects.VoteService.remove_vote",
+            new=AsyncMock(side_effect=VoteTargetNotFoundError("Project not found")),
+        ):
+            response = client.delete(f"/api/v1/projects/{project_id}/vote")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Project not found"

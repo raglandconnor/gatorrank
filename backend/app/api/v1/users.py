@@ -5,13 +5,14 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from app.api.deps.auth import get_current_user
+from app.api.deps.auth import get_current_user, get_current_user_optional
 from app.db.database import get_db
 from app.models.user import User
 from app.schemas.project import ProjectListResponse
 from app.schemas.user import UserPrivate, UserPublic, UserUpdate
 from app.services.project import CursorError, ProjectService
 from app.services.user import UserService
+from app.services.vote import VoteService
 
 router = APIRouter()
 
@@ -65,6 +66,43 @@ async def update_current_user_profile(
 
 
 @router.get(
+    "/users/me/votes",
+    summary="List my voted projects",
+    description=(
+        "Return published projects voted by the authenticated user, ordered by most "
+        "recent vote first, with cursor pagination."
+    ),
+    response_model=ProjectListResponse,
+    responses={
+        400: {"description": "Invalid cursor"},
+        401: {"description": "Authentication required"},
+    },
+)
+async def list_my_voted_projects(
+    limit: int = Query(
+        default=20,
+        gt=0,
+        le=100,
+        description="Page size (1-100).",
+    ),
+    cursor: str | None = Query(
+        default=None,
+        description="Opaque pagination cursor from a previous response.",
+    ),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> ProjectListResponse:
+    """Return published projects voted by the authenticated user."""
+    service = VoteService(db)
+    try:
+        return await service.list_my_voted_projects(
+            user_id=current_user.id, limit=limit, cursor=cursor
+        )
+    except CursorError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.get(
     "/users/{user_id}",
     summary="Get public user profile",
     description="Return public-safe profile fields for a specific user.",
@@ -94,6 +132,7 @@ async def get_user_profile(
     response_model=ProjectListResponse,
     responses={
         400: {"description": "Invalid cursor"},
+        401: {"description": "Invalid or expired bearer token"},
         404: {"description": "User not found"},
     },
 )
@@ -125,6 +164,7 @@ async def list_user_projects(
         description="Inclusive `published_at` end date (`YYYY-MM-DD`) for `sort=top`.",
     ),
     db: AsyncSession = Depends(get_db),
+    current_user: User | None = Depends(get_current_user_optional),
 ) -> ProjectListResponse:
     """Return published projects authored by the specific user."""
     user_service = UserService(db)
@@ -141,6 +181,7 @@ async def list_user_projects(
             published_from=published_from,
             published_to=published_to,
             created_by_id=user_id,
+            current_user_id=current_user.id if current_user else None,
         )
     except CursorError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
