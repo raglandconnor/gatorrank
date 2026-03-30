@@ -328,7 +328,7 @@ export default function EditProfilePage() {
 
   if (loading || !isReady) {
     return (
-      <Box minH="100vh" bg="white">
+      <Box minH="100vh" bg="transparent">
         <Navbar />
         <Flex justify="center" align="center" minH="60vh">
           <Spinner size="lg" color="orange.400" />
@@ -342,7 +342,7 @@ export default function EditProfilePage() {
   const displayName = apiUser.full_name ?? apiUser.email;
 
   return (
-    <Box minH="100vh" bg="white">
+    <Box minH="100vh" bg="transparent">
       <Navbar />
 
       <input

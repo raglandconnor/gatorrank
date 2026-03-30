@@ -151,7 +151,7 @@ export default function ProfileUserPage() {
 
   if (state.status === 'loading') {
     return (
-      <Box minH="100vh" bg="white">
+      <Box minH="100vh" bg="transparent">
         <Navbar />
         <Flex justify="center" align="center" minH="60vh">
           <Spinner size="lg" color="orange.400" />
@@ -162,7 +162,7 @@ export default function ProfileUserPage() {
 
   if (state.status === 'notfound') {
     return (
-      <Box minH="100vh" bg="white">
+      <Box minH="100vh" bg="transparent">
         <Navbar />
         <Flex
           justify="center"
@@ -187,7 +187,7 @@ export default function ProfileUserPage() {
 
   if (state.status === 'error') {
     return (
-      <Box minH="100vh" bg="white">
+      <Box minH="100vh" bg="transparent">
         <Navbar />
         <Flex
           justify="center"
@@ -241,7 +241,7 @@ export default function ProfileUserPage() {
   const showOwnerBanner = isOwn && extendedIsEmpty && projectsLoadedEmpty;
 
   return (
-    <Box minH="100vh" bg="white">
+    <Box minH="100vh" bg="transparent">
       <Navbar />
 
       <Box px="36px" pt="32px" pb="64px" maxW="1280px" mx="auto">
