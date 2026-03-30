@@ -71,7 +71,7 @@ export default function LoginPage() {
   return (
     <Flex
       minH="100vh"
-      bg="#f8f8f8"
+      bg="transparent"
       direction="column"
       align="center"
       justify="flex-start"

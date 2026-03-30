@@ -10,7 +10,7 @@ export default function ProjectDetailPage() {
   const projectId = params.projectId as string;
 
   return (
-    <Box minH="100vh" bg="white">
+    <Box minH="100vh" bg="transparent">
       <Navbar />
       <Box px="36px" pt="32px" pb="64px" maxW="1280px" mx="auto">
         <VStack align="start" gap="24px">

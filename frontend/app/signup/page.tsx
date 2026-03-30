@@ -101,7 +101,7 @@ export default function SignupPage() {
   return (
     <Flex
       minH="100vh"
-      bg="#f8f8f8"
+      bg="transparent"
       direction="column"
       align="center"
       justify="flex-start"
