@@ -42,7 +42,7 @@ export async function fetchWithAuth(
 
   const doFetch = (accessToken: string | null) => {
     const headers = new Headers(init.headers);
-    if (init.body != null && !headers.has('Content-Type')) {
+    if (typeof init.body === 'string' && !headers.has('Content-Type')) {
       headers.set('Content-Type', 'application/json');
     }
     if (accessToken) {

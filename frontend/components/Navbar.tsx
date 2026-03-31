@@ -76,56 +76,57 @@ export function Navbar() {
             ) : user ? (
               /* Authenticated: profile avatar + logout */
               <HStack gap="12px" align="center">
-                <HStack
-                  gap="10px"
-                  align="center"
-                  cursor="pointer"
-                  _hover={{ opacity: 0.8 }}
+                <Link
+                  as={NextLink}
+                  href={`/profile/${user.id}`}
+                  _hover={{ textDecoration: 'none', opacity: 0.8 }}
                   transition="opacity 0.15s"
-                  onClick={() => router.push(`/profile/${user.id}`)}
+                  aria-label={`Go to ${user.full_name ?? user.email}'s profile`}
                 >
-                  {user.profile_picture_url ? (
-                    <img
-                      src={user.profile_picture_url}
-                      alt={user.full_name ?? user.email}
-                      style={{
-                        width: '38px',
-                        height: '38px',
-                        borderRadius: '50%',
-                        objectFit: 'cover',
-                        flexShrink: 0,
-                        display: 'block',
-                      }}
-                    />
-                  ) : (
-                    <Flex
-                      w="38px"
-                      h="38px"
-                      borderRadius="full"
-                      bg="orange.400"
-                      color="white"
-                      align="center"
-                      justify="center"
-                      fontSize="sm"
-                      fontWeight="bold"
-                      flexShrink={0}
+                  <HStack gap="10px" align="center">
+                    {user.profile_picture_url ? (
+                      <img
+                        src={user.profile_picture_url}
+                        alt={user.full_name ?? user.email}
+                        style={{
+                          width: '38px',
+                          height: '38px',
+                          borderRadius: '50%',
+                          objectFit: 'cover',
+                          flexShrink: 0,
+                          display: 'block',
+                        }}
+                      />
+                    ) : (
+                      <Flex
+                        w="38px"
+                        h="38px"
+                        borderRadius="full"
+                        bg="orange.400"
+                        color="white"
+                        align="center"
+                        justify="center"
+                        fontSize="sm"
+                        fontWeight="bold"
+                        flexShrink={0}
+                      >
+                        {getInitials(user.full_name ?? user.email)}
+                      </Flex>
+                    )}
+                    <Text
+                      fontSize="md"
+                      fontWeight="medium"
+                      color="gray.900"
+                      lineHeight="30px"
+                      maxW="120px"
+                      overflow="hidden"
+                      textOverflow="ellipsis"
+                      whiteSpace="nowrap"
                     >
-                      {getInitials(user.full_name ?? user.email)}
-                    </Flex>
-                  )}
-                  <Text
-                    fontSize="md"
-                    fontWeight="medium"
-                    color="gray.900"
-                    lineHeight="30px"
-                    maxW="120px"
-                    overflow="hidden"
-                    textOverflow="ellipsis"
-                    whiteSpace="nowrap"
-                  >
-                    {user.full_name ?? user.email}
-                  </Text>
-                </HStack>
+                      {user.full_name ?? user.email}
+                    </Text>
+                  </HStack>
+                </Link>
 
                 <Button
                   variant="ghost"
