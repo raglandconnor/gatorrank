@@ -11,7 +11,10 @@ export function isValidName(name: string): boolean {
   return NAME_REGEX.test(name.trim());
 }
 
-/** Matches backend `AuthService.validate_password_policy` (auth.py). */
+/**
+ * Matches backend `AuthService.validate_password_policy`
+ * (`backend/app/services/auth.py`, also enforced via `backend/app/schemas/auth.py`).
+ */
 export function isValidPassword(password: string): boolean {
   if (password.trim() === '') return false;
   if (password.length < 12) return false;

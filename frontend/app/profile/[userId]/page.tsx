@@ -119,9 +119,16 @@ export default function ProfileUserPage() {
   const isOwn = isReady && authUser?.id === userId;
 
   useEffect(() => {
-    if (!isUuid(userId)) return;
-
     async function load() {
+      if (!isUuid(userId)) {
+        setState({ status: 'notfound' });
+        setProjectCount(null);
+        return;
+      }
+
+      setState({ status: 'loading' });
+      setProjectCount(null);
+
       try {
         const publicUser = await getUserPublic(userId);
         const extended =
