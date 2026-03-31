@@ -10,7 +10,7 @@ import {
   ProjectFormValues,
   ProjectPayload,
 } from '@/components/projects/ProjectForm';
-import { toaster } from '@/components/ui/toaster';
+import { toast } from '@/lib/ui/toast';
 import { mockProject } from '@/data/mock-project';
 
 export default function EditProjectPage() {
@@ -30,7 +30,7 @@ export default function EditProjectPage() {
   };
 
   const handleSubmit = (payload: ProjectPayload) => {
-    toaster.success({
+    toast.success({
       title: 'Project updated',
       description: `"${payload.name}" has been successfully updated.`,
     });
@@ -43,7 +43,7 @@ export default function EditProjectPage() {
   };
 
   return (
-    <Box minH="100vh" bg="white">
+    <Box minH="100vh" bg="transparent">
       <Navbar />
       <Box px="36px" pt="32px" pb="64px" maxW="1280px" mx="auto">
         {/* Header */}

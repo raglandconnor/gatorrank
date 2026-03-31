@@ -1,7 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { GatorRankLogo } from '@/components/GatorRankLogo';
+import { useAuth } from '@/components/auth/AuthProvider';
+import { toast } from '@/lib/ui/toast';
+import { loginErrorToast } from '@/lib/auth/toastMessages';
 import {
   Box,
   Button,
@@ -20,15 +24,31 @@ import NextLink from 'next/link';
 import { isValidEduEmail } from '@/lib/validation';
 
 export default function LoginPage() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const { login, isReady } = useAuth();
+
+  useEffect(() => {
+    if (searchParams.get('signedOut') === '1') {
+      toast.success({
+        title: 'Signed out',
+        description: 'You have been successfully signed out.',
+      });
+      router.replace('/login');
+    }
+  }, [searchParams, router]);
+
   const [showPassword, setShowPassword] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [rememberMe, setRememberMe] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState<{
     email?: string;
     password?: string;
   }>({});
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     const newErrors: typeof errors = {};
 
@@ -43,15 +63,27 @@ export default function LoginPage() {
     }
 
     setErrors(newErrors);
-    if (Object.keys(newErrors).length === 0) {
-      // Valid - would submit to API
+    if (Object.keys(newErrors).length > 0) return;
+
+    setIsSubmitting(true);
+    try {
+      await login(email.trim(), password, rememberMe);
+      toast.success({
+        title: 'Signed in',
+        description: 'Welcome back. Taking you to your profile…',
+      });
+      router.push('/profile');
+    } catch (err) {
+      toast.error(loginErrorToast(err));
+    } finally {
+      setIsSubmitting(false);
     }
   }
 
   return (
     <Flex
       minH="100vh"
-      bg="#f8f8f8"
+      bg="transparent"
       direction="column"
       align="center"
       justify="flex-start"
@@ -175,6 +207,25 @@ export default function LoginPage() {
               )}
             </Field.Root>
 
+            <Box
+              as="label"
+              display="flex"
+              alignItems="center"
+              gap={2}
+              justifyContent="flex-start"
+              cursor="pointer"
+            >
+              <input
+                type="checkbox"
+                checked={rememberMe}
+                onChange={(e) => setRememberMe(e.target.checked)}
+                style={{ cursor: 'pointer' }}
+              />
+              <Text fontSize="sm" color="gray.700" textAlign="left">
+                Remember me
+              </Text>
+            </Box>
+
             <Button
               type="submit"
               bg="#FF8C38"
@@ -185,8 +236,9 @@ export default function LoginPage() {
               fontWeight="600"
               borderRadius="lg"
               py={6}
+              disabled={!isReady || isSubmitting}
             >
-              Sign In
+              {isSubmitting ? 'Signing in…' : 'Sign In'}
             </Button>
           </Stack>
         </Box>
