@@ -1,7 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useEffect, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { GatorRankLogo } from '@/components/GatorRankLogo';
 import { useAuth } from '@/components/auth/AuthProvider';
 import { toast } from '@/lib/ui/toast';
@@ -25,7 +25,19 @@ import { isValidEduEmail } from '@/lib/validation';
 
 export default function LoginPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { login, isReady } = useAuth();
+
+  useEffect(() => {
+    if (searchParams.get('signedOut') === '1') {
+      toast.success({
+        title: 'Signed out',
+        description: 'You have been successfully signed out.',
+      });
+      router.replace('/login');
+    }
+  }, [searchParams, router]);
+
   const [showPassword, setShowPassword] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
