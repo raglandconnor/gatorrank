@@ -10,7 +10,7 @@ import {
 
 export default function Home() {
   return (
-    <Box minH="100vh" bg="gray.50">
+    <Box minH="100vh" bg="transparent">
       <Navbar />
       <Container maxW="1280px" px="212px" py="50px">
         <VStack gap="96px" align="start">
