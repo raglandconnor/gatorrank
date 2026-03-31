@@ -2,10 +2,10 @@
 
 import { GatorRankLogo } from '@/components/GatorRankLogo';
 import { useAuth } from '@/components/auth/AuthProvider';
-import { Box, HStack, Text, Flex, Link, Button } from '@chakra-ui/react';
+import { Box, HStack, Text, Flex, Link, Menu, Portal } from '@chakra-ui/react';
 import NextLink from 'next/link';
 import { useRouter } from 'next/navigation';
-import { LuChevronDown, LuLogOut } from 'react-icons/lu';
+import { LuChevronDown, LuUser, LuPlus, LuLogOut } from 'react-icons/lu';
 
 function getInitials(name: string): string {
   const parts = name.trim().split(/\s+/);
@@ -19,7 +19,7 @@ export function Navbar() {
 
   const handleLogout = async () => {
     await logout();
-    router.push('/login');
+    router.push('/login?signedOut=1');
   };
 
   return (
@@ -35,37 +35,6 @@ export function Navbar() {
           {/* Left side: logo + nav links */}
           <HStack gap="32px" align="center">
             <GatorRankLogo size="sm" />
-
-            <HStack
-              gap="4px"
-              cursor="default"
-              _hover={{ opacity: 0.7 }}
-              transition="opacity 0.15s"
-            >
-              <Text
-                fontSize="md"
-                fontWeight="medium"
-                color="gray.900"
-                lineHeight="30px"
-              >
-                Categories
-              </Text>
-              <Box color="gray.900">
-                <LuChevronDown size={18} />
-              </Box>
-            </HStack>
-
-            <Text
-              fontSize="md"
-              fontWeight="medium"
-              color="gray.900"
-              lineHeight="30px"
-              cursor="pointer"
-              _hover={{ opacity: 0.7 }}
-              transition="opacity 0.15s"
-            >
-              Groups
-            </Text>
           </HStack>
 
           {/* Right side: auth-aware controls */}
@@ -74,16 +43,17 @@ export function Navbar() {
               /* Placeholder to prevent layout shift during hydration */
               <Box w="120px" />
             ) : user ? (
-              /* Authenticated: profile avatar + logout */
-              <HStack gap="12px" align="center">
-                <Link
-                  as={NextLink}
-                  href={`/profile/${user.id}`}
-                  _hover={{ textDecoration: 'none', opacity: 0.8 }}
-                  transition="opacity 0.15s"
-                  aria-label={`Go to ${user.full_name ?? user.email}'s profile`}
-                >
-                  <HStack gap="10px" align="center">
+              /* Authenticated: avatar dropdown */
+              <Menu.Root>
+                <Menu.Trigger asChild>
+                  <HStack
+                    gap="10px"
+                    align="center"
+                    cursor="pointer"
+                    _hover={{ opacity: 0.8 }}
+                    transition="opacity 0.15s"
+                    tabIndex={0}
+                  >
                     {user.profile_picture_url ? (
                       <img
                         src={user.profile_picture_url}
@@ -125,21 +95,85 @@ export function Navbar() {
                     >
                       {user.full_name ?? user.email}
                     </Text>
+                    <Box color="gray.600">
+                      <LuChevronDown size={16} />
+                    </Box>
                   </HStack>
-                </Link>
+                </Menu.Trigger>
 
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  color="gray.500"
-                  _hover={{ color: 'gray.900' }}
-                  aria-label="Log out"
-                  onClick={handleLogout}
-                  px="8px"
-                >
-                  <LuLogOut size={18} />
-                </Button>
-              </HStack>
+                <Portal>
+                  <Menu.Positioner>
+                    <Menu.Content
+                      minW="180px"
+                      borderRadius="12px"
+                      border="1px solid"
+                      borderColor="gray.200"
+                      boxShadow="md"
+                      py="6px"
+                      bg="white"
+                    >
+                      <Menu.Item
+                        value="view-profile"
+                        onClick={() => router.push(`/profile/${user.id}`)}
+                        px="14px"
+                        py="10px"
+                        fontSize="sm"
+                        color="gray.800"
+                        _hover={{ bg: 'gray.50' }}
+                        cursor="pointer"
+                        display="flex"
+                        alignItems="center"
+                        gap="10px"
+                      >
+                        <Box color="gray.600">
+                          <LuUser size={15} />
+                        </Box>
+                        View Profile
+                      </Menu.Item>
+
+                      <Menu.Item
+                        value="add-project"
+                        onClick={() => router.push('/projects/create')}
+                        px="14px"
+                        py="10px"
+                        fontSize="sm"
+                        color="gray.800"
+                        _hover={{ bg: 'gray.50' }}
+                        cursor="pointer"
+                        display="flex"
+                        alignItems="center"
+                        gap="10px"
+                      >
+                        <Box color="gray.600">
+                          <LuPlus size={15} />
+                        </Box>
+                        Add Project
+                      </Menu.Item>
+
+                      <Menu.Separator borderColor="gray.100" my="4px" />
+
+                      <Menu.Item
+                        value="sign-out"
+                        onClick={handleLogout}
+                        px="14px"
+                        py="10px"
+                        fontSize="sm"
+                        color="red.500"
+                        _hover={{ bg: 'red.50' }}
+                        cursor="pointer"
+                        display="flex"
+                        alignItems="center"
+                        gap="10px"
+                      >
+                        <Box>
+                          <LuLogOut size={15} />
+                        </Box>
+                        Sign Out
+                      </Menu.Item>
+                    </Menu.Content>
+                  </Menu.Positioner>
+                </Portal>
+              </Menu.Root>
             ) : (
               /* Unauthenticated: Sign Up + Log In */
               <>
