@@ -1,19 +1,22 @@
 'use client';
 import { motion } from 'framer-motion';
-import { VStack, Text, Button } from '@chakra-ui/react';
+import { VStack, Text, Button, Link as ChakraLink } from '@chakra-ui/react';
 import { ProjectCard } from '@/components/ProjectCard';
 import type { Project } from '@/data/mock-projects';
+import NextLink from 'next/link';
 
 interface ProjectSectionProps {
   title: string;
   projects: Project[];
   ctaLabel: string;
+  ctaHref?: string;
 }
 
 export function ProjectSection({
   title,
   projects,
   ctaLabel,
+  ctaHref,
 }: ProjectSectionProps) {
   return (
     <VStack gap="30px" align="center" w="100%">
@@ -54,19 +57,41 @@ export function ProjectSection({
       </VStack>
 
       {/* CTA button */}
-      <Button
-        bg="orange.400"
-        color="white"
-        borderRadius="25px"
-        h="50px"
-        w="100%"
-        fontSize="lg"
-        fontWeight="normal"
-        _hover={{ bg: 'orange.500' }}
-        transition="background 0.15s"
-      >
-        {ctaLabel}
-      </Button>
+      {ctaHref ? (
+        <ChakraLink
+          as={NextLink}
+          href={ctaHref}
+          display="inline-flex"
+          alignItems="center"
+          justifyContent="center"
+          bg="orange.400"
+          color="white"
+          borderRadius="25px"
+          h="50px"
+          w="100%"
+          fontSize="lg"
+          fontWeight="normal"
+          textDecoration="none"
+          _hover={{ bg: 'orange.500' }}
+          transition="background 0.15s"
+        >
+          {ctaLabel}
+        </ChakraLink>
+      ) : (
+        <Button
+          bg="orange.400"
+          color="white"
+          borderRadius="25px"
+          h="50px"
+          w="100%"
+          fontSize="lg"
+          fontWeight="normal"
+          _hover={{ bg: 'orange.500' }}
+          transition="background 0.15s"
+        >
+          {ctaLabel}
+        </Button>
+      )}
     </VStack>
   );
 }
