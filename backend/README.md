@@ -1,0 +1,85 @@
+# Backend
+
+## Mock Data Seeding (Dev)
+
+Use the scripts below to seed frontend-realistic mock data directly in the database and to clean it up safely.
+
+### Seed via Python DB flow
+
+Command:
+
+```bash
+cd backend
+uv run python -m app.scripts.seed_mock_data
+```
+
+What it does by default:
+- Creates or logs in `24` mock users (`mock_user_###@ufl.edu`).
+- Creates `36` projects (first `30` published, remaining `6` drafts).
+- Adds collaborators to `12` projects with varied team size.
+- Applies a weighted vote distribution targeting `140` votes over published projects.
+- Uses deterministic generation (seeded randomness) so output is stable between runs.
+- Uses richer content (varied names/titles and lorem-style descriptions) for better frontend visualization.
+
+Rerun behavior:
+- Idempotent: existing mock users/projects are updated in place by deterministic keys.
+- Memberships and votes are re-applied consistently for mock-scoped entities.
+- Optional `--reset-mock` will delete existing mock-scoped rows first, then reseed.
+
+Optional overrides:
+
+```bash
+cd backend
+uv run python -m app.scripts.seed_mock_data \
+  --total-users 24 \
+  --total-projects 36 \
+  --published-projects 30 \
+  --group-projects 12 \
+  --total-votes 140 \
+  --email-domain ufl.edu \
+  --mock-password 'mock-password-12345' \
+  --random-seed 42 \
+  --reset-mock
+```
+
+### Cleanup mock data (dev-only)
+
+Command:
+
+```bash
+cd backend
+uv run python -m app.scripts.cleanup_mock_data --yes
+```
+
+Safety rules:
+- Deletes only mock-scoped data (mock user emails and projects owned by those users, plus legacy `[MOCK]` titles).
+- Refuses to run against non-local DB hosts unless `--allow-non-local` is provided.
+- Prints table-level delete counts.
+
+Example for remote dev DB:
+
+```bash
+cd backend
+uv run python -m app.scripts.cleanup_mock_data --yes --allow-non-local
+```
+
+### Recommended dev workflow
+
+1. Apply migrations:
+
+```bash
+cd backend && uv run alembic upgrade head
+```
+
+2. Seed mock data:
+
+```bash
+cd backend && uv run python -m app.scripts.seed_mock_data
+```
+
+3. If you need a clean reseed, cleanup then seed:
+
+```bash
+cd backend && uv run python -m app.scripts.cleanup_mock_data --yes
+cd backend && uv run python -m app.scripts.seed_mock_data
+```
