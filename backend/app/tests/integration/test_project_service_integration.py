@@ -120,6 +120,7 @@ async def test_get_project_detail_visibility(db_session):
     member_view = await service.get_project_detail(unpublished.id, member.id)
     assert member_view is not None
     assert [m.user_id for m in member_view.members] == [member.id]
+    assert member_view.team_size == 1
     with pytest.raises(ProjectAccessForbiddenError):
         await service.get_project_detail(unpublished.id, stranger.id)
 
@@ -372,11 +373,13 @@ async def test_members_included_and_ordered_for_list_and_detail(db_session):
     detail = await service.get_project_detail(project.id, None)
     assert detail is not None
     assert [m.user_id for m in detail.members] == [member_a.id, member_b.id]
+    assert detail.team_size == 2
 
     listing = await service.list_projects(sort="top", limit=10)
     listed = next((item for item in listing.items if item.id == project.id), None)
     assert listed is not None
     assert [m.user_id for m in listed.members] == [member_a.id, member_b.id]
+    assert listed.team_size == 2
 
 
 @pytest.mark.asyncio
@@ -402,6 +405,7 @@ async def test_create_project_creates_draft_and_owner_membership_and_returns_det
     assert created.members
     assert created.members[0].user_id == creator.id
     assert created.members[0].role == "owner"
+    assert created.team_size == 1
 
     project_result = await db_session.exec(
         select(Project).where(Project.id == created.id)

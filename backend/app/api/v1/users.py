@@ -70,7 +70,7 @@ async def update_current_user_profile(
     summary="List my voted projects",
     description=(
         "Return published projects voted by the authenticated user, ordered by most "
-        "recent vote first, with cursor pagination."
+        "recent vote first, with cursor pagination and computed `team_size`."
     ),
     response_model=ProjectListResponse,
     responses={
@@ -92,7 +92,7 @@ async def list_my_voted_projects(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> ProjectListResponse:
-    """Return published projects voted by the authenticated user."""
+    """Return voted published project cards with computed team size."""
     service = VoteService(db)
     try:
         return await service.list_my_voted_projects(
@@ -127,7 +127,8 @@ async def get_user_profile(
     "/users/{user_id}/projects",
     summary="List published projects for a user",
     description=(
-        "Return published projects authored by the given user, with cursor pagination."
+        "Return published projects authored by the given user, with cursor pagination "
+        "and computed `team_size`."
     ),
     response_model=ProjectListResponse,
     responses={
@@ -166,7 +167,7 @@ async def list_user_projects(
     db: AsyncSession = Depends(get_db),
     current_user: User | None = Depends(get_current_user_optional),
 ) -> ProjectListResponse:
-    """Return published projects authored by the specific user."""
+    """Return authored published project cards with computed team size."""
     user_service = UserService(db)
     user = await user_service.get_user_by_id(user_id)
     if user is None:
