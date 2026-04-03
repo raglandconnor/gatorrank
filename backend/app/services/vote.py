@@ -87,7 +87,7 @@ class VoteService:
         limit: int = 20,
         cursor: str | None = None,
     ) -> ProjectListResponse:
-        """Return published projects voted by user, newest vote first."""
+        """Return published, non-deleted projects voted by user, newest vote first."""
         limit = max(1, min(limit, 100))
 
         vote_cols = getattr(Vote, "__table__").c
@@ -98,6 +98,7 @@ class VoteService:
             .where(
                 vote_cols.user_id == user_id,
                 project_cols.is_published.is_(True),
+                project_cols.deleted_at.is_(None),
             )
         )
 
@@ -153,6 +154,7 @@ class VoteService:
         statement = select(Project).where(
             project_cols.id == project_id,
             project_cols.is_published.is_(True),
+            project_cols.deleted_at.is_(None),
         )
         result = await self.db.exec(statement)
         return result.first()

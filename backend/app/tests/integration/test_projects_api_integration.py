@@ -2310,6 +2310,246 @@ async def test_get_project_members_draft_anonymous_returns_404(api_client, db_se
 
 
 @pytest.mark.asyncio
+async def test_delete_project_owner_returns_204_and_hides_project_everywhere(
+    api_client, db_session
+):
+    owner = await _seed_user(
+        db_session, f"owner_api_delete_{uuid4().hex[:8]}@ufl.edu", "Owner Delete API"
+    )
+    project = await _seed_project(
+        db_session,
+        created_by_id=owner.id,
+        title="Delete Me API Project",
+        is_published=True,
+    )
+    project.github_url = "https://github.com/example/delete-me-api"
+    await db_session.flush()
+
+    async def override_get_db():
+        yield db_session
+
+    app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_current_user] = _override_authed_user(owner)
+    app.dependency_overrides[get_current_user_optional] = lambda: owner
+    try:
+        delete_response = await api_client.delete(f"/api/v1/projects/{project.id}")
+        detail_response = await api_client.get(f"/api/v1/projects/{project.id}")
+        list_response = await api_client.get("/api/v1/projects")
+        user_projects_response = await api_client.get(
+            f"/api/v1/users/{owner.id}/projects"
+        )
+        members_response = await api_client.get(
+            f"/api/v1/projects/{project.id}/members"
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert delete_response.status_code == 204
+    assert detail_response.status_code == 404
+    assert list_response.status_code == 200
+    assert list_response.json()["items"] == []
+    assert user_projects_response.status_code == 200
+    assert user_projects_response.json()["items"] == []
+    assert members_response.status_code == 404
+    assert members_response.json()["detail"] == "Project not found"
+
+    project_result = await db_session.exec(
+        select(Project).where(Project.id == project.id)
+    )
+    stored_project = project_result.one()
+    assert stored_project.deleted_at is not None
+
+
+@pytest.mark.asyncio
+async def test_delete_project_is_idempotent_for_owner(api_client, db_session):
+    owner = await _seed_user(
+        db_session, f"owner_api_delete_twice_{uuid4().hex[:8]}@ufl.edu", "Owner Twice"
+    )
+    project = await _seed_project(
+        db_session,
+        created_by_id=owner.id,
+        title="Delete Twice API Project",
+        is_published=True,
+    )
+    project.github_url = "https://github.com/example/delete-twice-api"
+    await db_session.flush()
+
+    async def override_get_db():
+        yield db_session
+
+    app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_current_user] = _override_authed_user(owner)
+    try:
+        first_response = await api_client.delete(f"/api/v1/projects/{project.id}")
+        second_response = await api_client.delete(f"/api/v1/projects/{project.id}")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert first_response.status_code == 204
+    assert second_response.status_code == 204
+
+
+@pytest.mark.asyncio
+async def test_delete_project_non_owner_returns_403(api_client, db_session):
+    owner = await _seed_user(
+        db_session,
+        f"owner_api_delete_forbid_{uuid4().hex[:8]}@ufl.edu",
+        "Owner Forbid",
+    )
+    stranger = await _seed_user(
+        db_session,
+        f"stranger_api_delete_forbid_{uuid4().hex[:8]}@ufl.edu",
+        "Stranger Forbid",
+    )
+    project = await _seed_project(
+        db_session,
+        created_by_id=owner.id,
+        title="Forbidden Delete API Project",
+        is_published=True,
+    )
+    project.github_url = "https://github.com/example/delete-forbidden-api"
+    await db_session.flush()
+
+    async def override_get_db():
+        yield db_session
+
+    app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_current_user] = _override_authed_user(stranger)
+    try:
+        response = await api_client.delete(f"/api/v1/projects/{project.id}")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 403
+    assert response.json()["detail"] == "Project access forbidden"
+
+    project_result = await db_session.exec(
+        select(Project).where(Project.id == project.id)
+    )
+    assert project_result.one().deleted_at is None
+
+
+@pytest.mark.asyncio
+async def test_delete_project_missing_returns_404(api_client, db_session):
+    owner = await _seed_user(
+        db_session,
+        f"owner_api_delete_missing_{uuid4().hex[:8]}@ufl.edu",
+        "Owner Missing",
+    )
+
+    async def override_get_db():
+        yield db_session
+
+    app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_current_user] = _override_authed_user(owner)
+    try:
+        response = await api_client.delete(f"/api/v1/projects/{uuid4()}")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Project not found"
+
+
+@pytest.mark.asyncio
+async def test_add_vote_soft_deleted_project_returns_404(api_client, db_session):
+    owner = await _seed_user(
+        db_session, f"owner_api_vote_del_{uuid4().hex[:8]}@ufl.edu", "Owner Vote Del"
+    )
+    voter = await _seed_user(
+        db_session, f"voter_api_vote_del_{uuid4().hex[:8]}@ufl.edu", "Voter Vote Del"
+    )
+    project = await _seed_project(
+        db_session,
+        created_by_id=owner.id,
+        title="Deleted Vote API Target",
+        is_published=True,
+    )
+    project.github_url = "https://github.com/example/deleted-vote-api"
+    await db_session.flush()
+
+    async def override_get_db():
+        yield db_session
+
+    app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_current_user] = _override_authed_user(owner)
+    try:
+        delete_response = await api_client.delete(f"/api/v1/projects/{project.id}")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert delete_response.status_code == 204
+
+    app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_current_user] = _override_authed_user(voter)
+    try:
+        vote_response = await api_client.post(f"/api/v1/projects/{project.id}/vote")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert vote_response.status_code == 404
+    assert vote_response.json()["detail"] == "Project not found"
+
+
+@pytest.mark.asyncio
+async def test_remove_vote_soft_deleted_project_returns_404(api_client, db_session):
+    owner = await _seed_user(
+        db_session,
+        f"owner_api_unvote_del_{uuid4().hex[:8]}@ufl.edu",
+        "Owner Unvote Del",
+    )
+    voter = await _seed_user(
+        db_session,
+        f"voter_api_unvote_del_{uuid4().hex[:8]}@ufl.edu",
+        "Voter Unvote Del",
+    )
+    project = await _seed_project(
+        db_session,
+        created_by_id=owner.id,
+        title="Deleted Unvote API Target",
+        is_published=True,
+    )
+    project.github_url = "https://github.com/example/deleted-unvote-api"
+    await db_session.flush()
+
+    async def override_get_db():
+        yield db_session
+
+    app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_current_user] = _override_authed_user(voter)
+    try:
+        add_vote_response = await api_client.post(f"/api/v1/projects/{project.id}/vote")
+    finally:
+        app.dependency_overrides.clear()
+    assert add_vote_response.status_code == 204
+
+    app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_current_user] = _override_authed_user(owner)
+    try:
+        delete_response = await api_client.delete(f"/api/v1/projects/{project.id}")
+    finally:
+        app.dependency_overrides.clear()
+    assert delete_response.status_code == 204
+
+    app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_current_user] = _override_authed_user(voter)
+    try:
+        remove_vote_response = await api_client.delete(
+            f"/api/v1/projects/{project.id}/vote"
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert remove_vote_response.status_code == 404
+    assert remove_vote_response.json()["detail"] == "Project not found"
+
+    vote_result = await db_session.exec(
+        select(Vote).where(Vote.project_id == project.id, Vote.user_id == voter.id)
+    )
+    assert vote_result.one_or_none() is not None
+
+
+@pytest.mark.asyncio
 async def test_add_project_member_concurrent_duplicate_requests_one_success_one_conflict(
     api_client, async_engine
 ):
