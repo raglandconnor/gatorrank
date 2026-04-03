@@ -92,7 +92,7 @@ async def list_my_voted_projects(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> ProjectListResponse:
-    """Return voted published project cards with computed team size."""
+    """Return published projects voted by the authenticated user, including computed team size."""
     service = VoteService(db)
     try:
         return await service.list_my_voted_projects(
@@ -167,7 +167,7 @@ async def list_user_projects(
     db: AsyncSession = Depends(get_db),
     current_user: User | None = Depends(get_current_user_optional),
 ) -> ProjectListResponse:
-    """Return authored published project cards with computed team size."""
+    """Return published projects authored by the specified user, including computed team size."""
     user_service = UserService(db)
     user = await user_service.get_user_by_id(user_id)
     if user is None:
