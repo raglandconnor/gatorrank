@@ -1,6 +1,5 @@
 from typing import TypeAlias
 
-import sqlalchemy as sa
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
@@ -52,7 +51,7 @@ class TaxonomyService:
     ) -> list[TaxonomyTermResponse]:
         model_cols = getattr(model, "__table__").c
         statement = select(model).order_by(
-            sa.func.lower(model_cols.name).asc(),
+            model_cols.normalized_name.asc(),
             model_cols.id.asc(),
         )
         result = await self.db.exec(statement)
