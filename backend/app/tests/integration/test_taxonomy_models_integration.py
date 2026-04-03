@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+from uuid import uuid4
 
 import pytest
 from sqlalchemy.exc import IntegrityError
@@ -66,6 +67,50 @@ async def test_taxonomy_normalized_name_unique_within_each_vocabulary(db_session
     )
     async with db_session.begin_nested():
         db_session.add(category_duplicate)
+        with pytest.raises(IntegrityError):
+            await db_session.flush()
+
+
+@pytest.mark.asyncio
+async def test_tag_normalized_name_unique_within_vocabulary(db_session):
+    now = datetime.now(timezone.utc)
+    tag_one = Tag(
+        name="Backend",
+        normalized_name="backend",
+        created_at=now,
+    )
+    db_session.add(tag_one)
+    await db_session.flush()
+
+    tag_duplicate = Tag(
+        name="BACKEND",
+        normalized_name="backend",
+        created_at=now,
+    )
+    async with db_session.begin_nested():
+        db_session.add(tag_duplicate)
+        with pytest.raises(IntegrityError):
+            await db_session.flush()
+
+
+@pytest.mark.asyncio
+async def test_tech_stack_normalized_name_unique_within_vocabulary(db_session):
+    now = datetime.now(timezone.utc)
+    stack_one = TechStack(
+        name="PostgreSQL",
+        normalized_name="postgresql",
+        created_at=now,
+    )
+    db_session.add(stack_one)
+    await db_session.flush()
+
+    stack_duplicate = TechStack(
+        name="POSTGRESQL",
+        normalized_name="postgresql",
+        created_at=now,
+    )
+    async with db_session.begin_nested():
+        db_session.add(stack_duplicate)
         with pytest.raises(IntegrityError):
             await db_session.flush()
 
@@ -173,8 +218,12 @@ async def test_project_tag_and_tech_stack_positions_represent_order(db_session):
     db_session.add(stack_two)
     await db_session.flush()
 
-    db_session.add(ProjectTag(project_id=project.id, tag_id=tag_one.id, position=0, created_at=now))
-    db_session.add(ProjectTag(project_id=project.id, tag_id=tag_two.id, position=1, created_at=now))
+    db_session.add(
+        ProjectTag(project_id=project.id, tag_id=tag_one.id, position=0, created_at=now)
+    )
+    db_session.add(
+        ProjectTag(project_id=project.id, tag_id=tag_two.id, position=1, created_at=now)
+    )
     db_session.add(
         ProjectTechStack(
             project_id=project.id,
@@ -212,3 +261,172 @@ async def test_project_tag_and_tech_stack_positions_represent_order(db_session):
 
     assert [row.tag_id for row in tag_rows] == [tag_one.id, tag_two.id]
     assert [row.tech_stack_id for row in stack_rows] == [stack_one.id, stack_two.id]
+
+
+@pytest.mark.asyncio
+async def test_project_tag_join_enforces_unique_pair_and_position(db_session):
+    now = datetime.now(timezone.utc)
+    user = await _seed_user(db_session, "taxonomy-tag-constraints@ufl.edu")
+    project = await _seed_project(db_session, created_by_id=user.id)
+
+    tag_one = Tag(name="Backend", normalized_name="backend", created_at=now)
+    tag_two = Tag(name="Frontend", normalized_name="frontend", created_at=now)
+    db_session.add(tag_one)
+    db_session.add(tag_two)
+    await db_session.flush()
+
+    db_session.add(
+        ProjectTag(project_id=project.id, tag_id=tag_one.id, position=0, created_at=now)
+    )
+    await db_session.flush()
+
+    async with db_session.begin_nested():
+        db_session.add(
+            ProjectTag(
+                project_id=project.id,
+                tag_id=tag_one.id,
+                position=1,
+                created_at=now,
+            )
+        )
+        with pytest.raises(IntegrityError):
+            await db_session.flush()
+
+    async with db_session.begin_nested():
+        db_session.add(
+            ProjectTag(
+                project_id=project.id,
+                tag_id=tag_two.id,
+                position=0,
+                created_at=now,
+            )
+        )
+        with pytest.raises(IntegrityError):
+            await db_session.flush()
+
+
+@pytest.mark.asyncio
+async def test_project_tech_stack_join_enforces_unique_pair_and_position(db_session):
+    now = datetime.now(timezone.utc)
+    user = await _seed_user(db_session, "taxonomy-tech-stack-constraints@ufl.edu")
+    project = await _seed_project(db_session, created_by_id=user.id)
+
+    stack_one = TechStack(name="FastAPI", normalized_name="fastapi", created_at=now)
+    stack_two = TechStack(
+        name="PostgreSQL",
+        normalized_name="postgresql",
+        created_at=now,
+    )
+    db_session.add(stack_one)
+    db_session.add(stack_two)
+    await db_session.flush()
+
+    db_session.add(
+        ProjectTechStack(
+            project_id=project.id,
+            tech_stack_id=stack_one.id,
+            position=0,
+            created_at=now,
+        )
+    )
+    await db_session.flush()
+
+    async with db_session.begin_nested():
+        db_session.add(
+            ProjectTechStack(
+                project_id=project.id,
+                tech_stack_id=stack_one.id,
+                position=1,
+                created_at=now,
+            )
+        )
+        with pytest.raises(IntegrityError):
+            await db_session.flush()
+
+    async with db_session.begin_nested():
+        db_session.add(
+            ProjectTechStack(
+                project_id=project.id,
+                tech_stack_id=stack_two.id,
+                position=0,
+                created_at=now,
+            )
+        )
+        with pytest.raises(IntegrityError):
+            await db_session.flush()
+
+
+@pytest.mark.asyncio
+async def test_join_tables_enforce_foreign_keys(db_session):
+    now = datetime.now(timezone.utc)
+    user = await _seed_user(db_session, "taxonomy-fk@ufl.edu")
+    project = await _seed_project(db_session, created_by_id=user.id)
+    category = Category(name="Web", normalized_name="web", created_at=now)
+    tag = Tag(name="Backend", normalized_name="backend", created_at=now)
+    stack = TechStack(name="FastAPI", normalized_name="fastapi", created_at=now)
+    db_session.add(category)
+    db_session.add(tag)
+    db_session.add(stack)
+    await db_session.flush()
+
+    async with db_session.begin_nested():
+        db_session.add(
+            ProjectCategory(
+                project_id=uuid4(),
+                category_id=category.id,
+                position=0,
+                created_at=now,
+            )
+        )
+        with pytest.raises(IntegrityError):
+            await db_session.flush()
+
+    async with db_session.begin_nested():
+        db_session.add(
+            ProjectTag(
+                project_id=project.id,
+                tag_id=uuid4(),
+                position=0,
+                created_at=now,
+            )
+        )
+        with pytest.raises(IntegrityError):
+            await db_session.flush()
+
+    async with db_session.begin_nested():
+        db_session.add(
+            ProjectTechStack(
+                project_id=uuid4(),
+                tech_stack_id=stack.id,
+                position=0,
+                created_at=now,
+            )
+        )
+        with pytest.raises(IntegrityError):
+            await db_session.flush()
+
+
+@pytest.mark.asyncio
+async def test_created_at_uses_server_default_when_omitted(db_session):
+    user = await _seed_user(db_session, "taxonomy-created-at-default@ufl.edu")
+    project = await _seed_project(db_session, created_by_id=user.id)
+    category = Category(  # pyright: ignore[reportCallIssue]
+        name="Dev Tools",
+        normalized_name="dev tools",
+    )
+    db_session.add(category)
+    await db_session.flush()
+    await db_session.refresh(category)
+
+    assert category.created_at is not None
+
+    project_category = ProjectCategory(  # pyright: ignore[reportCallIssue]
+        project_id=project.id,
+        category_id=category.id,
+        position=0,
+    )
+    db_session.add(project_category)
+    await db_session.flush()
+    await db_session.refresh(project_category)
+
+    assert project_category.created_at is not None
