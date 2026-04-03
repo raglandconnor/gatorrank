@@ -76,8 +76,8 @@ class ProjectCategory(SQLModel, table=True):
     )
 
     id: UUID = Field(default_factory=uuid4, primary_key=True, nullable=False)
-    project_id: UUID = Field(foreign_key="projects.id", nullable=False, index=True)
-    category_id: UUID = Field(foreign_key="categories.id", nullable=False, index=True)
+    project_id: UUID = Field(foreign_key="projects.id", nullable=False)
+    category_id: UUID = Field(foreign_key="categories.id", nullable=False)
     position: int = Field(nullable=False, ge=0)
     created_at: datetime = Field(
         sa_column=sa.Column(
@@ -103,8 +103,8 @@ class ProjectTag(SQLModel, table=True):
     )
 
     id: UUID = Field(default_factory=uuid4, primary_key=True, nullable=False)
-    project_id: UUID = Field(foreign_key="projects.id", nullable=False, index=True)
-    tag_id: UUID = Field(foreign_key="tags.id", nullable=False, index=True)
+    project_id: UUID = Field(foreign_key="projects.id", nullable=False)
+    tag_id: UUID = Field(foreign_key="tags.id", nullable=False)
     position: int = Field(nullable=False, ge=0)
     created_at: datetime = Field(
         sa_column=sa.Column(
@@ -132,10 +132,8 @@ class ProjectTechStack(SQLModel, table=True):
     )
 
     id: UUID = Field(default_factory=uuid4, primary_key=True, nullable=False)
-    project_id: UUID = Field(foreign_key="projects.id", nullable=False, index=True)
-    tech_stack_id: UUID = Field(
-        foreign_key="tech_stacks.id", nullable=False, index=True
-    )
+    project_id: UUID = Field(foreign_key="projects.id", nullable=False)
+    tech_stack_id: UUID = Field(foreign_key="tech_stacks.id", nullable=False)
     position: int = Field(nullable=False, ge=0)
     created_at: datetime = Field(
         sa_column=sa.Column(
