@@ -368,6 +368,7 @@ class ProjectService:
         return ProjectDetailResponse(
             **project.model_dump(),
             members=members,
+            team_size=len(members),
             viewer_has_voted=viewer_has_voted,
         )
 
@@ -642,11 +643,7 @@ class ProjectService:
             )
 
         items = [
-            self._to_project_list_item(
-                project,
-                members_by_project.get(project.id, []),
-                viewer_has_voted=project.id in voted_project_ids,
-            )
+            self._to_project_list_item(project, members_by_project, voted_project_ids)
             for project in projects
         ]
 
@@ -719,12 +716,16 @@ class ProjectService:
 
     @staticmethod
     def _to_project_list_item(
-        project: Project, members: list[ProjectMemberInfo], *, viewer_has_voted: bool
+        project: Project,
+        members_by_project: dict[UUID, list[ProjectMemberInfo]],
+        voted_project_ids: set[UUID],
     ) -> ProjectListItemResponse:
+        members = members_by_project.get(project.id, [])
         return ProjectListItemResponse(
             **project.model_dump(),
             members=members,
-            viewer_has_voted=viewer_has_voted,
+            team_size=len(members),
+            viewer_has_voted=project.id in voted_project_ids,
         )
 
     async def _viewer_has_voted(self, project_id: UUID, user_id: UUID) -> bool:
