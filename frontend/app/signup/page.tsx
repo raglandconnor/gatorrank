@@ -1,7 +1,11 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { GatorRankLogo } from '@/components/GatorRankLogo';
+import { useAuth } from '@/components/auth/AuthProvider';
+import { toast } from '@/lib/ui/toast';
+import { signupErrorToast } from '@/lib/auth/toastMessages';
 import {
   Box,
   Button,
@@ -24,12 +28,16 @@ import {
 } from '@/lib/validation';
 
 export default function SignupPage() {
+  const router = useRouter();
+  const { signup, isReady } = useAuth();
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [rememberMe, setRememberMe] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState<{
     fullName?: string;
     email?: string;
@@ -37,7 +45,7 @@ export default function SignupPage() {
     confirmPassword?: string;
   }>({});
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     const newErrors: typeof errors = {};
 
@@ -58,7 +66,7 @@ export default function SignupPage() {
       newErrors.password = 'Password is required';
     } else if (!isValidPassword(password)) {
       newErrors.password =
-        'Password must be 10+ characters with upper, lower, numbers, and symbols';
+        'Password must be 12–128 characters (not only spaces), matching server rules';
     }
 
     if (!confirmPassword) {
@@ -68,15 +76,32 @@ export default function SignupPage() {
     }
 
     setErrors(newErrors);
-    if (Object.keys(newErrors).length === 0) {
-      // Valid - would submit to API
+    if (Object.keys(newErrors).length > 0) return;
+
+    setIsSubmitting(true);
+    try {
+      await signup({
+        email: email.trim(),
+        password,
+        fullName: fullName.trim(),
+        rememberMe,
+      });
+      toast.success({
+        title: 'Account created',
+        description: 'Welcome to GatorRank. Taking you to your profile…',
+      });
+      router.push('/profile');
+    } catch (err) {
+      toast.error(signupErrorToast(err));
+    } finally {
+      setIsSubmitting(false);
     }
   }
 
   return (
     <Flex
       minH="100vh"
-      bg="#f8f8f8"
+      bg="transparent"
       direction="column"
       align="center"
       justify="flex-start"
@@ -304,6 +329,25 @@ export default function SignupPage() {
               )}
             </Field.Root>
 
+            <Box
+              as="label"
+              display="flex"
+              alignItems="center"
+              gap={2}
+              justifyContent="flex-start"
+              cursor="pointer"
+            >
+              <input
+                type="checkbox"
+                checked={rememberMe}
+                onChange={(e) => setRememberMe(e.target.checked)}
+                style={{ cursor: 'pointer' }}
+              />
+              <Text fontSize="sm" color="gray.700" textAlign="left">
+                Remember me
+              </Text>
+            </Box>
+
             <Button
               type="submit"
               bg="#FF8C38"
@@ -315,8 +359,9 @@ export default function SignupPage() {
               borderRadius="lg"
               py={6}
               mt={4}
+              disabled={!isReady || isSubmitting}
             >
-              Sign Up
+              {isSubmitting ? 'Creating account…' : 'Sign Up'}
             </Button>
           </Stack>
         </Box>

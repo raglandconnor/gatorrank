@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from unittest.mock import AsyncMock
 from uuid import UUID, uuid4
 
@@ -120,6 +120,7 @@ async def test_get_project_detail_visibility(db_session):
     member_view = await service.get_project_detail(unpublished.id, member.id)
     assert member_view is not None
     assert [m.user_id for m in member_view.members] == [member.id]
+    assert member_view.team_size == 1
     with pytest.raises(ProjectAccessForbiddenError):
         await service.get_project_detail(unpublished.id, stranger.id)
 
@@ -372,11 +373,13 @@ async def test_members_included_and_ordered_for_list_and_detail(db_session):
     detail = await service.get_project_detail(project.id, None)
     assert detail is not None
     assert [m.user_id for m in detail.members] == [member_a.id, member_b.id]
+    assert detail.team_size == 2
 
     listing = await service.list_projects(sort="top", limit=10)
     listed = next((item for item in listing.items if item.id == project.id), None)
     assert listed is not None
     assert [m.user_id for m in listed.members] == [member_a.id, member_b.id]
+    assert listed.team_size == 2
 
 
 @pytest.mark.asyncio
@@ -402,6 +405,7 @@ async def test_create_project_creates_draft_and_owner_membership_and_returns_det
     assert created.members
     assert created.members[0].user_id == creator.id
     assert created.members[0].role == "owner"
+    assert created.team_size == 1
 
     project_result = await db_session.exec(
         select(Project).where(Project.id == created.id)
@@ -612,6 +616,76 @@ async def test_update_project_requires_at_least_one_resulting_url(db_session):
             current_user_id=owner.id,
             payload=payload,
         )
+
+
+@pytest.mark.asyncio
+async def test_update_project_rejects_timeline_end_without_start(db_session):
+    now = datetime.now(timezone.utc)
+    owner = await _seed_user(
+        db_session, "owner-update-timeline-1@ufl.edu", "Owner Timeline 1"
+    )
+    project = await _seed_project(
+        db_session,
+        created_by_id=owner.id,
+        title="Timeline Rule 1",
+        vote_count=0,
+        is_published=False,
+        created_at=now,
+    )
+    project.github_url = "https://github.com/example/timeline-rule-1"
+    await db_session.flush()
+
+    service = ProjectService(db_session)
+    payload = ProjectUpdateRequest(timeline_end_date=date(2026, 4, 1))
+
+    with pytest.raises(
+        ProjectValidationError,
+        match="timeline_end_date requires timeline_start_date.",
+    ):
+        await service.update_project(
+            project_id=project.id,
+            current_user_id=owner.id,
+            payload=payload,
+        )
+
+
+@pytest.mark.asyncio
+async def test_update_project_allows_clearing_timeline_end_for_in_progress(db_session):
+    now = datetime.now(timezone.utc)
+    owner = await _seed_user(
+        db_session, "owner-update-timeline-2@ufl.edu", "Owner Timeline 2"
+    )
+    project = await _seed_project(
+        db_session,
+        created_by_id=owner.id,
+        title="Timeline Rule 2",
+        vote_count=0,
+        is_published=False,
+        created_at=now,
+    )
+    project.github_url = "https://github.com/example/timeline-rule-2"
+    project.timeline_start_date = date(2026, 3, 1)
+    project.timeline_end_date = date(2026, 3, 31)
+    await db_session.flush()
+
+    service = ProjectService(db_session)
+    payload = ProjectUpdateRequest(timeline_end_date=None)
+    updated = await service.update_project(
+        project_id=project.id,
+        current_user_id=owner.id,
+        payload=payload,
+    )
+
+    assert updated is not None
+    assert updated.timeline_start_date == date(2026, 3, 1)
+    assert updated.timeline_end_date is None
+
+    refreshed_result = await db_session.exec(
+        select(Project).where(Project.id == project.id)
+    )
+    refreshed = refreshed_result.one()
+    assert refreshed.timeline_start_date == date(2026, 3, 1)
+    assert refreshed.timeline_end_date is None
 
 
 @pytest.mark.asyncio

@@ -40,8 +40,9 @@ router = APIRouter()
         422: {
             "description": (
                 "Validation error (for example: missing/blank title or "
-                "short_description, invalid URL format, or no demo/github/video URL "
-                "provided)."
+                "short_description, invalid URL format, invalid timeline "
+                "dates/order, or no demo/github/video URL provided). URL domains "
+                "are not restricted beyond valid http(s) format."
             )
         },
     },
@@ -62,7 +63,10 @@ async def create_project(
 @router.get(
     "/projects/{project_id}",
     summary="Get project detail",
-    description="Return project details if visible to the current requester",
+    description=(
+        "Return project details if visible to the current requester, including "
+        "computed `team_size` from active project memberships."
+    ),
     response_model=ProjectDetailResponse,
     responses={
         403: {"description": "Authenticated user cannot access this draft project"},
@@ -76,6 +80,7 @@ async def get_project_detail(
     db: AsyncSession = Depends(get_db),
     current_user: User | None = Depends(get_current_user_optional),
 ) -> ProjectDetailResponse:
+    """Return project details, including computed team size, when requester can view."""
     service = ProjectService(db)
     current_user_id = current_user.id if current_user else None
     try:
@@ -328,7 +333,8 @@ async def leave_project(
     description=(
         "Partially update a project. Editing is owner-only and allowed for both draft "
         "and published projects. The final project state must include at least one "
-        "of `demo_url`, `github_url`, or `video_url`."
+        "of `demo_url`, `github_url`, or `video_url`. URL domains are not restricted "
+        "beyond valid http(s) format."
     ),
     response_model=ProjectDetailResponse,
     responses={
@@ -338,7 +344,8 @@ async def leave_project(
         422: {
             "description": (
                 "Validation error (for example: empty payload, non-editable fields, "
-                "invalid URL format, or removing all project URLs)."
+                "invalid URL format, invalid timeline dates/order, or removing all "
+                "project URLs)."
             )
         },
     },
@@ -442,6 +449,10 @@ async def unpublish_project(
 @router.get(
     "/projects",
     summary="List projects",
+    description=(
+        "Return published project cards with cursor pagination, including computed "
+        "`team_size` from active project memberships."
+    ),
     response_model=ProjectListResponse,
     responses={
         400: {"description": "Invalid cursor"},

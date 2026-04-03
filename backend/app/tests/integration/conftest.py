@@ -11,17 +11,12 @@ from sqlalchemy.pool import NullPool
 from sqlmodel.ext.asyncio.session import AsyncSession
 from testcontainers.postgres import PostgresContainer
 
+from app.tests.integration._db_url_utils import (
+    to_async_database_url,
+    to_sync_migration_url,
+)
+
 BACKEND_ROOT = Path(__file__).resolve().parents[3]
-
-
-def _to_async_database_url(sync_url: str) -> str:
-    if sync_url.startswith("postgresql+psycopg2://"):
-        return sync_url.replace("postgresql+psycopg2://", "postgresql+asyncpg://", 1)
-    if sync_url.startswith("postgresql+psycopg://"):
-        return sync_url.replace("postgresql+psycopg://", "postgresql+asyncpg://", 1)
-    if sync_url.startswith("postgresql://"):
-        return sync_url.replace("postgresql://", "postgresql+asyncpg://", 1)
-    return sync_url
 
 
 @pytest.fixture(scope="session")
@@ -40,7 +35,10 @@ def postgres_container() -> Generator[PostgresContainer, None, None]:
 @pytest.fixture(scope="session")
 def database_urls(postgres_container: PostgresContainer) -> dict[str, str]:
     sync_url = postgres_container.get_connection_url()
-    return {"sync": sync_url, "async": _to_async_database_url(sync_url)}
+    return {
+        "sync": to_sync_migration_url(sync_url),
+        "async": to_async_database_url(sync_url),
+    }
 
 
 @pytest.fixture(scope="session", autouse=True)
