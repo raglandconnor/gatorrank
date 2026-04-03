@@ -130,6 +130,7 @@ class VoteService:
             ProjectListItemResponse(
                 **project.model_dump(),
                 members=members_by_project.get(project.id, []),
+                team_size=len(members_by_project.get(project.id, [])),
                 viewer_has_voted=True,
             )
             for _, project in page_rows

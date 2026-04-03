@@ -253,6 +253,10 @@ class ProjectBaseResponse(BaseModel):
     timeline_start_date: date | None = None
     timeline_end_date: date | None = None
     vote_count: int
+    team_size: int = Field(
+        ge=0,
+        description="Computed count of active project members.",
+    )
     is_group_project: bool
     is_published: bool
     viewer_has_voted: bool = False
