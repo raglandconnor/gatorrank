@@ -9,8 +9,9 @@ from datetime import UTC, datetime, timedelta
 from app.main import app
 from app.db.database import get_db
 from app.models.user import User
-from app.models.project import Project
+from app.models.project import Project, Vote
 from app.core.config import get_settings
+from app.services.vote import VoteService
 
 settings = get_settings()
 
@@ -347,3 +348,58 @@ async def test_list_user_projects(api_client, db_session):
         assert data["items"][0]["id"] == str(p1.id)
     finally:
         app.dependency_overrides.clear()
+
+
+@pytest.mark.asyncio
+async def test_list_my_voted_projects_excludes_soft_deleted_projects(
+    api_client, db_session, monkeypatch
+):
+    jwt_secret = "integration-test-jwt-secret-at-least-32b"
+    monkeypatch.setattr(settings, "DATABASE_JWT_SECRET", jwt_secret)
+
+    user_id = uuid4()
+    email = f"user-votes-{uuid4().hex[:8]}@ufl.edu"
+    await seed_auth_user(db_session, user_id=user_id, email=email)
+    token = generate_token(user_id, email, jwt_secret)
+
+    now = datetime.now(UTC)
+    visible = Project(
+        id=uuid4(),
+        title="Visible Voted Project",
+        short_description="Visible voted project description",
+        is_published=True,
+        published_at=now,
+        created_by_id=user_id,
+    )  # pyright: ignore[reportCallIssue]
+    deleted = Project(
+        id=uuid4(),
+        title="Deleted Voted Project",
+        short_description="Deleted voted project description",
+        is_published=True,
+        published_at=now,
+        created_by_id=user_id,
+        deleted_at=now,
+    )  # pyright: ignore[reportCallIssue]
+    db_session.add_all([visible, deleted])
+    await db_session.commit()
+
+    vote_service = VoteService(db_session)
+    await vote_service.add_vote(project_id=visible.id, user_id=user_id)
+    db_session.add(Vote(user_id=user_id, project_id=deleted.id, created_at=now))
+    await db_session.commit()
+
+    async def override_get_db():
+        yield db_session
+
+    app.dependency_overrides[get_db] = override_get_db
+    try:
+        response = await api_client.get(
+            "/api/v1/users/me/votes",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert [item["id"] for item in payload["items"]] == [str(visible.id)]

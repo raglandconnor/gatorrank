@@ -39,6 +39,15 @@ def make_project(*, is_published: bool, created_by_id=None) -> Project:
     )
 
 
+def test_can_view_project_hides_soft_deleted_projects():
+    service = ProjectService(cast(AsyncSession, DummySession()))
+    owner_id = uuid4()
+    project = make_project(is_published=True, created_by_id=owner_id)
+    project.deleted_at = datetime.now(timezone.utc)
+
+    assert service.can_view_project(project, current_user_id=owner_id) is False
+
+
 def test_can_view_project_allows_published_anonymous():
     service = ProjectService(cast(AsyncSession, DummySession()))
     project = make_project(is_published=True)

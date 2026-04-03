@@ -2,7 +2,7 @@ from datetime import date
 from typing import Literal
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.api.deps.auth import get_current_user, get_current_user_optional
@@ -90,6 +90,33 @@ async def get_project_detail(
     if project is None:
         raise HTTPException(status_code=404, detail="Project not found")
     return project
+
+
+@router.delete(
+    "/projects/{project_id}",
+    summary="Soft delete project",
+    status_code=status.HTTP_204_NO_CONTENT,
+    responses={
+        401: {"description": "Authentication required"},
+        403: {"description": "Only the owner can delete this project"},
+        404: {"description": "Project not found"},
+    },
+)
+async def delete_project(
+    project_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> Response:
+    service = ProjectService(db)
+    try:
+        deleted = await service.soft_delete_project(project_id, current_user.id)
+    except ProjectAccessForbiddenError as exc:
+        raise HTTPException(status_code=403, detail="Project access forbidden") from exc
+
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.get(
@@ -495,7 +522,7 @@ async def list_projects(
     "/projects/{project_id}/vote",
     summary="Vote for a project",
     description=(
-        "Add the authenticated user's vote for a published project. "
+        "Add the authenticated user's vote for a published, non-deleted project. "
         "This endpoint is idempotent and returns `204` even if the vote already exists."
     ),
     status_code=status.HTTP_204_NO_CONTENT,
@@ -510,7 +537,7 @@ async def add_project_vote(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> None:
-    """Vote for a published project as the authenticated user."""
+    """Vote for a published, non-deleted project as the authenticated user."""
     service = VoteService(db)
     try:
         await service.add_vote(project_id=project_id, user_id=current_user.id)
@@ -522,7 +549,7 @@ async def add_project_vote(
     "/projects/{project_id}/vote",
     summary="Remove project vote",
     description=(
-        "Remove the authenticated user's vote for a published project. "
+        "Remove the authenticated user's vote for a published, non-deleted project. "
         "This endpoint is idempotent and returns `204` even if no vote exists."
     ),
     status_code=status.HTTP_204_NO_CONTENT,
@@ -537,7 +564,7 @@ async def remove_project_vote(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> None:
-    """Remove a vote for a published project as the authenticated user."""
+    """Remove a vote for a published, non-deleted project as the authenticated user."""
     service = VoteService(db)
     try:
         await service.remove_vote(project_id=project_id, user_id=current_user.id)

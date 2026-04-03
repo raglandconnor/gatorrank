@@ -69,7 +69,7 @@ async def update_current_user_profile(
     "/users/me/votes",
     summary="List my voted projects",
     description=(
-        "Return published projects voted by the authenticated user, ordered by most "
+        "Return published, non-deleted projects voted by the authenticated user, ordered by most "
         "recent vote first, with cursor pagination and computed `team_size`."
     ),
     response_model=ProjectListResponse,
@@ -92,7 +92,7 @@ async def list_my_voted_projects(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> ProjectListResponse:
-    """Return published projects voted by the authenticated user, including computed team size."""
+    """Return published, non-deleted projects voted by the authenticated user, including computed team size."""
     service = VoteService(db)
     try:
         return await service.list_my_voted_projects(
