@@ -65,9 +65,9 @@ async def test_taxonomy_normalized_name_unique_within_each_vocabulary(db_session
         normalized_name="react",
         created_at=now,
     )
-    async with db_session.begin_nested():
-        db_session.add(category_duplicate)
-        with pytest.raises(IntegrityError):
+    with pytest.raises(IntegrityError):
+        async with db_session.begin_nested():
+            db_session.add(category_duplicate)
             await db_session.flush()
 
 
@@ -87,9 +87,9 @@ async def test_tag_normalized_name_unique_within_vocabulary(db_session):
         normalized_name="backend",
         created_at=now,
     )
-    async with db_session.begin_nested():
-        db_session.add(tag_duplicate)
-        with pytest.raises(IntegrityError):
+    with pytest.raises(IntegrityError):
+        async with db_session.begin_nested():
+            db_session.add(tag_duplicate)
             await db_session.flush()
 
 
@@ -109,9 +109,9 @@ async def test_tech_stack_normalized_name_unique_within_vocabulary(db_session):
         normalized_name="postgresql",
         created_at=now,
     )
-    async with db_session.begin_nested():
-        db_session.add(stack_duplicate)
-        with pytest.raises(IntegrityError):
+    with pytest.raises(IntegrityError):
+        async with db_session.begin_nested():
+            db_session.add(stack_duplicate)
             await db_session.flush()
 
 
@@ -157,9 +157,9 @@ async def test_project_category_join_enforces_unique_pair(db_session):
         position=1,
         created_at=now,
     )
-    async with db_session.begin_nested():
-        db_session.add(duplicate_pair)
-        with pytest.raises(IntegrityError):
+    with pytest.raises(IntegrityError):
+        async with db_session.begin_nested():
+            db_session.add(duplicate_pair)
             await db_session.flush()
 
 
@@ -185,16 +185,16 @@ async def test_project_category_join_enforces_unique_position(db_session):
     )
     await db_session.flush()
 
-    async with db_session.begin_nested():
-        db_session.add(
-            ProjectCategory(
-                project_id=project.id,
-                category_id=category_two.id,
-                position=0,
-                created_at=now,
+    with pytest.raises(IntegrityError):
+        async with db_session.begin_nested():
+            db_session.add(
+                ProjectCategory(
+                    project_id=project.id,
+                    category_id=category_two.id,
+                    position=0,
+                    created_at=now,
+                )
             )
-        )
-        with pytest.raises(IntegrityError):
             await db_session.flush()
 
 
@@ -280,28 +280,28 @@ async def test_project_tag_join_enforces_unique_pair_and_position(db_session):
     )
     await db_session.flush()
 
-    async with db_session.begin_nested():
-        db_session.add(
-            ProjectTag(
-                project_id=project.id,
-                tag_id=tag_one.id,
-                position=1,
-                created_at=now,
+    with pytest.raises(IntegrityError):
+        async with db_session.begin_nested():
+            db_session.add(
+                ProjectTag(
+                    project_id=project.id,
+                    tag_id=tag_one.id,
+                    position=1,
+                    created_at=now,
+                )
             )
-        )
-        with pytest.raises(IntegrityError):
             await db_session.flush()
 
-    async with db_session.begin_nested():
-        db_session.add(
-            ProjectTag(
-                project_id=project.id,
-                tag_id=tag_two.id,
-                position=0,
-                created_at=now,
+    with pytest.raises(IntegrityError):
+        async with db_session.begin_nested():
+            db_session.add(
+                ProjectTag(
+                    project_id=project.id,
+                    tag_id=tag_two.id,
+                    position=0,
+                    created_at=now,
+                )
             )
-        )
-        with pytest.raises(IntegrityError):
             await db_session.flush()
 
 
@@ -331,28 +331,28 @@ async def test_project_tech_stack_join_enforces_unique_pair_and_position(db_sess
     )
     await db_session.flush()
 
-    async with db_session.begin_nested():
-        db_session.add(
-            ProjectTechStack(
-                project_id=project.id,
-                tech_stack_id=stack_one.id,
-                position=1,
-                created_at=now,
+    with pytest.raises(IntegrityError):
+        async with db_session.begin_nested():
+            db_session.add(
+                ProjectTechStack(
+                    project_id=project.id,
+                    tech_stack_id=stack_one.id,
+                    position=1,
+                    created_at=now,
+                )
             )
-        )
-        with pytest.raises(IntegrityError):
             await db_session.flush()
 
-    async with db_session.begin_nested():
-        db_session.add(
-            ProjectTechStack(
-                project_id=project.id,
-                tech_stack_id=stack_two.id,
-                position=0,
-                created_at=now,
+    with pytest.raises(IntegrityError):
+        async with db_session.begin_nested():
+            db_session.add(
+                ProjectTechStack(
+                    project_id=project.id,
+                    tech_stack_id=stack_two.id,
+                    position=0,
+                    created_at=now,
+                )
             )
-        )
-        with pytest.raises(IntegrityError):
             await db_session.flush()
 
 
@@ -369,40 +369,40 @@ async def test_join_tables_enforce_foreign_keys(db_session):
     db_session.add(stack)
     await db_session.flush()
 
-    async with db_session.begin_nested():
-        db_session.add(
-            ProjectCategory(
-                project_id=uuid4(),
-                category_id=category.id,
-                position=0,
-                created_at=now,
+    with pytest.raises(IntegrityError):
+        async with db_session.begin_nested():
+            db_session.add(
+                ProjectCategory(
+                    project_id=uuid4(),
+                    category_id=category.id,
+                    position=0,
+                    created_at=now,
+                )
             )
-        )
-        with pytest.raises(IntegrityError):
             await db_session.flush()
 
-    async with db_session.begin_nested():
-        db_session.add(
-            ProjectTag(
-                project_id=project.id,
-                tag_id=uuid4(),
-                position=0,
-                created_at=now,
+    with pytest.raises(IntegrityError):
+        async with db_session.begin_nested():
+            db_session.add(
+                ProjectTag(
+                    project_id=project.id,
+                    tag_id=uuid4(),
+                    position=0,
+                    created_at=now,
+                )
             )
-        )
-        with pytest.raises(IntegrityError):
             await db_session.flush()
 
-    async with db_session.begin_nested():
-        db_session.add(
-            ProjectTechStack(
-                project_id=uuid4(),
-                tech_stack_id=stack.id,
-                position=0,
-                created_at=now,
+    with pytest.raises(IntegrityError):
+        async with db_session.begin_nested():
+            db_session.add(
+                ProjectTechStack(
+                    project_id=uuid4(),
+                    tech_stack_id=stack.id,
+                    position=0,
+                    created_at=now,
+                )
             )
-        )
-        with pytest.raises(IntegrityError):
             await db_session.flush()
 
 
