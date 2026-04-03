@@ -119,6 +119,25 @@ async def test_add_vote_rejects_draft_project(db_session):
 
 
 @pytest.mark.asyncio
+async def test_add_vote_rejects_soft_deleted_project(db_session):
+    unique = uuid4().hex[:8]
+    owner = await _seed_user(db_session, f"vote-owner-del-{unique}@ufl.edu", "Owner")
+    voter = await _seed_user(db_session, f"vote-voter-del-{unique}@ufl.edu", "Voter")
+    deleted_project = await _seed_project(
+        db_session,
+        created_by_id=owner.id,
+        title="Deleted Target",
+        is_published=True,
+    )
+    deleted_project.deleted_at = datetime.now(timezone.utc)
+    await db_session.commit()
+
+    service = VoteService(db_session)
+    with pytest.raises(VoteTargetNotFoundError, match="Project not found"):
+        await service.add_vote(project_id=deleted_project.id, user_id=voter.id)
+
+
+@pytest.mark.asyncio
 async def test_add_vote_invalid_user_id_raises_integrity_error(
     async_engine: AsyncEngine,
 ):
@@ -178,6 +197,35 @@ async def test_remove_vote_is_idempotent_and_never_goes_negative(db_session):
     refreshed = await db_session.exec(select(Project).where(Project.id == project.id))
     updated_project = refreshed.one()
     assert updated_project.vote_count == 0
+
+
+@pytest.mark.asyncio
+async def test_remove_vote_rejects_soft_deleted_project(db_session):
+    unique = uuid4().hex[:8]
+    owner = await _seed_user(
+        db_session, f"vote-owner-rm-del-{unique}@ufl.edu", "Owner RM Del"
+    )
+    voter = await _seed_user(
+        db_session, f"vote-voter-rm-del-{unique}@ufl.edu", "Voter RM Del"
+    )
+    project = await _seed_project(
+        db_session,
+        created_by_id=owner.id,
+        title="Remove Deleted Vote Target",
+    )
+    service = VoteService(db_session)
+    await service.add_vote(project_id=project.id, user_id=voter.id)
+
+    project.deleted_at = datetime.now(timezone.utc)
+    await db_session.commit()
+
+    with pytest.raises(VoteTargetNotFoundError, match="Project not found"):
+        await service.remove_vote(project_id=project.id, user_id=voter.id)
+
+    vote_result = await db_session.exec(
+        select(Vote).where(Vote.project_id == project.id, Vote.user_id == voter.id)
+    )
+    assert vote_result.one_or_none() is not None
 
 
 @pytest.mark.asyncio
@@ -251,6 +299,39 @@ async def test_list_my_voted_projects_orders_and_paginates(db_session):
     assert [item.id for item in second_page.items] == [oldest.id]
     assert [item.viewer_has_voted for item in second_page.items] == [True]
     assert second_page.next_cursor is None
+
+
+@pytest.mark.asyncio
+async def test_list_my_voted_projects_excludes_soft_deleted_projects(db_session):
+    unique = uuid4().hex[:8]
+    owner = await _seed_user(
+        db_session, f"vote-owner-list-del-{unique}@ufl.edu", "Owner List Del"
+    )
+    voter = await _seed_user(
+        db_session, f"vote-voter-list-del-{unique}@ufl.edu", "Voter List Del"
+    )
+
+    visible = await _seed_project(
+        db_session,
+        created_by_id=owner.id,
+        title="Visible Voted Project",
+        is_published=True,
+    )
+    deleted = await _seed_project(
+        db_session,
+        created_by_id=owner.id,
+        title="Deleted Voted Project",
+        is_published=True,
+    )
+
+    service = VoteService(db_session)
+    await service.add_vote(project_id=visible.id, user_id=voter.id)
+    await service.add_vote(project_id=deleted.id, user_id=voter.id)
+    deleted.deleted_at = datetime.now(timezone.utc)
+    await db_session.commit()
+
+    response = await service.list_my_voted_projects(user_id=voter.id, limit=10)
+    assert [item.id for item in response.items] == [visible.id]
 
 
 @pytest.mark.asyncio

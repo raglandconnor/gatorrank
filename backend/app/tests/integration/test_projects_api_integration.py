@@ -13,7 +13,7 @@ from sqlmodel.ext.asyncio.session import AsyncSession as SQLModelAsyncSession
 from app.api.deps.auth import get_current_user, get_current_user_optional
 from app.db.database import get_db
 from app.main import app
-from app.models.project import Project, ProjectMember
+from app.models.project import Project, ProjectMember, Vote
 from app.models.user import User
 
 
@@ -2304,6 +2304,104 @@ async def test_delete_project_missing_returns_404(api_client, db_session):
 
     assert response.status_code == 404
     assert response.json()["detail"] == "Project not found"
+
+
+@pytest.mark.asyncio
+async def test_add_vote_soft_deleted_project_returns_404(api_client, db_session):
+    owner = await _seed_user(
+        db_session, f"owner_api_vote_del_{uuid4().hex[:8]}@ufl.edu", "Owner Vote Del"
+    )
+    voter = await _seed_user(
+        db_session, f"voter_api_vote_del_{uuid4().hex[:8]}@ufl.edu", "Voter Vote Del"
+    )
+    project = await _seed_project(
+        db_session,
+        created_by_id=owner.id,
+        title="Deleted Vote API Target",
+        is_published=True,
+    )
+    project.github_url = "https://github.com/example/deleted-vote-api"
+    await db_session.flush()
+
+    async def override_get_db():
+        yield db_session
+
+    app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_current_user] = _override_authed_user(owner)
+    try:
+        delete_response = await api_client.delete(f"/api/v1/projects/{project.id}")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert delete_response.status_code == 204
+
+    app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_current_user] = _override_authed_user(voter)
+    try:
+        vote_response = await api_client.post(f"/api/v1/projects/{project.id}/vote")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert vote_response.status_code == 404
+    assert vote_response.json()["detail"] == "Project not found"
+
+
+@pytest.mark.asyncio
+async def test_remove_vote_soft_deleted_project_returns_404(api_client, db_session):
+    owner = await _seed_user(
+        db_session,
+        f"owner_api_unvote_del_{uuid4().hex[:8]}@ufl.edu",
+        "Owner Unvote Del",
+    )
+    voter = await _seed_user(
+        db_session,
+        f"voter_api_unvote_del_{uuid4().hex[:8]}@ufl.edu",
+        "Voter Unvote Del",
+    )
+    project = await _seed_project(
+        db_session,
+        created_by_id=owner.id,
+        title="Deleted Unvote API Target",
+        is_published=True,
+    )
+    project.github_url = "https://github.com/example/deleted-unvote-api"
+    await db_session.flush()
+
+    async def override_get_db():
+        yield db_session
+
+    app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_current_user] = _override_authed_user(voter)
+    try:
+        add_vote_response = await api_client.post(f"/api/v1/projects/{project.id}/vote")
+    finally:
+        app.dependency_overrides.clear()
+    assert add_vote_response.status_code == 204
+
+    app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_current_user] = _override_authed_user(owner)
+    try:
+        delete_response = await api_client.delete(f"/api/v1/projects/{project.id}")
+    finally:
+        app.dependency_overrides.clear()
+    assert delete_response.status_code == 204
+
+    app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_current_user] = _override_authed_user(voter)
+    try:
+        remove_vote_response = await api_client.delete(
+            f"/api/v1/projects/{project.id}/vote"
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert remove_vote_response.status_code == 404
+    assert remove_vote_response.json()["detail"] == "Project not found"
+
+    vote_result = await db_session.exec(
+        select(Vote).where(Vote.project_id == project.id, Vote.user_id == voter.id)
+    )
+    assert vote_result.one_or_none() is not None
 
 
 @pytest.mark.asyncio
