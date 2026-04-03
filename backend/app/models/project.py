@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 from uuid import UUID, uuid4
 
 import sqlalchemy as sa
@@ -21,6 +21,12 @@ class Project(SQLModel, table=True):
     demo_url: str | None = Field(default=None, max_length=2048)
     github_url: str | None = Field(default=None, max_length=2048)
     video_url: str | None = Field(default=None, max_length=2048)
+    timeline_start_date: date | None = Field(
+        default=None, sa_column=sa.Column(sa.Date(), nullable=True)
+    )
+    timeline_end_date: date | None = Field(
+        default=None, sa_column=sa.Column(sa.Date(), nullable=True)
+    )
     vote_count: int = Field(default=0, nullable=False)
     is_group_project: bool = Field(default=False, nullable=False)
     is_published: bool = Field(

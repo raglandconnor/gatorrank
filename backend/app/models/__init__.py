@@ -1,5 +1,13 @@
 from app.models.auth import RefreshSession
 from app.models.user import User
+from app.models.user_roles import (
+    USER_ROLE_ADMIN,
+    USER_ROLE_FACULTY,
+    USER_ROLE_STUDENT,
+    UserRole,
+    cast_user_role,
+    is_user_role,
+)
 from app.models.project import Project, ProjectMember, Vote
 from app.models.project_roles import (
     PROJECT_ROLE_CONTRIBUTOR,
@@ -8,9 +16,23 @@ from app.models.project_roles import (
     ProjectMemberRole,
     ProjectMemberWritableRole,
 )
+from app.models.taxonomy import (
+    Category,
+    ProjectCategory,
+    ProjectTag,
+    ProjectTechStack,
+    Tag,
+    TechStack,
+)
 
 __all__ = [
     "User",
+    "UserRole",
+    "USER_ROLE_STUDENT",
+    "USER_ROLE_FACULTY",
+    "USER_ROLE_ADMIN",
+    "is_user_role",
+    "cast_user_role",
     "RefreshSession",
     "Project",
     "ProjectMember",
@@ -20,4 +42,10 @@ __all__ = [
     "PROJECT_ROLE_CONTRIBUTOR",
     "ProjectMemberRole",
     "ProjectMemberWritableRole",
+    "Category",
+    "Tag",
+    "TechStack",
+    "ProjectCategory",
+    "ProjectTag",
+    "ProjectTechStack",
 ]

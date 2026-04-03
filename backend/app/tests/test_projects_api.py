@@ -39,6 +39,7 @@ def _build_project_response(project_id: UUID) -> ProjectDetailResponse:
         github_url=None,
         video_url=None,
         vote_count=5,
+        team_size=0,
         is_group_project=False,
         is_published=True,
         published_at=now,
@@ -61,6 +62,7 @@ def _build_project_list_response() -> ProjectListResponse:
                 github_url=None,
                 video_url=None,
                 vote_count=10,
+                team_size=0,
                 is_group_project=False,
                 is_published=True,
                 published_at=now,
@@ -106,6 +108,7 @@ def _build_draft_project_response(
         github_url="https://github.com/example/repo",
         video_url=None,
         vote_count=0,
+        team_size=1,
         is_group_project=False,
         is_published=False,
         published_at=None,
@@ -370,6 +373,54 @@ def test_create_project_validation_invalid_url_returns_422():
             response = client.post(
                 "/api/v1/projects",
                 json=_build_create_project_payload(github_url="not-a-url"),
+            )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 422
+    assert mock_create_project.await_count == 0
+
+
+def test_create_project_validation_rejects_timeline_end_without_start():
+    user_id = uuid4()
+
+    app.dependency_overrides[get_db] = _override_get_db
+    app.dependency_overrides[get_current_user] = _override_current_user(user_id)
+    try:
+        with patch(
+            "app.api.v1.projects.ProjectService.create_project",
+            new=AsyncMock(),
+        ) as mock_create_project:
+            response = client.post(
+                "/api/v1/projects",
+                json=_build_create_project_payload(
+                    timeline_start_date=None,
+                    timeline_end_date="2026-03-30",
+                ),
+            )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 422
+    assert mock_create_project.await_count == 0
+
+
+def test_create_project_validation_rejects_timeline_start_after_end():
+    user_id = uuid4()
+
+    app.dependency_overrides[get_db] = _override_get_db
+    app.dependency_overrides[get_current_user] = _override_current_user(user_id)
+    try:
+        with patch(
+            "app.api.v1.projects.ProjectService.create_project",
+            new=AsyncMock(),
+        ) as mock_create_project:
+            response = client.post(
+                "/api/v1/projects",
+                json=_build_create_project_payload(
+                    timeline_start_date="2026-04-01",
+                    timeline_end_date="2026-03-30",
+                ),
             )
     finally:
         app.dependency_overrides.clear()

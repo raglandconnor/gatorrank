@@ -10,7 +10,7 @@ import {
 
 export default function Home() {
   return (
-    <Box minH="100vh" bg="gray.50">
+    <Box minH="100vh" bg="transparent">
       <Navbar />
       <Container maxW="1280px" px="212px" py="50px">
         <VStack gap="96px" align="start">
@@ -18,16 +18,19 @@ export default function Home() {
             title="Top Overall UF Projects"
             projects={topOverallProjects}
             ctaLabel="See all top UF projects"
+            ctaHref="/projects/top/top-overall"
           />
           <ProjectSection
             title="Trending UF Projects This Month"
             projects={trendingThisMonthProjects}
             ctaLabel="See all trending UF projects this month"
+            ctaHref="/projects/top/trending-this-month"
           />
           <ProjectSection
             title="Trending UF Projects Last Month"
             projects={trendingLastMonthProjects}
             ctaLabel="See all trending UF projects last month"
+            ctaHref="/projects/top/trending-last-month"
           />
         </VStack>
       </Container>
