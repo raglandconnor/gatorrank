@@ -1,10 +1,11 @@
+import unicodedata
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 def _contains_control_chars(value: str) -> bool:
-    return any(ord(char) < 32 or ord(char) == 127 for char in value)
+    return any(unicodedata.category(char) == "Cc" for char in value)
 
 
 class TaxonomyTermCreateRequest(BaseModel):

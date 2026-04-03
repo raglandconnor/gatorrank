@@ -227,6 +227,28 @@ async def test_create_category_rejects_control_characters(api_client, db_session
 
 
 @pytest.mark.asyncio
+async def test_create_category_rejects_c1_control_characters(api_client, db_session):
+    admin = await _seed_user(
+        db_session, email="taxonomy-admin-control-c1@ufl.edu", role="admin"
+    )
+
+    async def override_get_db():
+        yield db_session
+
+    app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_current_user] = _override_authed_user(admin)
+    try:
+        response = await api_client.post(
+            "/api/v1/taxonomy/categories",
+            json={"name": "Re\u0085act"},
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 422
+
+
+@pytest.mark.asyncio
 async def test_create_tags_and_tech_stacks_match_admin_and_conflict_rules(
     api_client, db_session
 ):
