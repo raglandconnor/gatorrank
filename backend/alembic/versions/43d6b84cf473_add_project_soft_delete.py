@@ -1,4 +1,4 @@
-"""add
+"""add project soft delete column
 
 Revision ID: 43d6b84cf473
 Revises: d529c433d293
