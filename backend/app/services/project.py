@@ -3,6 +3,7 @@ from typing import Literal
 from uuid import UUID
 
 import sqlalchemy as sa
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import update
 from sqlmodel import select
@@ -15,6 +16,14 @@ from app.models.project_roles import (
     cast_project_member_role,
 )
 from app.models.user import User
+from app.models.taxonomy import (
+    Category,
+    ProjectCategory,
+    ProjectTag,
+    ProjectTechStack,
+    Tag,
+    TechStack,
+)
 from app.schemas.project import (
     ProjectCreateRequest,
     ProjectDetailResponse,
@@ -25,6 +34,8 @@ from app.schemas.project import (
     ProjectMemberUpdateRequest,
     ProjectUpdateRequest,
 )
+from app.schemas.taxonomy import TaxonomyTermResponse
+from app.services.taxonomy import normalize_taxonomy_name
 from app.services.project_members import get_members_for_projects
 from app.utils.pagination import (
     CursorError,
@@ -106,6 +117,13 @@ class ProjectService:
         try:
             self.db.add(project)
             self.db.add(owner_member)
+            await self.db.flush()
+            await self._replace_project_taxonomy_assignments(
+                project_id=project.id,
+                categories=payload.categories,
+                tags=payload.tags,
+                tech_stack=payload.tech_stack,
+            )
             await self.db.commit()
         except Exception:
             await self.db.rollback()
@@ -219,8 +237,25 @@ class ProjectService:
         if "timeline_end_date" in payload.model_fields_set:
             project.timeline_end_date = payload.timeline_end_date
 
+        categories: list[str] | None = None
+        tags: list[str] | None = None
+        tech_stack: list[str] | None = None
+        if "categories" in payload.model_fields_set:
+            categories = payload.categories
+        if "tags" in payload.model_fields_set:
+            tags = payload.tags
+        if "tech_stack" in payload.model_fields_set:
+            tech_stack = payload.tech_stack
+
         try:
             self.db.add(project)
+            await self.db.flush()
+            await self._replace_project_taxonomy_assignments(
+                project_id=project.id,
+                categories=categories,
+                tags=tags,
+                tech_stack=tech_stack,
+            )
             await self.db.commit()
         except Exception:
             await self.db.rollback()
@@ -392,6 +427,10 @@ class ProjectService:
             return None
 
         members = await self.get_project_members(project.id)
+        taxonomy_by_project = await self._get_project_taxonomy_by_project_ids(
+            [project.id]
+        )
+        taxonomy = taxonomy_by_project.get(project.id, self._empty_taxonomy_payload())
         viewer_has_voted = False
         if project.is_published and current_user_id is not None:
             viewer_has_voted = await self._viewer_has_voted(project.id, current_user_id)
@@ -400,6 +439,9 @@ class ProjectService:
             members=members,
             team_size=len(members),
             viewer_has_voted=viewer_has_voted,
+            categories=taxonomy["categories"],
+            tags=taxonomy["tags"],
+            tech_stack=taxonomy["tech_stack"],
         )
 
     async def get_project_members(self, project_id: UUID) -> list[ProjectMemberInfo]:
@@ -665,6 +707,9 @@ class ProjectService:
         members_by_project = await self._get_members_for_projects(
             [p.id for p in projects]
         )
+        taxonomy_by_project = await self._get_project_taxonomy_by_project_ids(
+            [p.id for p in projects]
+        )
         voted_project_ids: set[UUID] = set()
         if current_user_id is not None:
             voted_project_ids = await self._get_voted_project_ids(
@@ -673,7 +718,12 @@ class ProjectService:
             )
 
         items = [
-            self._to_project_list_item(project, members_by_project, voted_project_ids)
+            self._to_project_list_item(
+                project,
+                members_by_project,
+                taxonomy_by_project,
+                voted_project_ids,
+            )
             for project in projects
         ]
 
@@ -682,6 +732,188 @@ class ProjectService:
             next_cursor = self._encode_cursor(projects[-1], sort, top_range=top_range)
 
         return ProjectListResponse(items=items, next_cursor=next_cursor)
+
+    async def _replace_project_taxonomy_assignments(
+        self,
+        *,
+        project_id: UUID,
+        categories: list[str] | None,
+        tags: list[str] | None,
+        tech_stack: list[str] | None,
+    ) -> None:
+        if categories is not None:
+            category_terms = await self._resolve_or_create_terms(Category, categories)
+            await self._replace_join_assignments(
+                join_model=ProjectCategory,
+                term_fk_field="category_id",
+                project_id=project_id,
+                terms=category_terms,
+            )
+        if tags is not None:
+            tag_terms = await self._resolve_or_create_terms(Tag, tags)
+            await self._replace_join_assignments(
+                join_model=ProjectTag,
+                term_fk_field="tag_id",
+                project_id=project_id,
+                terms=tag_terms,
+            )
+        if tech_stack is not None:
+            tech_stack_terms = await self._resolve_or_create_terms(
+                TechStack, tech_stack
+            )
+            await self._replace_join_assignments(
+                join_model=ProjectTechStack,
+                term_fk_field="tech_stack_id",
+                project_id=project_id,
+                terms=tech_stack_terms,
+            )
+
+    async def _resolve_or_create_terms(
+        self,
+        model: type[Category] | type[Tag] | type[TechStack],
+        values: list[str],
+    ) -> list[TaxonomyTermResponse]:
+        terms: list[TaxonomyTermResponse] = []
+        for value in values:
+            normalized_name = normalize_taxonomy_name(value)
+            model_cols = getattr(model, "__table__").c
+            existing_statement = select(model).where(
+                model_cols.normalized_name == normalized_name
+            )
+            existing_result = await self.db.exec(existing_statement)
+            existing = existing_result.first()
+            if existing is not None:
+                terms.append(TaxonomyTermResponse.model_validate(existing))
+                continue
+
+            insert_statement = (
+                pg_insert(getattr(model, "__table__"))
+                .values(name=value.strip(), normalized_name=normalized_name)
+                .on_conflict_do_nothing(index_elements=["normalized_name"])
+                .returning(model_cols.id, model_cols.name)
+            )
+            insert_result = await self.db.exec(insert_statement)
+            inserted = insert_result.first()
+            if inserted is not None:
+                terms.append(TaxonomyTermResponse(id=inserted.id, name=inserted.name))
+                continue
+
+            race_result = await self.db.exec(existing_statement)
+            raced_existing = race_result.first()
+            if raced_existing is None:
+                raise RuntimeError("Taxonomy term could not be resolved")
+            terms.append(TaxonomyTermResponse.model_validate(raced_existing))
+
+        return terms
+
+    async def _replace_join_assignments(
+        self,
+        *,
+        join_model: type[ProjectCategory] | type[ProjectTag] | type[ProjectTechStack],
+        term_fk_field: str,
+        project_id: UUID,
+        terms: list[TaxonomyTermResponse],
+    ) -> None:
+        join_cols = getattr(join_model, "__table__").c
+        delete_statement = sa.delete(join_model).where(
+            join_cols.project_id == project_id
+        )
+        await self.db.exec(delete_statement)
+
+        for position, term in enumerate(terms):
+            if term_fk_field == "category_id":
+                assignment = ProjectCategory(  # pyright: ignore[reportCallIssue]
+                    project_id=project_id,
+                    category_id=term.id,
+                    position=position,
+                )
+            elif term_fk_field == "tag_id":
+                assignment = ProjectTag(  # pyright: ignore[reportCallIssue]
+                    project_id=project_id,
+                    tag_id=term.id,
+                    position=position,
+                )
+            else:
+                assignment = ProjectTechStack(  # pyright: ignore[reportCallIssue]
+                    project_id=project_id,
+                    tech_stack_id=term.id,
+                    position=position,
+                )
+            self.db.add(assignment)
+
+    async def _get_project_taxonomy_by_project_ids(
+        self, project_ids: list[UUID]
+    ) -> dict[UUID, dict[str, list[TaxonomyTermResponse]]]:
+        if not project_ids:
+            return {}
+
+        payload = {
+            project_id: self._empty_taxonomy_payload() for project_id in project_ids
+        }
+
+        project_category_cols = getattr(ProjectCategory, "__table__").c
+        category_cols = getattr(Category, "__table__").c
+        category_statement = (
+            select(ProjectCategory, Category)
+            .join(Category, category_cols.id == project_category_cols.category_id)
+            .where(project_category_cols.project_id.in_(project_ids))
+            .order_by(
+                project_category_cols.project_id.asc(),
+                project_category_cols.position.asc(),
+            )
+        )
+        category_result = await self.db.exec(category_statement)
+        for assignment, category in category_result.all():
+            payload[assignment.project_id]["categories"].append(
+                TaxonomyTermResponse.model_validate(category)
+            )
+
+        project_tag_cols = getattr(ProjectTag, "__table__").c
+        tag_cols = getattr(Tag, "__table__").c
+        tag_statement = (
+            select(ProjectTag, Tag)
+            .join(Tag, tag_cols.id == project_tag_cols.tag_id)
+            .where(project_tag_cols.project_id.in_(project_ids))
+            .order_by(
+                project_tag_cols.project_id.asc(),
+                project_tag_cols.position.asc(),
+            )
+        )
+        tag_result = await self.db.exec(tag_statement)
+        for assignment, tag in tag_result.all():
+            payload[assignment.project_id]["tags"].append(
+                TaxonomyTermResponse.model_validate(tag)
+            )
+
+        project_tech_stack_cols = getattr(ProjectTechStack, "__table__").c
+        tech_stack_cols = getattr(TechStack, "__table__").c
+        tech_stack_statement = (
+            select(ProjectTechStack, TechStack)
+            .join(
+                TechStack,
+                tech_stack_cols.id == project_tech_stack_cols.tech_stack_id,
+            )
+            .where(project_tech_stack_cols.project_id.in_(project_ids))
+            .order_by(
+                project_tech_stack_cols.project_id.asc(),
+                project_tech_stack_cols.position.asc(),
+            )
+        )
+        tech_stack_result = await self.db.exec(tech_stack_statement)
+        for assignment, tech_stack in tech_stack_result.all():
+            payload[assignment.project_id]["tech_stack"].append(
+                TaxonomyTermResponse.model_validate(tech_stack)
+            )
+
+        return payload
+
+    @staticmethod
+    def _empty_taxonomy_payload() -> dict[str, list[TaxonomyTermResponse]]:
+        return {
+            "categories": [],
+            "tags": [],
+            "tech_stack": [],
+        }
 
     async def _assert_owner_access(
         self, *, project: Project, current_user_id: UUID | None
@@ -751,14 +983,21 @@ class ProjectService:
     def _to_project_list_item(
         project: Project,
         members_by_project: dict[UUID, list[ProjectMemberInfo]],
+        taxonomy_by_project: dict[UUID, dict[str, list[TaxonomyTermResponse]]],
         voted_project_ids: set[UUID],
     ) -> ProjectListItemResponse:
         members = members_by_project.get(project.id, [])
+        taxonomy = taxonomy_by_project.get(
+            project.id, ProjectService._empty_taxonomy_payload()
+        )
         return ProjectListItemResponse(
             **project.model_dump(),
             members=members,
             team_size=len(members),
             viewer_has_voted=project.id in voted_project_ids,
+            categories=taxonomy["categories"],
+            tags=taxonomy["tags"],
+            tech_stack=taxonomy["tech_stack"],
         )
 
     async def _viewer_has_voted(self, project_id: UUID, user_id: UUID) -> bool:
