@@ -126,15 +126,17 @@ class VoteService:
         members_by_project = await get_members_for_projects(
             self.db, [project.id for project in projects]
         )
-        items = [
-            ProjectListItemResponse(
-                **project.model_dump(),
-                members=members_by_project.get(project.id, []),
-                team_size=len(members_by_project.get(project.id, [])),
-                viewer_has_voted=True,
+        items: list[ProjectListItemResponse] = []
+        for _, project in page_rows:
+            members = members_by_project.get(project.id, [])
+            items.append(
+                ProjectListItemResponse(
+                    **project.model_dump(),
+                    members=members,
+                    team_size=len(members),
+                    viewer_has_voted=True,
+                )
             )
-            for _, project in page_rows
-        ]
 
         next_cursor: str | None = None
         if has_more and page_rows:
