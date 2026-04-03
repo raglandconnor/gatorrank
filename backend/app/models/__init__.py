@@ -16,6 +16,14 @@ from app.models.project_roles import (
     ProjectMemberRole,
     ProjectMemberWritableRole,
 )
+from app.models.taxonomy import (
+    Category,
+    ProjectCategory,
+    ProjectTag,
+    ProjectTechStack,
+    Tag,
+    TechStack,
+)
 
 __all__ = [
     "User",
@@ -34,4 +42,10 @@ __all__ = [
     "PROJECT_ROLE_CONTRIBUTOR",
     "ProjectMemberRole",
     "ProjectMemberWritableRole",
+    "Category",
+    "Tag",
+    "TechStack",
+    "ProjectCategory",
+    "ProjectTag",
+    "ProjectTechStack",
 ]
