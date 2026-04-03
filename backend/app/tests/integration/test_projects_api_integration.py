@@ -14,6 +14,14 @@ from app.api.deps.auth import get_current_user, get_current_user_optional
 from app.db.database import get_db
 from app.main import app
 from app.models.project import Project, ProjectMember, Vote
+from app.models.taxonomy import (
+    Category,
+    ProjectCategory,
+    ProjectTag,
+    ProjectTechStack,
+    Tag,
+    TechStack,
+)
 from app.models.user import User
 
 
@@ -3278,3 +3286,187 @@ async def test_add_project_vote_concurrent_requests_one_effective_vote(
                 delete(User).where(user_cols.id.in_([owner_id, voter_id]))
             )
             await cleanup_session.commit()
+
+
+@pytest.mark.asyncio
+async def test_create_project_with_taxonomy_create_on_miss_and_canonical_reuse(
+    api_client, db_session
+):
+    creator = await _seed_user(
+        db_session, "creator_taxonomy_create@ufl.edu", "Creator Taxonomy Create"
+    )
+    existing_category = Category(
+        name="React",
+        normalized_name="react",
+        created_at=datetime.now(timezone.utc),
+    )
+    db_session.add(existing_category)
+    await db_session.flush()
+
+    async def override_get_db():
+        yield db_session
+
+    app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_current_user] = _override_authed_user(creator)
+    try:
+        response = await api_client.post(
+            "/api/v1/projects",
+            json=_create_project_payload(
+                categories=[" react ", "AI"],
+                tags=["API"],
+                tech_stack=["FastAPI"],
+            ),
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 201
+    payload = response.json()
+    assert [term["name"] for term in payload["categories"]] == ["React", "AI"]
+    assert [term["name"] for term in payload["tags"]] == ["API"]
+    assert [term["name"] for term in payload["tech_stack"]] == ["FastAPI"]
+
+    project_id = payload["id"]
+    project_category_cols = getattr(ProjectCategory, "__table__").c
+    project_tag_cols = getattr(ProjectTag, "__table__").c
+    project_tech_stack_cols = getattr(ProjectTechStack, "__table__").c
+    category_cols = getattr(Category, "__table__").c
+    tag_cols = getattr(Tag, "__table__").c
+    tech_stack_cols = getattr(TechStack, "__table__").c
+
+    categories_result = await db_session.exec(
+        select(ProjectCategory, Category)
+        .join(Category, category_cols.id == project_category_cols.category_id)
+        .where(project_category_cols.project_id == project_id)
+        .order_by(project_category_cols.position.asc())
+    )
+    category_rows = categories_result.all()
+    assert [category.name for _, category in category_rows] == ["React", "AI"]
+
+    tags_result = await db_session.exec(
+        select(ProjectTag, Tag)
+        .join(Tag, tag_cols.id == project_tag_cols.tag_id)
+        .where(project_tag_cols.project_id == project_id)
+        .order_by(project_tag_cols.position.asc())
+    )
+    tag_rows = tags_result.all()
+    assert [tag.name for _, tag in tag_rows] == ["API"]
+
+    tech_stack_result = await db_session.exec(
+        select(ProjectTechStack, TechStack)
+        .join(
+            TechStack,
+            tech_stack_cols.id == project_tech_stack_cols.tech_stack_id,
+        )
+        .where(project_tech_stack_cols.project_id == project_id)
+        .order_by(project_tech_stack_cols.position.asc())
+    )
+    tech_stack_rows = tech_stack_result.all()
+    assert [tech_stack.name for _, tech_stack in tech_stack_rows] == ["FastAPI"]
+
+
+@pytest.mark.asyncio
+async def test_update_project_taxonomy_omitted_replace_and_clear_semantics(
+    api_client, db_session
+):
+    creator = await _seed_user(
+        db_session, "creator_taxonomy_update@ufl.edu", "Creator Taxonomy Update"
+    )
+
+    async def override_get_db():
+        yield db_session
+
+    app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_current_user] = _override_authed_user(creator)
+    try:
+        create_response = await api_client.post(
+            "/api/v1/projects",
+            json=_create_project_payload(
+                categories=["Web", "AI"],
+                tags=["Backend"],
+                tech_stack=["FastAPI"],
+            ),
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert create_response.status_code == 201
+    project_id = create_response.json()["id"]
+
+    app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_current_user] = _override_authed_user(creator)
+    try:
+        replace_response = await api_client.patch(
+            f"/api/v1/projects/{project_id}",
+            json={"categories": ["ML"], "demo_url": "https://example.com/demo"},
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert replace_response.status_code == 200
+    replaced = replace_response.json()
+    assert [term["name"] for term in replaced["categories"]] == ["ML"]
+    assert [term["name"] for term in replaced["tags"]] == ["Backend"]
+    assert [term["name"] for term in replaced["tech_stack"]] == ["FastAPI"]
+
+    app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_current_user] = _override_authed_user(creator)
+    try:
+        clear_response = await api_client.patch(
+            f"/api/v1/projects/{project_id}",
+            json={"tags": [], "demo_url": "https://example.com/demo2"},
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert clear_response.status_code == 200
+    cleared = clear_response.json()
+    assert [term["name"] for term in cleared["categories"]] == ["ML"]
+    assert cleared["tags"] == []
+    assert [term["name"] for term in cleared["tech_stack"]] == ["FastAPI"]
+
+
+@pytest.mark.asyncio
+async def test_create_project_rejects_duplicate_taxonomy_terms(api_client, db_session):
+    creator = await _seed_user(
+        db_session, "creator_taxonomy_dup@ufl.edu", "Creator Taxonomy Dup"
+    )
+
+    async def override_get_db():
+        yield db_session
+
+    app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_current_user] = _override_authed_user(creator)
+    try:
+        response = await api_client.post(
+            "/api/v1/projects",
+            json=_create_project_payload(categories=["AI", " ai "]),
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_create_project_rejects_taxonomy_limit_exceeded(api_client, db_session):
+    creator = await _seed_user(
+        db_session, "creator_taxonomy_limit@ufl.edu", "Creator Taxonomy Limit"
+    )
+
+    async def override_get_db():
+        yield db_session
+
+    app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_current_user] = _override_authed_user(creator)
+    try:
+        response = await api_client.post(
+            "/api/v1/projects",
+            json=_create_project_payload(
+                categories=["A1", "A2", "A3", "A4"],
+            ),
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 422
