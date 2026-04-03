@@ -63,7 +63,10 @@ async def create_project(
 @router.get(
     "/projects/{project_id}",
     summary="Get project detail",
-    description="Return project details if visible to the current requester",
+    description=(
+        "Return project details if visible to the current requester, including "
+        "computed `team_size` from active project memberships."
+    ),
     response_model=ProjectDetailResponse,
     responses={
         403: {"description": "Authenticated user cannot access this draft project"},
@@ -77,6 +80,7 @@ async def get_project_detail(
     db: AsyncSession = Depends(get_db),
     current_user: User | None = Depends(get_current_user_optional),
 ) -> ProjectDetailResponse:
+    """Return project details, including computed team size, when requester can view."""
     service = ProjectService(db)
     current_user_id = current_user.id if current_user else None
     try:
@@ -418,6 +422,10 @@ async def unpublish_project(
 @router.get(
     "/projects",
     summary="List projects",
+    description=(
+        "Return published project cards with cursor pagination, including computed "
+        "`team_size` from active project memberships."
+    ),
     response_model=ProjectListResponse,
     responses={
         400: {"description": "Invalid cursor"},

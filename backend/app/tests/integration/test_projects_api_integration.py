@@ -2831,6 +2831,113 @@ async def test_viewer_has_voted_project_endpoints_authenticated_vs_anonymous(
 
 
 @pytest.mark.asyncio
+async def test_team_size_in_detail_feed_user_projects_and_my_votes(
+    api_client, db_session
+):
+    owner = await _seed_user(db_session, "owner_team_size@ufl.edu", "Owner Team Size")
+    viewer = await _seed_user(
+        db_session, "viewer_team_size@ufl.edu", "Viewer Team Size"
+    )
+    teammate = await _seed_user(
+        db_session, "teammate_team_size@ufl.edu", "Teammate Team Size"
+    )
+    project = await _seed_project(
+        db_session,
+        created_by_id=owner.id,
+        title="Team Size Project",
+        is_published=True,
+    )
+    await _seed_member(
+        db_session, project_id=project.id, user_id=owner.id, role="owner"
+    )
+    await _seed_member(
+        db_session,
+        project_id=project.id,
+        user_id=teammate.id,
+        role="contributor",
+    )
+    await _seed_vote(db_session, project_id=project.id, user_id=viewer.id)
+    await db_session.flush()
+
+    async def override_get_db():
+        yield db_session
+
+    app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_current_user_optional] = _override_authed_user(viewer)
+    app.dependency_overrides[get_current_user] = _override_authed_user(viewer)
+    try:
+        detail_response = await api_client.get(f"/api/v1/projects/{project.id}")
+        list_response = await api_client.get("/api/v1/projects?sort=new&limit=10")
+        user_projects_response = await api_client.get(
+            f"/api/v1/users/{owner.id}/projects?sort=new&limit=10"
+        )
+        my_votes_response = await api_client.get("/api/v1/users/me/votes?limit=10")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert detail_response.status_code == 200
+    assert list_response.status_code == 200
+    assert user_projects_response.status_code == 200
+    assert my_votes_response.status_code == 200
+
+    assert detail_response.json()["team_size"] == 2
+    list_items = {item["id"]: item for item in list_response.json()["items"]}
+    assert list_items[str(project.id)]["team_size"] == 2
+    user_items = {item["id"]: item for item in user_projects_response.json()["items"]}
+    assert user_items[str(project.id)]["team_size"] == 2
+    vote_items = {item["id"]: item for item in my_votes_response.json()["items"]}
+    assert vote_items[str(project.id)]["team_size"] == 2
+
+
+@pytest.mark.asyncio
+async def test_team_size_updates_after_add_and_remove_member(api_client, db_session):
+    owner = await _seed_user(db_session, "owner_team_flow@ufl.edu", "Owner Team Flow")
+    teammate = await _seed_user(
+        db_session, "teammate_team_flow@ufl.edu", "Teammate Team Flow"
+    )
+    project = await _seed_project(
+        db_session,
+        created_by_id=owner.id,
+        title="Team Flow Project",
+        is_published=True,
+    )
+    await _seed_member(
+        db_session, project_id=project.id, user_id=owner.id, role="owner"
+    )
+    await db_session.flush()
+
+    async def override_get_db():
+        yield db_session
+
+    app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_current_user] = _override_authed_user(owner)
+    app.dependency_overrides[get_current_user_optional] = _override_authed_user(owner)
+    try:
+        before = await api_client.get(f"/api/v1/projects/{project.id}")
+        add_response = await api_client.post(
+            f"/api/v1/projects/{project.id}/members",
+            json={"email": teammate.email, "role": "contributor"},
+        )
+        after_add = await api_client.get(f"/api/v1/projects/{project.id}")
+        remove_response = await api_client.delete(
+            f"/api/v1/projects/{project.id}/members/{teammate.id}"
+        )
+        after_remove = await api_client.get(f"/api/v1/projects/{project.id}")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert before.status_code == 200
+    assert add_response.status_code == 201
+    assert after_add.status_code == 200
+    assert remove_response.status_code == 204
+    assert after_remove.status_code == 200
+
+    assert before.json()["team_size"] == 1
+    assert after_add.json()["team_size"] == 2
+    assert after_remove.json()["team_size"] == 1
+
+
+@pytest.mark.asyncio
 async def test_add_project_vote_concurrent_requests_one_effective_vote(
     api_client, async_engine
 ):
