@@ -32,7 +32,7 @@ def test_alembic_roundtrip_latest_revision() -> None:
             check=True,
         )
         subprocess.run(
-            ["uv", "run", "alembic", "downgrade", "-1"],
+            ["uv", "run", "alembic", "downgrade", "base"],
             cwd=BACKEND_ROOT,
             env=env,
             check=True,
