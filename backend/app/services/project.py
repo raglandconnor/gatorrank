@@ -1,5 +1,7 @@
 from datetime import UTC, date, datetime, time, timedelta
+import re
 from typing import Literal
+import unicodedata
 from uuid import UUID
 
 import sqlalchemy as sa
@@ -76,6 +78,17 @@ class ProjectService:
         result = await self.db.exec(statement)
         return result.first()
 
+    async def get_project_by_slug(
+        self, slug: str, *, include_deleted: bool = False
+    ) -> Project | None:
+        normalized_slug = slug.strip().lower()
+        project_cols = getattr(Project, "__table__").c
+        statement = select(Project).where(project_cols.slug == normalized_slug)
+        if not include_deleted:
+            statement = statement.where(project_cols.deleted_at.is_(None))
+        result = await self.db.exec(statement)
+        return result.first()
+
     async def get_user_by_id(self, user_id: UUID) -> User | None:
         statement = select(User).where(User.id == user_id)
         result = await self.db.exec(statement)
@@ -93,9 +106,11 @@ class ProjectService:
         created_by_id: UUID,
         payload: ProjectCreateRequest,
     ) -> ProjectDetailResponse:
+        slug = await self._generate_unique_slug(payload.title)
         project = Project(  # pyright: ignore[reportCallIssue]
             created_by_id=created_by_id,
             title=payload.title,
+            slug=slug,
             short_description=payload.short_description,
             long_description=payload.long_description,
             demo_url=payload.demo_url,
@@ -446,6 +461,16 @@ class ProjectService:
             tags=taxonomy["tags"],
             tech_stack=taxonomy["tech_stack"],
         )
+
+    async def get_project_detail_by_slug(
+        self,
+        slug: str,
+        current_user_id: UUID | None,
+    ) -> ProjectDetailResponse | None:
+        project = await self.get_project_by_slug(slug)
+        if project is None:
+            return None
+        return await self.get_project_detail(project.id, current_user_id)
 
     async def get_project_members(self, project_id: UUID) -> list[ProjectMemberInfo]:
         project_member_cols = getattr(ProjectMember, "__table__").c
@@ -1157,3 +1182,40 @@ class ProjectService:
             return (self._parse_date(raw_from), self._parse_date(raw_to))
         except CursorError:
             return None
+
+    async def _generate_unique_slug(self, title: str) -> str:
+        base_slug = self._build_slug_base(title)
+        project_cols = getattr(Project, "__table__").c
+        statement = select(project_cols.slug).where(
+            sa.or_(
+                project_cols.slug == base_slug,
+                project_cols.slug.like(f"{base_slug}-%"),
+            )
+        )
+        existing_result = await self.db.exec(statement)
+        existing_slugs = {slug for slug in existing_result.all()}
+        if base_slug not in existing_slugs:
+            return base_slug
+
+        pattern = re.compile(rf"^{re.escape(base_slug)}-(\d+)$")
+        max_suffix = 1
+        for existing_slug in existing_slugs:
+            match = pattern.match(existing_slug)
+            if match is None:
+                continue
+            suffix = int(match.group(1))
+            if suffix > max_suffix:
+                max_suffix = suffix
+        return f"{base_slug}-{max_suffix + 1}"
+
+    @staticmethod
+    def _build_slug_base(title: str) -> str:
+        transliterated = (
+            unicodedata.normalize("NFKD", title)
+            .encode("ascii", "ignore")
+            .decode("ascii")
+        )
+        lowered = transliterated.strip().lower()
+        hyphenated = re.sub(r"[^a-z0-9]+", "-", lowered)
+        collapsed = re.sub(r"-{2,}", "-", hyphenated).strip("-")
+        return collapsed or "project"
