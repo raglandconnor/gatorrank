@@ -15,6 +15,7 @@ from app.services.project import (
     ProjectResourceNotFoundError,
     ProjectService,
 )
+from sqlalchemy.exc import IntegrityError
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 
@@ -173,6 +174,41 @@ async def test_create_project_skips_taxonomy_assignment_when_create_lists_empty(
     assert kwargs["categories"] is None
     assert kwargs["tags"] is None
     assert kwargs["tech_stack"] is None
+
+
+@pytest.mark.asyncio
+async def test_create_project_retries_on_slug_unique_conflict():
+    db = AsyncMock()
+    db.add = Mock()
+    service = ProjectService(cast(AsyncSession, db))
+    creator_id = uuid4()
+    payload = ProjectCreateRequest(
+        title="Retry Slug Conflict",
+        short_description="Description",
+        github_url="https://github.com/example/retry-slug",
+    )
+    detail_stub = type("Detail", (), {"id": uuid4()})()
+
+    slug_conflict = IntegrityError(
+        statement="insert into projects ...",
+        params={},
+        orig=Exception(
+            'duplicate key value violates unique constraint "uq_projects_slug"'
+        ),
+    )
+
+    db.flush = AsyncMock(side_effect=[slug_conflict, None])
+    service.get_project_detail = AsyncMock(return_value=detail_stub)  # type: ignore[method-assign]
+    service._replace_project_taxonomy_assignments = AsyncMock(return_value=None)  # type: ignore[method-assign]
+    service._generate_unique_slug = AsyncMock(
+        side_effect=["retry-slug", "retry-slug-2"]
+    )  # type: ignore[method-assign]
+
+    created = await service.create_project(created_by_id=creator_id, payload=payload)
+
+    assert created is detail_stub
+    assert service._generate_unique_slug.await_count == 2  # type: ignore[attr-defined]
+    assert db.rollback.await_count == 1
 
 
 @pytest.mark.asyncio

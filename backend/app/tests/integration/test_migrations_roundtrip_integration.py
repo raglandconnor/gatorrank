@@ -73,61 +73,64 @@ def test_slug_backfill_is_deterministic_for_collisions() -> None:
 
         engine = create_engine(sync_url)
         creator_id = str(uuid4())
-        with engine.begin() as conn:
-            conn.execute(
-                text(
-                    """
-                    INSERT INTO users (id, email, password_hash, role, created_at, updated_at)
-                    VALUES (:id, :email, :password_hash, :role, NOW(), NOW())
-                    """
-                ),
-                {
-                    "id": creator_id,
-                    "email": "migration-slug-backfill@ufl.edu",
-                    "password_hash": "test-password-hash",
-                    "role": "student",
-                },
-            )
-
-            # Insert out-of-order to ensure backfill is driven by created_at + id sorting.
-            conn.execute(
-                text(
-                    """
-                    INSERT INTO projects (
-                        id, created_by_id, title, short_description, vote_count,
-                        is_group_project, is_published, published_at, created_at, updated_at
-                    )
-                    VALUES
-                        ('00000000-0000-0000-0000-000000000002', :creator_id, 'Cafe', 'B', 0, FALSE, FALSE, NULL, '2026-01-01T00:00:00+00:00', '2026-01-01T00:00:00+00:00'),
-                        ('00000000-0000-0000-0000-000000000001', :creator_id, 'Café', 'A', 0, FALSE, FALSE, NULL, '2026-01-01T00:00:00+00:00', '2026-01-01T00:00:00+00:00'),
-                        ('00000000-0000-0000-0000-000000000003', :creator_id, 'cafe!!!', 'C', 0, FALSE, FALSE, NULL, '2026-01-02T00:00:00+00:00', '2026-01-02T00:00:00+00:00')
-                    """
-                ),
-                {"creator_id": creator_id},
-            )
-
-        subprocess.run(
-            ["uv", "run", "alembic", "upgrade", "head"],
-            cwd=BACKEND_ROOT,
-            env=env,
-            check=True,
-        )
-
-        with engine.begin() as conn:
-            rows = conn.execute(
-                text(
-                    """
-                    SELECT id::text, slug
-                    FROM projects
-                    ORDER BY id ASC
-                    """
+        try:
+            with engine.begin() as conn:
+                conn.execute(
+                    text(
+                        """
+                        INSERT INTO users (id, email, password_hash, role, created_at, updated_at)
+                        VALUES (:id, :email, :password_hash, :role, NOW(), NOW())
+                        """
+                    ),
+                    {
+                        "id": creator_id,
+                        "email": "migration-slug-backfill@ufl.edu",
+                        "password_hash": "test-password-hash",
+                        "role": "student",
+                    },
                 )
-            ).fetchall()
 
-        assert rows == [
-            ("00000000-0000-0000-0000-000000000001", "cafe"),
-            ("00000000-0000-0000-0000-000000000002", "cafe-2"),
-            ("00000000-0000-0000-0000-000000000003", "cafe-3"),
-        ]
+                # Insert out-of-order to ensure backfill is driven by created_at + id sorting.
+                conn.execute(
+                    text(
+                        """
+                        INSERT INTO projects (
+                            id, created_by_id, title, short_description, vote_count,
+                            is_group_project, is_published, published_at, created_at, updated_at
+                        )
+                        VALUES
+                            ('00000000-0000-0000-0000-000000000002', :creator_id, 'Cafe', 'B', 0, FALSE, FALSE, NULL, '2026-01-01T00:00:00+00:00', '2026-01-01T00:00:00+00:00'),
+                            ('00000000-0000-0000-0000-000000000001', :creator_id, 'Café', 'A', 0, FALSE, FALSE, NULL, '2026-01-01T00:00:00+00:00', '2026-01-01T00:00:00+00:00'),
+                            ('00000000-0000-0000-0000-000000000003', :creator_id, 'cafe!!!', 'C', 0, FALSE, FALSE, NULL, '2026-01-02T00:00:00+00:00', '2026-01-02T00:00:00+00:00')
+                        """
+                    ),
+                    {"creator_id": creator_id},
+                )
+
+            subprocess.run(
+                ["uv", "run", "alembic", "upgrade", "head"],
+                cwd=BACKEND_ROOT,
+                env=env,
+                check=True,
+            )
+
+            with engine.begin() as conn:
+                rows = conn.execute(
+                    text(
+                        """
+                        SELECT id::text, slug
+                        FROM projects
+                        ORDER BY id ASC
+                        """
+                    )
+                ).fetchall()
+
+            assert rows == [
+                ("00000000-0000-0000-0000-000000000001", "cafe"),
+                ("00000000-0000-0000-0000-000000000002", "cafe-2"),
+                ("00000000-0000-0000-0000-000000000003", "cafe-3"),
+            ]
+        finally:
+            engine.dispose()
     finally:
         container.stop()
