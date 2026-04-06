@@ -440,6 +440,7 @@ async def test_list_user_projects_by_username(api_client, db_session):
     p1 = Project(
         id=uuid4(),
         title="Published Project",
+        slug="published-project",
         short_description="Desc",
         is_published=True,
         published_at=now,
@@ -448,6 +449,7 @@ async def test_list_user_projects_by_username(api_client, db_session):
     p2 = Project(
         id=uuid4(),
         title="Draft Project",
+        slug="draft-project",
         short_description="Desc",
         is_published=False,
         created_by_id=user_id,
