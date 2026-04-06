@@ -963,6 +963,7 @@ class ProjectService:
     def _member_to_info(member: ProjectMember, user: User) -> ProjectMemberInfo:
         return ProjectMemberInfo(
             user_id=user.id,
+            username=user.username,
             role=ProjectService._coerce_member_role(member.role),
             full_name=user.full_name,
             profile_picture_url=user.profile_picture_url,

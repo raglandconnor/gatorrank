@@ -19,6 +19,7 @@ async def _seed_user(db_session, email: str, name: str) -> User:
     now = datetime.now(timezone.utc)
     user = User(
         email=email,
+        username=f"user_{uuid4().hex[:10]}",
         password_hash="integration-password-hash",
         full_name=name,
         created_at=now,

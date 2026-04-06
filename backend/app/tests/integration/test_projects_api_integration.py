@@ -36,6 +36,7 @@ async def _seed_user(db_session, email: str, name: str) -> User:
     now = datetime.now(timezone.utc)
     user = User(
         email=email,
+        username=f"user_{uuid4().hex[:10]}",
         password_hash="integration-password-hash",
         full_name=name,
         created_at=now,
@@ -2563,6 +2564,7 @@ async def test_add_project_member_concurrent_duplicate_requests_one_success_one_
 ):
     now = datetime.now(timezone.utc)
     unique = uuid4().hex
+    short_unique = unique[:8]
     owner_email = f"owner_race_{unique}@ufl.edu"
     target_email = f"target_race_{unique}@ufl.edu"
     session_factory = async_sessionmaker(
@@ -2574,6 +2576,7 @@ async def test_add_project_member_concurrent_duplicate_requests_one_success_one_
     async with session_factory() as setup_session:
         owner = User(
             email=owner_email,
+            username=f"owner_{short_unique}",
             password_hash="integration-password-hash",
             full_name="Owner Race",
             created_at=now,
@@ -2581,6 +2584,7 @@ async def test_add_project_member_concurrent_duplicate_requests_one_success_one_
         )
         target = User(
             email=target_email,
+            username=f"target_{short_unique}",
             password_hash="integration-password-hash",
             full_name="Target Race",
             created_at=now,
@@ -3202,6 +3206,7 @@ async def test_add_project_vote_concurrent_requests_one_effective_vote(
     async with session_factory() as setup_session:
         owner = User(
             email=owner_email,
+            username=f"owner_{unique}",
             password_hash="integration-password-hash",
             full_name="Owner Vote Concurrent",
             created_at=now,
@@ -3209,6 +3214,7 @@ async def test_add_project_vote_concurrent_requests_one_effective_vote(
         )
         voter = User(
             email=voter_email,
+            username=f"voter_{unique}",
             password_hash="integration-password-hash",
             full_name="Voter Vote Concurrent",
             created_at=now,
@@ -3604,6 +3610,7 @@ async def test_create_project_taxonomy_create_on_miss_concurrency_converges_one_
     async with session_factory() as setup_session:
         owner = User(
             email=owner_email,
+            username=f"owner_{unique}",
             password_hash="integration-password-hash",
             full_name="Owner Taxonomy Create Race",
             created_at=now,
@@ -3715,6 +3722,7 @@ async def test_update_project_taxonomy_create_on_miss_concurrency_converges_one_
     async with session_factory() as setup_session:
         owner = User(
             email=owner_email,
+            username=f"owner_{unique}",
             password_hash="integration-password-hash",
             full_name="Owner Taxonomy Update Race",
             created_at=now,
@@ -3849,6 +3857,7 @@ async def test_concurrent_create_normalization_variants_share_single_taxonomy_te
     async with session_factory() as setup_session:
         owner = User(
             email=owner_email,
+            username=f"owner_{unique}",
             password_hash="integration-password-hash",
             full_name="Owner Taxonomy Norm Race",
             created_at=now,
@@ -3959,6 +3968,7 @@ async def test_concurrent_cross_vocabulary_create_on_miss_is_independent(
     async with session_factory() as setup_session:
         owner = User(
             email=owner_email,
+            username=f"owner_{unique}",
             password_hash="integration-password-hash",
             full_name="Owner Taxonomy Vocab Race",
             created_at=now,
