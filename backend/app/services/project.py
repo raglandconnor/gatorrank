@@ -65,6 +65,8 @@ class ProjectResourceNotFoundError(LookupError):
 
 
 class ProjectService:
+    _MAX_SLUG_RETRY_ATTEMPTS = 8
+
     def __init__(self, db: AsyncSession):
         self.db = db
 
@@ -106,51 +108,59 @@ class ProjectService:
         created_by_id: UUID,
         payload: ProjectCreateRequest,
     ) -> ProjectDetailResponse:
-        slug = await self._generate_unique_slug(payload.title)
-        project = Project(  # pyright: ignore[reportCallIssue]
-            created_by_id=created_by_id,
-            title=payload.title,
-            slug=slug,
-            short_description=payload.short_description,
-            long_description=payload.long_description,
-            demo_url=payload.demo_url,
-            github_url=payload.github_url,
-            video_url=payload.video_url,
-            timeline_start_date=payload.timeline_start_date,
-            timeline_end_date=payload.timeline_end_date,
-            is_group_project=False,
-            vote_count=0,
-            is_published=False,
-            published_at=None,
-        )
-        owner_member = ProjectMember(  # pyright: ignore[reportCallIssue]
-            project_id=project.id,
-            user_id=created_by_id,
-            role=PROJECT_ROLE_OWNER,
-        )
-
-        try:
-            self.db.add(project)
-            self.db.add(owner_member)
-            await self.db.flush()
-            create_categories = payload.categories or None
-            create_tags = payload.tags or None
-            create_tech_stack = payload.tech_stack or None
-            await self._replace_project_taxonomy_assignments(
-                project_id=project.id,
-                categories=create_categories,
-                tags=create_tags,
-                tech_stack=create_tech_stack,
+        for _ in range(self._MAX_SLUG_RETRY_ATTEMPTS):
+            slug = await self._generate_unique_slug(payload.title)
+            project = Project(  # pyright: ignore[reportCallIssue]
+                created_by_id=created_by_id,
+                title=payload.title,
+                slug=slug,
+                short_description=payload.short_description,
+                long_description=payload.long_description,
+                demo_url=payload.demo_url,
+                github_url=payload.github_url,
+                video_url=payload.video_url,
+                timeline_start_date=payload.timeline_start_date,
+                timeline_end_date=payload.timeline_end_date,
+                is_group_project=False,
+                vote_count=0,
+                is_published=False,
+                published_at=None,
             )
-            await self.db.commit()
-        except Exception:
-            await self.db.rollback()
-            raise
+            owner_member = ProjectMember(  # pyright: ignore[reportCallIssue]
+                project_id=project.id,
+                user_id=created_by_id,
+                role=PROJECT_ROLE_OWNER,
+            )
 
-        created = await self.get_project_detail(project.id, created_by_id)
-        if created is None:
-            raise RuntimeError("Created project could not be loaded")
-        return created
+            try:
+                self.db.add(project)
+                self.db.add(owner_member)
+                await self.db.flush()
+                create_categories = payload.categories or None
+                create_tags = payload.tags or None
+                create_tech_stack = payload.tech_stack or None
+                await self._replace_project_taxonomy_assignments(
+                    project_id=project.id,
+                    categories=create_categories,
+                    tags=create_tags,
+                    tech_stack=create_tech_stack,
+                )
+                await self.db.commit()
+            except IntegrityError as exc:
+                await self.db.rollback()
+                if self._is_project_slug_conflict(exc):
+                    continue
+                raise
+            except Exception:
+                await self.db.rollback()
+                raise
+
+            created = await self.get_project_detail(project.id, created_by_id)
+            if created is None:
+                raise RuntimeError("Created project could not be loaded")
+            return created
+
+        raise RuntimeError("Project slug generation failed after retry attempts")
 
     async def soft_delete_project(
         self, project_id: UUID, current_user_id: UUID
@@ -1219,3 +1229,14 @@ class ProjectService:
         hyphenated = re.sub(r"[^a-z0-9]+", "-", lowered)
         collapsed = re.sub(r"-{2,}", "-", hyphenated).strip("-")
         return collapsed or "project"
+
+    @staticmethod
+    def _is_project_slug_conflict(exc: IntegrityError) -> bool:
+        orig = getattr(exc, "orig", None)
+        diag = getattr(orig, "diag", None)
+        constraint_name = getattr(diag, "constraint_name", None)
+        if constraint_name in {"uq_projects_slug", "projects_slug_key"}:
+            return True
+
+        message = str(orig or exc).lower()
+        return "projects" in message and "slug" in message and "unique" in message
