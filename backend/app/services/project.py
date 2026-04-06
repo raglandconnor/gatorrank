@@ -118,11 +118,14 @@ class ProjectService:
             self.db.add(project)
             self.db.add(owner_member)
             await self.db.flush()
+            create_categories = payload.categories or None
+            create_tags = payload.tags or None
+            create_tech_stack = payload.tech_stack or None
             await self._replace_project_taxonomy_assignments(
                 project_id=project.id,
-                categories=payload.categories,
-                tags=payload.tags,
-                tech_stack=payload.tech_stack,
+                categories=create_categories,
+                tags=create_tags,
+                tech_stack=create_tech_stack,
             )
             await self.db.commit()
         except Exception:
@@ -810,7 +813,7 @@ class ProjectService:
         self,
         *,
         join_model: type[ProjectCategory] | type[ProjectTag] | type[ProjectTechStack],
-        term_fk_field: str,
+        term_fk_field: Literal["category_id", "tag_id", "tech_stack_id"],
         project_id: UUID,
         terms: list[TaxonomyTermResponse],
     ) -> None:
@@ -833,12 +836,14 @@ class ProjectService:
                     tag_id=term.id,
                     position=position,
                 )
-            else:
+            elif term_fk_field == "tech_stack_id":
                 assignment = ProjectTechStack(  # pyright: ignore[reportCallIssue]
                     project_id=project_id,
                     tech_stack_id=term.id,
                     position=position,
                 )
+            else:
+                raise ValueError(f"Unsupported taxonomy term_fk_field: {term_fk_field}")
             self.db.add(assignment)
 
     async def _get_project_taxonomy_by_project_ids(
