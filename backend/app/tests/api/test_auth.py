@@ -166,6 +166,7 @@ def test_optional_auth_valid_token_returns_existing_user(jwt_test_context):
     existing_user = User(  # pyright: ignore[reportCallIssue]
         id=user_id,
         email="optional-user@ufl.edu",
+        username="optional-user",
         password_hash="test-password-hash",
         role="student",
     )
@@ -259,6 +260,7 @@ def jwt_test_client(client, monkeypatch):
     existing_user = User(  # pyright: ignore[reportCallIssue]
         id=DEFAULT_AUTH_USER_ID,
         email="jwt-test@ufl.edu",
+        username="jwt-test",
         password_hash="test-password-hash",
         role="student",
     )
@@ -570,6 +572,7 @@ def test_real_jwt_existing_user_does_not_create(jwt_test_context):
     existing_user = User(  # pyright: ignore[reportCallIssue]
         id=user_id,
         email="existing@ufl.edu",
+        username="existing",
         password_hash="test-password-hash",
         role="student",
     )
@@ -620,6 +623,7 @@ def test_real_jwt_email_claim_does_not_mutate_existing_user(jwt_test_context):
     existing_user = User(  # pyright: ignore[reportCallIssue]
         id=user_id,
         email="existing@ufl.edu",
+        username="existing",
         password_hash="test-password-hash",
         role="student",
     )

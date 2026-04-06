@@ -39,6 +39,7 @@ def _build_user(*, email: str = "auth-service@ufl.edu") -> User:
     return User(  # pyright: ignore[reportCallIssue]
         id=uuid4(),
         email=email,
+        username=f"user_{uuid4().hex[:10]}",
         password_hash="placeholder",
         role="student",
         created_at=now,
@@ -248,6 +249,7 @@ async def test_create_user_rolls_back_on_commit_failure():
     with pytest.raises(RuntimeError, match="commit failed"):
         await service.create_user(
             email="rollback-create@ufl.edu",
+            username="rollback_user",
             password="valid-create-password-123",
         )
     db.rollback.assert_awaited_once()

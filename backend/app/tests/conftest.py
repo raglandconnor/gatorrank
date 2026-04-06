@@ -18,6 +18,7 @@ def mock_user():
     return User(  # pyright: ignore[reportCallIssue]
         id=uuid4(),
         email="test@ufl.edu",
+        username="test_user",
         password_hash="test-password-hash",
         role="student",
     )

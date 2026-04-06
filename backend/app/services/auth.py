@@ -17,6 +17,7 @@ from app.core.config import get_settings
 from app.models.auth import RefreshSession
 from app.models.user import User
 from app.models.user_roles import USER_ROLE_STUDENT
+from app.utils.username import normalize_username, validate_username
 
 ACCESS_TOKEN_TTL = timedelta(minutes=30)
 REFRESH_TOKEN_TTL_DEFAULT = timedelta(days=14)
@@ -36,6 +37,10 @@ class InvalidRefreshTokenError(ValueError):
 
 class DuplicateEmailError(ValueError):
     """Raised when attempting to create an already-registered email."""
+
+
+class DuplicateUsernameError(ValueError):
+    """Raised when attempting to create an already-registered username."""
 
 
 @dataclass(frozen=True)
@@ -63,6 +68,11 @@ class AuthService:
             return None
         normalized = full_name.strip()
         return normalized or None
+
+    @staticmethod
+    def _integrity_error_is_username_conflict(exc: IntegrityError) -> bool:
+        raw = str(getattr(exc, "orig", exc)).lower()
+        return "username" in raw
 
     @staticmethod
     def _refresh_ttl(remember_me: bool) -> timedelta:
@@ -122,19 +132,27 @@ class AuthService:
         self,
         *,
         email: str,
+        username: str,
         password: str,
         full_name: str | None = None,
     ) -> User:
         self.validate_password_policy(password)
         normalized_email = self.normalize_email(email)
+        normalized_username = validate_username(username)
         normalized_full_name = self.normalize_full_name(full_name)
 
         existing = await self.get_user_by_email(normalized_email)
         if existing is not None:
             raise DuplicateEmailError("Email already registered")
+        username_existing_result = await self.db.exec(
+            select(User).where(User.username == normalize_username(normalized_username))
+        )
+        if username_existing_result.first() is not None:
+            raise DuplicateUsernameError("Username already taken")
 
         user = User(  # pyright: ignore[reportCallIssue]
             email=normalized_email,
+            username=normalized_username,
             password_hash=self.hash_password(password),
             full_name=normalized_full_name,
             role=USER_ROLE_STUDENT,
@@ -145,6 +163,8 @@ class AuthService:
             await self.db.refresh(user)
         except IntegrityError as exc:
             await self.db.rollback()
+            if self._integrity_error_is_username_conflict(exc):
+                raise DuplicateUsernameError("Username already taken") from exc
             raise DuplicateEmailError("Email already registered") from exc
         except Exception:
             await self.db.rollback()

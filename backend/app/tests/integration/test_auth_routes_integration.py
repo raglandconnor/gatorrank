@@ -31,6 +31,7 @@ async def test_signup_creates_user_and_returns_auth_payload(
     jwt_secret = "integration-auth-routes-secret-at-least-32b"
     monkeypatch.setattr(settings, "DATABASE_JWT_SECRET", jwt_secret)
     email = f"signup-{uuid4().hex[:8]}@ufl.edu"
+    username = f"signup_{uuid4().hex[:8]}"
 
     async def override_get_db():
         yield db_session
@@ -41,6 +42,7 @@ async def test_signup_creates_user_and_returns_auth_payload(
             "/api/v1/auth/signup",
             json={
                 "email": email,
+                "username": username,
                 "password": "valid-signup-password-123",
                 "full_name": "Signup User",
                 "remember_me": False,
@@ -50,6 +52,7 @@ async def test_signup_creates_user_and_returns_auth_payload(
         payload = response.json()
         assert payload["token_type"] == "bearer"
         assert payload["user"]["email"] == email
+        assert payload["user"]["username"] == username
         assert payload["expires_in"] == 1800
         assert payload["refresh_token_expires_in"] == 1209600
 
@@ -78,6 +81,7 @@ async def test_login_returns_auth_payload_for_valid_credentials(
     jwt_secret = "integration-auth-routes-secret-at-least-32b"
     monkeypatch.setattr(settings, "DATABASE_JWT_SECRET", jwt_secret)
     email = f"login-{uuid4().hex[:8]}@ufl.edu"
+    username = f"login_{uuid4().hex[:8]}"
 
     async def override_get_db():
         yield db_session
@@ -88,6 +92,7 @@ async def test_login_returns_auth_payload_for_valid_credentials(
             "/api/v1/auth/signup",
             json={
                 "email": email,
+                "username": username,
                 "password": "valid-login-password-123",
                 "remember_me": True,
             },
@@ -105,6 +110,7 @@ async def test_login_returns_auth_payload_for_valid_credentials(
         assert response.status_code == 200
         payload = response.json()
         assert payload["user"]["email"] == email
+        assert payload["user"]["username"] == username
         assert payload["refresh_token_expires_in"] == 15552000
     finally:
         app.dependency_overrides.clear()
@@ -151,6 +157,7 @@ async def test_signup_password_length_boundaries(
     jwt_secret = "integration-auth-routes-secret-at-least-32b"
     monkeypatch.setattr(settings, "DATABASE_JWT_SECRET", jwt_secret)
     email = f"pwd-boundary-{uuid4().hex[:8]}@ufl.edu"
+    username = f"pwd_{uuid4().hex[:8]}"
 
     async def override_get_db():
         yield db_session
@@ -161,6 +168,7 @@ async def test_signup_password_length_boundaries(
             "/api/v1/auth/signup",
             json={
                 "email": email,
+                "username": username,
                 "password": password,
                 "remember_me": False,
             },
@@ -177,6 +185,7 @@ async def test_signup_whitespace_only_password_rejected(
     jwt_secret = "integration-auth-routes-secret-at-least-32b"
     monkeypatch.setattr(settings, "DATABASE_JWT_SECRET", jwt_secret)
     email = f"pwd-whitespace-{uuid4().hex[:8]}@ufl.edu"
+    username = f"pwdws_{uuid4().hex[:8]}"
 
     async def override_get_db():
         yield db_session
@@ -187,6 +196,7 @@ async def test_signup_whitespace_only_password_rejected(
             "/api/v1/auth/signup",
             json={
                 "email": email,
+                "username": username,
                 "password": "            ",
                 "remember_me": False,
             },
@@ -204,6 +214,7 @@ async def test_signup_email_is_normalized_before_persist(
     monkeypatch.setattr(settings, "DATABASE_JWT_SECRET", jwt_secret)
     raw_email = f"  MiXeD-Case-{uuid4().hex[:8]}@UFL.EDU  "
     expected_email = raw_email.strip().lower()
+    username = f"norm_{uuid4().hex[:8]}"
 
     async def override_get_db():
         yield db_session
@@ -214,6 +225,7 @@ async def test_signup_email_is_normalized_before_persist(
             "/api/v1/auth/signup",
             json={
                 "email": raw_email,
+                "username": username,
                 "password": "valid-normalize-password-123",
                 "remember_me": False,
             },
@@ -238,6 +250,7 @@ async def test_login_email_is_normalized_for_lookup(
     jwt_secret = "integration-auth-routes-secret-at-least-32b"
     monkeypatch.setattr(settings, "DATABASE_JWT_SECRET", jwt_secret)
     normalized_email = f"login-norm-{uuid4().hex[:8]}@ufl.edu"
+    username = f"lognorm_{uuid4().hex[:8]}"
 
     async def override_get_db():
         yield db_session
@@ -248,6 +261,7 @@ async def test_login_email_is_normalized_for_lookup(
             "/api/v1/auth/signup",
             json={
                 "email": normalized_email,
+                "username": username,
                 "password": "valid-login-normalized-password-123",
                 "remember_me": False,
             },
@@ -276,6 +290,7 @@ async def test_login_invalid_credentials_are_generic_for_wrong_email_and_passwor
     monkeypatch.setattr(settings, "DATABASE_JWT_SECRET", jwt_secret)
     email = f"invalid-generic-{uuid4().hex[:8]}@ufl.edu"
     password = "valid-generic-password-123"
+    username = f"inval_{uuid4().hex[:8]}"
 
     async def override_get_db():
         yield db_session
@@ -286,6 +301,7 @@ async def test_login_invalid_credentials_are_generic_for_wrong_email_and_passwor
             "/api/v1/auth/signup",
             json={
                 "email": email,
+                "username": username,
                 "password": password,
                 "remember_me": False,
             },
@@ -314,6 +330,7 @@ async def test_auth_me_uses_issued_access_token(api_client, db_session, monkeypa
     jwt_secret = "integration-auth-routes-secret-at-least-32b"
     monkeypatch.setattr(settings, "DATABASE_JWT_SECRET", jwt_secret)
     email = f"me-{uuid4().hex[:8]}@ufl.edu"
+    username = f"me_{uuid4().hex[:8]}"
 
     async def override_get_db():
         yield db_session
@@ -324,6 +341,7 @@ async def test_auth_me_uses_issued_access_token(api_client, db_session, monkeypa
             "/api/v1/auth/signup",
             json={
                 "email": email,
+                "username": username,
                 "password": "valid-me-password-123",
             },
         )
@@ -337,6 +355,7 @@ async def test_auth_me_uses_issued_access_token(api_client, db_session, monkeypa
         assert response.status_code == 200
         payload = response.json()
         assert payload["email"] == email
+        assert payload["username"] == username
         assert "created_at" in payload
         assert "updated_at" in payload
     finally:
@@ -350,6 +369,7 @@ async def test_auth_me_excludes_sensitive_user_fields(
     jwt_secret = "integration-auth-routes-secret-at-least-32b"
     monkeypatch.setattr(settings, "DATABASE_JWT_SECRET", jwt_secret)
     email = f"me-safe-{uuid4().hex[:8]}@ufl.edu"
+    username = f"mesafe_{uuid4().hex[:8]}"
 
     async def override_get_db():
         yield db_session
@@ -360,6 +380,7 @@ async def test_auth_me_excludes_sensitive_user_fields(
             "/api/v1/auth/signup",
             json={
                 "email": email,
+                "username": username,
                 "password": "valid-me-safe-password-123",
                 "remember_me": False,
             },
@@ -394,6 +415,7 @@ async def test_refresh_rotates_and_logout_is_idempotent(
     jwt_secret = "integration-auth-routes-secret-at-least-32b"
     monkeypatch.setattr(settings, "DATABASE_JWT_SECRET", jwt_secret)
     email = f"refresh-{uuid4().hex[:8]}@ufl.edu"
+    username = f"refresh_{uuid4().hex[:8]}"
 
     async def override_get_db():
         yield db_session
@@ -404,6 +426,7 @@ async def test_refresh_rotates_and_logout_is_idempotent(
             "/api/v1/auth/signup",
             json={
                 "email": email,
+                "username": username,
                 "password": "valid-refresh-password-123",
                 "remember_me": False,
             },
@@ -469,8 +492,10 @@ async def test_signup_duplicate_email_race_returns_one_201_and_one_409(
     jwt_secret = "integration-auth-routes-secret-at-least-32b"
     monkeypatch.setattr(settings, "DATABASE_JWT_SECRET", jwt_secret)
     email = f"race-signup-{uuid4().hex[:8]}@ufl.edu"
+    username = f"race_{uuid4().hex[:8]}"
     payload = {
         "email": email,
+        "username": username,
         "password": "valid-race-password-123",
         "full_name": "Race Signup",
         "remember_me": False,
@@ -497,6 +522,7 @@ async def test_refresh_rejects_revoked_token(api_client, db_session, monkeypatch
     jwt_secret = "integration-auth-routes-secret-at-least-32b"
     monkeypatch.setattr(settings, "DATABASE_JWT_SECRET", jwt_secret)
     email = f"revoked-refresh-{uuid4().hex[:8]}@ufl.edu"
+    username = f"revoke_{uuid4().hex[:8]}"
 
     async def override_get_db():
         yield db_session
@@ -507,6 +533,7 @@ async def test_refresh_rejects_revoked_token(api_client, db_session, monkeypatch
             "/api/v1/auth/signup",
             json={
                 "email": email,
+                "username": username,
                 "password": "valid-revoke-password-123",
                 "remember_me": False,
             },
@@ -537,6 +564,7 @@ async def test_concurrent_refresh_with_same_token_only_one_succeeds(
     jwt_secret = "integration-auth-routes-secret-at-least-32b"
     monkeypatch.setattr(settings, "DATABASE_JWT_SECRET", jwt_secret)
     email = f"concurrent-refresh-{uuid4().hex[:8]}@ufl.edu"
+    username = f"conref_{uuid4().hex[:8]}"
 
     async def override_get_db():
         async with AsyncSession(async_engine, expire_on_commit=False) as session:
@@ -548,6 +576,7 @@ async def test_concurrent_refresh_with_same_token_only_one_succeeds(
             "/api/v1/auth/signup",
             json={
                 "email": email,
+                "username": username,
                 "password": "valid-concurrency-password-123",
                 "remember_me": False,
             },
@@ -589,8 +618,10 @@ async def test_signup_duplicate_email_sequential_returns_409(
     jwt_secret = "integration-auth-routes-secret-at-least-32b"
     monkeypatch.setattr(settings, "DATABASE_JWT_SECRET", jwt_secret)
     email = f"dup-seq-{uuid4().hex[:8]}@ufl.edu"
+    username = f"dupseq_{uuid4().hex[:8]}"
     payload = {
         "email": email,
+        "username": username,
         "password": "valid-duplicate-password-123",
         "remember_me": False,
     }
@@ -618,6 +649,7 @@ async def test_signup_duplicate_email_case_variant_sequential_returns_409(
     monkeypatch.setattr(settings, "DATABASE_JWT_SECRET", jwt_secret)
     first_email = f"Case-Seq-{uuid4().hex[:8]}@UFL.EDU"
     second_email = f"  {first_email.lower()}  "
+    username = f"caseseq_{uuid4().hex[:8]}"
 
     async def override_get_db():
         yield db_session
@@ -628,6 +660,7 @@ async def test_signup_duplicate_email_case_variant_sequential_returns_409(
             "/api/v1/auth/signup",
             json={
                 "email": first_email,
+                "username": username,
                 "password": "valid-duplicate-case-password-123",
                 "remember_me": False,
             },
@@ -638,6 +671,7 @@ async def test_signup_duplicate_email_case_variant_sequential_returns_409(
             "/api/v1/auth/signup",
             json={
                 "email": second_email,
+                "username": username,
                 "password": "valid-duplicate-case-password-123",
                 "remember_me": False,
             },
@@ -655,13 +689,16 @@ async def test_signup_duplicate_email_case_variant_race_returns_one_201_and_one_
     jwt_secret = "integration-auth-routes-secret-at-least-32b"
     monkeypatch.setattr(settings, "DATABASE_JWT_SECRET", jwt_secret)
     canonical_email = f"race-case-{uuid4().hex[:8]}@ufl.edu"
+    username = f"racecase_{uuid4().hex[:8]}"
     first_payload = {
         "email": canonical_email.upper(),
+        "username": username,
         "password": "valid-race-case-password-123",
         "remember_me": False,
     }
     second_payload = {
         "email": f"  {canonical_email}  ",
+        "username": username,
         "password": "valid-race-case-password-123",
         "remember_me": False,
     }
@@ -689,6 +726,7 @@ async def test_logout_after_token_already_revoked_remains_204(
     jwt_secret = "integration-auth-routes-secret-at-least-32b"
     monkeypatch.setattr(settings, "DATABASE_JWT_SECRET", jwt_secret)
     email = f"logout-revoked-{uuid4().hex[:8]}@ufl.edu"
+    username = f"logout_{uuid4().hex[:8]}"
 
     async def override_get_db():
         yield db_session
@@ -699,6 +737,7 @@ async def test_logout_after_token_already_revoked_remains_204(
             "/api/v1/auth/signup",
             json={
                 "email": email,
+                "username": username,
                 "password": "valid-logout-revoked-password-123",
                 "remember_me": False,
             },
@@ -731,6 +770,7 @@ async def test_login_password_is_not_trimmed_or_normalized(
     monkeypatch.setattr(settings, "DATABASE_JWT_SECRET", jwt_secret)
     email = f"password-raw-{uuid4().hex[:8]}@ufl.edu"
     raw_password = "  pass phrase with spaces  "
+    username = f"rawpwd_{uuid4().hex[:8]}"
 
     async def override_get_db():
         yield db_session
@@ -741,6 +781,7 @@ async def test_login_password_is_not_trimmed_or_normalized(
             "/api/v1/auth/signup",
             json={
                 "email": email,
+                "username": username,
                 "password": raw_password,
                 "remember_me": False,
             },
