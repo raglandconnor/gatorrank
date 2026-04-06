@@ -12,6 +12,11 @@ class User(SQLModel, table=True):
 
     id: UUID = Field(default_factory=uuid4, primary_key=True, nullable=False)
     email: str = Field(unique=True, nullable=False, max_length=320)
+    username: str = Field(
+        sa_column=sa.Column(
+            sa.String(length=32), nullable=False, unique=True, index=True
+        )
+    )
     password_hash: str = Field(
         sa_column=sa.Column(sa.String(length=255), nullable=False)
     )

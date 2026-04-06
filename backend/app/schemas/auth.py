@@ -4,6 +4,11 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
 from app.models.user_roles import UserRole
+from app.utils.username import (
+    USERNAME_MAX_LENGTH,
+    USERNAME_MIN_LENGTH,
+    validate_username,
+)
 
 
 class AuthUserResponse(BaseModel):
@@ -13,6 +18,12 @@ class AuthUserResponse(BaseModel):
 
     id: UUID
     email: EmailStr
+    username: str = Field(
+        description=(
+            "Canonical lowercase username used for profile URLs. "
+            "Contains only `a-z`, `0-9`, `_`, `-`."
+        )
+    )
     role: UserRole = Field(
         description="System role for authorization (`student`, `faculty`, or `admin`)."
     )
@@ -35,6 +46,14 @@ class AuthSignupRequest(BaseModel):
     """Request body for first-party user signup."""
 
     email: EmailStr
+    username: str = Field(
+        min_length=USERNAME_MIN_LENGTH,
+        max_length=USERNAME_MAX_LENGTH,
+        description=(
+            "Required username. Normalized to lowercase and must contain only "
+            "`a-z`, `0-9`, `_`, `-`."
+        ),
+    )
     password: str
     full_name: str | None = Field(default=None, max_length=255)
     remember_me: bool = False
@@ -55,6 +74,13 @@ class AuthSignupRequest(BaseModel):
             raise ValueError("Password must be at least 12 characters")
         if len(value) > 128:
             raise ValueError("Password must be at most 128 characters")
+        return value
+
+    @field_validator("username", mode="before")
+    @classmethod
+    def normalize_and_validate_username(cls, value: object) -> object:
+        if isinstance(value, str):
+            return validate_username(value)
         return value
 
     @field_validator("full_name", mode="before")
@@ -102,6 +128,12 @@ class AuthMeResponse(BaseModel):
 
     id: UUID
     email: EmailStr
+    username: str = Field(
+        description=(
+            "Canonical lowercase username used for profile URLs. "
+            "Contains only `a-z`, `0-9`, `_`, `-`."
+        )
+    )
     role: UserRole = Field(
         description="System role for authorization (`student`, `faculty`, or `admin`)."
     )

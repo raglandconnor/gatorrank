@@ -10,7 +10,7 @@ Command:
 
 ```bash
 cd backend
-uv run python -m app.scripts.seed_mock_data
+PYTHONPATH=. uv run python app/scripts/seed_mock_data.py
 ```
 
 What it does by default:
@@ -30,7 +30,7 @@ Optional overrides:
 
 ```bash
 cd backend
-uv run python -m app.scripts.seed_mock_data \
+PYTHONPATH=. uv run python app/scripts/seed_mock_data.py \
   --total-users 24 \
   --total-projects 36 \
   --published-projects 30 \
@@ -48,7 +48,7 @@ Command:
 
 ```bash
 cd backend
-uv run python -m app.scripts.cleanup_mock_data --yes
+PYTHONPATH=. uv run python app/scripts/cleanup_mock_data.py --yes
 ```
 
 Safety rules:
@@ -60,7 +60,7 @@ Example for remote dev DB:
 
 ```bash
 cd backend
-uv run python -m app.scripts.cleanup_mock_data --yes --allow-non-local
+PYTHONPATH=. uv run python app/scripts/cleanup_mock_data.py --yes --allow-non-local
 ```
 
 ### Recommended dev workflow
@@ -74,12 +74,12 @@ cd backend && uv run alembic upgrade head
 2. Seed mock data:
 
 ```bash
-cd backend && uv run python -m app.scripts.seed_mock_data
+cd backend && PYTHONPATH=. uv run python app/scripts/seed_mock_data.py
 ```
 
 3. If you need a clean reseed, cleanup then seed:
 
 ```bash
-cd backend && uv run python -m app.scripts.cleanup_mock_data --yes
-cd backend && uv run python -m app.scripts.seed_mock_data
+cd backend && PYTHONPATH=. uv run python app/scripts/cleanup_mock_data.py --yes
+cd backend && PYTHONPATH=. uv run python app/scripts/seed_mock_data.py
 ```

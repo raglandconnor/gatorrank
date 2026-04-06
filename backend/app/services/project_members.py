@@ -42,6 +42,7 @@ async def get_members_for_projects(
         members_by_project[member.project_id].append(
             ProjectMemberInfo(
                 user_id=user.id,
+                username=user.username,
                 role=_coerce_member_role(member.role),
                 full_name=user.full_name,
                 profile_picture_url=user.profile_picture_url,

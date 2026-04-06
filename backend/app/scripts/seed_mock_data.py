@@ -1,7 +1,7 @@
 """Seed frontend-realistic mock data directly in the database (dev-only).
 
 Usage:
-  uv run python app/scripts/seed_mock_data.py
+  PYTHONPATH=. uv run python app/scripts/seed_mock_data.py
 """
 
 from __future__ import annotations
@@ -86,6 +86,10 @@ def parse_args() -> SeedConfig:
 
 def email_for_index(index: int, domain: str) -> str:
     return f"mock_user_{index:03d}@{domain}".lower()
+
+
+def username_for_index(index: int) -> str:
+    return f"mock_user_{index:03d}"
 
 
 def _lorem_sentence(rng: random.Random, min_words: int = 8, max_words: int = 18) -> str:
@@ -335,6 +339,7 @@ async def get_or_create_mock_user(
     )
     existing = result.first()
     if existing is not None:
+        existing.username = username_for_index(index)
         existing.full_name = full_name_for_index(index, rng)
         existing.profile_picture_url = f"https://avatar.gatorrank.mock/user-{index}.png"
         session.add(existing)
@@ -342,6 +347,7 @@ async def get_or_create_mock_user(
 
     user = User(  # pyright: ignore[reportCallIssue]
         email=email,
+        username=username_for_index(index),
         password_hash=password_hash,
         role="student",
         full_name=full_name_for_index(index, rng),
