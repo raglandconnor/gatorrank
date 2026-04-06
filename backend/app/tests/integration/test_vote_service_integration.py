@@ -42,6 +42,7 @@ async def _seed_project(
     project = Project(
         created_by_id=created_by_id,
         title=title,
+        slug=title.lower().replace(" ", "-"),
         short_description=f"{title} description",
         vote_count=vote_count,
         is_group_project=False,

@@ -1,6 +1,7 @@
 import asyncio
 from datetime import date, datetime, timedelta, timezone
 from time import perf_counter
+from urllib.parse import quote
 from uuid import uuid4
 
 import pytest
@@ -57,6 +58,7 @@ async def _seed_project(
     project = Project(
         created_by_id=created_by_id,
         title=title,
+        slug=title.lower().replace(" ", "-"),
         short_description=f"{title} description",
         vote_count=0,
         is_group_project=False,
@@ -147,7 +149,127 @@ async def test_get_project_detail_published_visible_anonymous(api_client, db_ses
     assert response.status_code == 200
     payload = response.json()
     assert payload["id"] == str(project.id)
+    assert payload["slug"] == project.slug
     assert payload["is_published"] is True
+
+
+@pytest.mark.asyncio
+async def test_get_project_detail_by_slug_published_visible_anonymous(
+    api_client, db_session
+):
+    owner = await _seed_user(db_session, "owner_api_slug_pub@ufl.edu", "Owner API Slug")
+    project = await _seed_project(
+        db_session,
+        created_by_id=owner.id,
+        title="Published Slug API Project",
+        is_published=True,
+    )
+
+    async def override_get_db():
+        yield db_session
+
+    app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_current_user_optional] = lambda: None
+    try:
+        response = await api_client.get(f"/api/v1/projects/slug/{project.slug}")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["id"] == str(project.id)
+    assert payload["slug"] == project.slug
+
+
+@pytest.mark.asyncio
+async def test_get_project_detail_by_slug_unpublished_hidden_anonymous(
+    api_client, db_session
+):
+    owner = await _seed_user(
+        db_session, "owner_api_slug_hidden@ufl.edu", "Owner API Slug Hidden"
+    )
+    project = await _seed_project(
+        db_session,
+        created_by_id=owner.id,
+        title="Hidden Slug API Project",
+        is_published=False,
+    )
+
+    async def override_get_db():
+        yield db_session
+
+    app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_current_user_optional] = lambda: None
+    try:
+        response = await api_client.get(f"/api/v1/projects/slug/{project.slug}")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Project not found"
+
+
+@pytest.mark.asyncio
+async def test_get_project_detail_by_slug_normalizes_case_and_whitespace(
+    api_client, db_session
+):
+    owner = await _seed_user(
+        db_session, "owner_api_slug_normalize@ufl.edu", "Owner API Slug Normalize"
+    )
+    project = await _seed_project(
+        db_session,
+        created_by_id=owner.id,
+        title="Normalize Slug API Project",
+        is_published=True,
+    )
+    slug_with_whitespace_and_case = quote(f"  {project.slug.upper()}  ", safe="")
+
+    async def override_get_db():
+        yield db_session
+
+    app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_current_user_optional] = lambda: None
+    try:
+        response = await api_client.get(
+            f"/api/v1/projects/slug/{slug_with_whitespace_and_case}"
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["id"] == str(project.id)
+    assert payload["slug"] == project.slug
+
+
+@pytest.mark.asyncio
+async def test_get_project_detail_by_slug_soft_deleted_returns_404(
+    api_client, db_session
+):
+    owner = await _seed_user(
+        db_session, "owner_api_slug_deleted@ufl.edu", "Owner API Slug Deleted"
+    )
+    project = await _seed_project(
+        db_session,
+        created_by_id=owner.id,
+        title="Deleted Slug API Project",
+        is_published=True,
+    )
+    project.deleted_at = datetime.now(timezone.utc)
+    await db_session.commit()
+
+    async def override_get_db():
+        yield db_session
+
+    app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_current_user_optional] = lambda: None
+    try:
+        response = await api_client.get(f"/api/v1/projects/slug/{project.slug}")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Project not found"
 
 
 @pytest.mark.asyncio
@@ -173,6 +295,7 @@ async def test_create_project_authenticated_returns_201_and_persists_draft(
     payload = response.json()
     assert payload["created_by_id"] == str(creator.id)
     assert payload["title"] == "API Create Project"
+    assert payload["slug"] == "api-create-project"
     assert payload["short_description"] == "API create project description"
     assert payload["github_url"] == "https://github.com/example/api-create"
     assert payload["is_published"] is False
@@ -546,6 +669,47 @@ async def test_patch_project_owner_updates_non_url_fields_with_existing_url(
     assert payload["title"] == "Retitled Project"
     assert payload["short_description"] == "Revised summary"
     assert payload["github_url"] == "https://github.com/example/existing-url"
+
+
+@pytest.mark.asyncio
+async def test_patch_project_title_does_not_mutate_slug(api_client, db_session):
+    owner = await _seed_user(
+        db_session, "owner_patch_slug_immutable@ufl.edu", "Owner Patch Immutable"
+    )
+    project = await _seed_project(
+        db_session,
+        created_by_id=owner.id,
+        title="Immutable Slug Source Title",
+        is_published=False,
+    )
+    project.github_url = "https://github.com/example/immutable-slug"
+    await db_session.flush()
+    original_slug = project.slug
+
+    async def override_get_db():
+        yield db_session
+
+    app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_current_user] = _override_authed_user(owner)
+    try:
+        response = await api_client.patch(
+            f"/api/v1/projects/{project.id}",
+            json={"title": "Completely Changed Title"},
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["title"] == "Completely Changed Title"
+    assert payload["slug"] == original_slug
+
+    project_result = await db_session.exec(
+        select(Project).where(Project.id == project.id)
+    )
+    stored_project = project_result.one()
+    assert stored_project.title == "Completely Changed Title"
+    assert stored_project.slug == original_slug
 
 
 @pytest.mark.asyncio
@@ -2593,6 +2757,7 @@ async def test_add_project_member_concurrent_duplicate_requests_one_success_one_
         project = Project(
             created_by_id=owner.id,
             title="Concurrent Member Add",
+            slug="concurrent-member-add",
             short_description="Concurrent add coverage",
             vote_count=0,
             is_group_project=False,
@@ -3221,6 +3386,7 @@ async def test_add_project_vote_concurrent_requests_one_effective_vote(
         project = Project(
             created_by_id=owner.id,
             title="Concurrent Vote API",
+            slug="concurrent-vote-api",
             short_description="Concurrent vote endpoint coverage",
             vote_count=0,
             is_group_project=False,
@@ -3725,6 +3891,7 @@ async def test_update_project_taxonomy_create_on_miss_concurrency_converges_one_
         first_project = Project(
             created_by_id=owner.id,
             title=f"Update Race A {unique}",
+            slug=f"update-race-a-{unique}",
             short_description="Update race A",
             vote_count=0,
             is_group_project=False,
@@ -3737,6 +3904,7 @@ async def test_update_project_taxonomy_create_on_miss_concurrency_converges_one_
         second_project = Project(
             created_by_id=owner.id,
             title=f"Update Race B {unique}",
+            slug=f"update-race-b-{unique}",
             short_description="Update race B",
             vote_count=0,
             is_group_project=False,
