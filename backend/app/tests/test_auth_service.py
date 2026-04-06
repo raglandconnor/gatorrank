@@ -5,6 +5,7 @@ from uuid import uuid4
 
 import jwt
 import pytest
+from sqlalchemy.exc import IntegrityError
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.core.config import get_settings
@@ -13,6 +14,8 @@ from app.models.user import User
 from app.services.auth import (
     ACCESS_TOKEN_TTL,
     AuthService,
+    DuplicateEmailError,
+    DuplicateUsernameError,
     InvalidCredentialsError,
     InvalidRefreshTokenError,
     REFRESH_TOKEN_TTL_DEFAULT,
@@ -32,6 +35,31 @@ class FakeIssueSession:
 
     def add(self, obj: object) -> None:
         self.added.append(obj)
+
+
+class _FakeDiag:
+    def __init__(self, constraint_name: str | None = None):
+        self.constraint_name = constraint_name
+
+
+class _FakeDBError(Exception):
+    def __init__(
+        self,
+        *,
+        message: str,
+        pgcode: str | None = None,
+        constraint_name: str | None = None,
+    ):
+        self._message = message
+        self.pgcode = pgcode
+        self.diag = _FakeDiag(constraint_name)
+
+    def __str__(self) -> str:
+        return self._message
+
+
+def _build_integrity_error(orig: Exception) -> IntegrityError:
+    return IntegrityError("INSERT INTO users ...", {"email": "x"}, orig)
 
 
 def _build_user(*, email: str = "auth-service@ufl.edu") -> User:
@@ -179,6 +207,38 @@ def test_derive_original_refresh_ttl_defaults_when_non_positive_delta():
     )
 
 
+def test_classify_unique_integrity_error_username_by_constraint_name():
+    exc = _build_integrity_error(
+        _FakeDBError(
+            message='duplicate key value violates unique constraint "ix_users_username"',
+            pgcode="23505",
+            constraint_name="ix_users_username",
+        )
+    )
+    assert AuthService._classify_unique_integrity_error(exc) == "username"
+
+
+def test_classify_unique_integrity_error_email_by_constraint_name():
+    exc = _build_integrity_error(
+        _FakeDBError(
+            message='duplicate key value violates unique constraint "users_email_key"',
+            pgcode="23505",
+            constraint_name="users_email_key",
+        )
+    )
+    assert AuthService._classify_unique_integrity_error(exc) == "email"
+
+
+def test_classify_unique_integrity_error_ignores_non_unique_username_mention():
+    exc = _build_integrity_error(
+        _FakeDBError(
+            message='null value in column "username" violates not-null constraint',
+            pgcode="23502",
+        )
+    )
+    assert AuthService._classify_unique_integrity_error(exc) == "other"
+
+
 @pytest.mark.asyncio
 async def test_refresh_token_pair_rejects_unknown_token():
     class SessionWithNoRefreshRows:
@@ -250,6 +310,107 @@ async def test_create_user_rolls_back_on_commit_failure():
         await service.create_user(
             email="rollback-create@ufl.edu",
             username="rollback_user",
+            password="valid-create-password-123",
+        )
+    db.rollback.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_create_user_maps_username_unique_integrity_error():
+    class SessionCommitFailsWithIntegrity:
+        def __init__(self, error: IntegrityError):
+            self.rollback = AsyncMock()
+            self.commit = AsyncMock(side_effect=error)
+            self.refresh = AsyncMock()
+
+        async def exec(self, _statement):
+            return type("Result", (), {"first": lambda self: None})()
+
+        def add(self, _obj):
+            return None
+
+    integrity_error = _build_integrity_error(
+        _FakeDBError(
+            message='duplicate key value violates unique constraint "ix_users_username"',
+            pgcode="23505",
+            constraint_name="ix_users_username",
+        )
+    )
+    db = SessionCommitFailsWithIntegrity(integrity_error)
+    service = AuthService(cast(AsyncSession, db))
+    service.get_user_by_email = AsyncMock(return_value=None)  # type: ignore[method-assign]
+
+    with pytest.raises(DuplicateUsernameError, match="Username already taken"):
+        await service.create_user(
+            email="username-dup@ufl.edu",
+            username="username_dup",
+            password="valid-create-password-123",
+        )
+    db.rollback.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_create_user_maps_email_unique_integrity_error():
+    class SessionCommitFailsWithIntegrity:
+        def __init__(self, error: IntegrityError):
+            self.rollback = AsyncMock()
+            self.commit = AsyncMock(side_effect=error)
+            self.refresh = AsyncMock()
+
+        async def exec(self, _statement):
+            return type("Result", (), {"first": lambda self: None})()
+
+        def add(self, _obj):
+            return None
+
+    integrity_error = _build_integrity_error(
+        _FakeDBError(
+            message='duplicate key value violates unique constraint "users_email_key"',
+            pgcode="23505",
+            constraint_name="users_email_key",
+        )
+    )
+    db = SessionCommitFailsWithIntegrity(integrity_error)
+    service = AuthService(cast(AsyncSession, db))
+    service.get_user_by_email = AsyncMock(return_value=None)  # type: ignore[method-assign]
+
+    with pytest.raises(DuplicateEmailError, match="Email already registered"):
+        await service.create_user(
+            email="email-dup@ufl.edu",
+            username="email_dup_user",
+            password="valid-create-password-123",
+        )
+    db.rollback.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_create_user_reraises_non_unique_integrity_error_even_with_username_text():
+    class SessionCommitFailsWithIntegrity:
+        def __init__(self, error: IntegrityError):
+            self.rollback = AsyncMock()
+            self.commit = AsyncMock(side_effect=error)
+            self.refresh = AsyncMock()
+
+        async def exec(self, _statement):
+            return type("Result", (), {"first": lambda self: None})()
+
+        def add(self, _obj):
+            return None
+
+    integrity_error = _build_integrity_error(
+        _FakeDBError(
+            message='null value in column "username" violates not-null constraint',
+            pgcode="23502",
+        )
+    )
+    db = SessionCommitFailsWithIntegrity(integrity_error)
+    service = AuthService(cast(AsyncSession, db))
+    service.get_user_by_email = AsyncMock(return_value=None)  # type: ignore[method-assign]
+
+    with pytest.raises(IntegrityError):
+        await service.create_user(
+            email="other-integrity@ufl.edu",
+            username="other_integrity_user",
             password="valid-create-password-123",
         )
     db.rollback.assert_awaited_once()
