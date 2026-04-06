@@ -117,6 +117,7 @@ def _build_draft_project_response(
         members=[
             ProjectMemberInfo(
                 user_id=created_by_id,
+                username="owner_user",
                 role="owner",
                 full_name=None,
                 profile_picture_url=None,
@@ -130,6 +131,7 @@ def _build_member_info(
 ) -> ProjectMemberInfo:
     return ProjectMemberInfo(
         user_id=user_id,
+        username=f"user_{str(user_id)[:8]}",
         role=role,
         full_name="Member Name",
         profile_picture_url="https://example.com/avatar.png",
