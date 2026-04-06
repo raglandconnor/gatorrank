@@ -9,6 +9,7 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.models.project import Project, Vote
 from app.schemas.project import ProjectListItemResponse, ProjectListResponse
+from app.services.project import ProjectService
 from app.services.project_members import get_members_for_projects
 from app.utils.pagination import (
     CursorError,
@@ -87,7 +88,7 @@ class VoteService:
         limit: int = 20,
         cursor: str | None = None,
     ) -> ProjectListResponse:
-        """Return published, non-deleted projects voted by user, newest vote first."""
+        """Return voted project cards with taxonomy and computed team size."""
         limit = max(1, min(limit, 100))
 
         vote_cols = getattr(Vote, "__table__").c
@@ -127,15 +128,18 @@ class VoteService:
         members_by_project = await get_members_for_projects(
             self.db, [project.id for project in projects]
         )
+        project_service = ProjectService(self.db)
+        taxonomy_by_project = await project_service.get_project_taxonomy_by_project_ids(
+            [project.id for project in projects]
+        )
         items: list[ProjectListItemResponse] = []
         for _, project in page_rows:
-            members = members_by_project.get(project.id, [])
             items.append(
-                ProjectListItemResponse(
-                    **project.model_dump(),
-                    members=members,
-                    team_size=len(members),
-                    viewer_has_voted=True,
+                project_service.to_project_list_item(
+                    project,
+                    members_by_project,
+                    taxonomy_by_project,
+                    {project.id},
                 )
             )
 

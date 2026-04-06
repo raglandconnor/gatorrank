@@ -441,6 +441,7 @@ class ProjectService:
         project_id: UUID,
         current_user_id: UUID | None,
     ) -> ProjectDetailResponse | None:
+        """Return visible project detail with team size and taxonomy in assignment order."""
         project = await self.get_project_by_id(project_id)
         if project is None:
             return None
@@ -477,6 +478,7 @@ class ProjectService:
         slug: str,
         current_user_id: UUID | None,
     ) -> ProjectDetailResponse | None:
+        """Return visible project detail by slug with the same payload parity guarantees."""
         project = await self.get_project_by_slug(slug)
         if project is None:
             return None
@@ -664,6 +666,7 @@ class ProjectService:
         created_by_id: UUID | None = None,
         current_user_id: UUID | None = None,
     ) -> ProjectListResponse:
+        """Return project cards with team size and taxonomy hydrated for every endpoint."""
         limit = max(1, min(limit, 100))
 
         project_cols = getattr(Project, "__table__").c
@@ -947,6 +950,12 @@ class ProjectService:
 
         return payload
 
+    async def get_project_taxonomy_by_project_ids(
+        self, project_ids: list[UUID]
+    ) -> dict[UUID, dict[str, list[TaxonomyTermResponse]]]:
+        """Return taxonomy payloads for projects keyed by project id."""
+        return await self._get_project_taxonomy_by_project_ids(project_ids)
+
     @staticmethod
     def _empty_taxonomy_payload() -> dict[str, list[TaxonomyTermResponse]]:
         return {
@@ -1039,6 +1048,21 @@ class ProjectService:
             categories=taxonomy["categories"],
             tags=taxonomy["tags"],
             tech_stack=taxonomy["tech_stack"],
+        )
+
+    @staticmethod
+    def to_project_list_item(
+        project: Project,
+        members_by_project: dict[UUID, list[ProjectMemberInfo]],
+        taxonomy_by_project: dict[UUID, dict[str, list[TaxonomyTermResponse]]],
+        voted_project_ids: set[UUID],
+    ) -> ProjectListItemResponse:
+        """Build a project list item with member/team/vote/taxonomy parity."""
+        return ProjectService._to_project_list_item(
+            project,
+            members_by_project,
+            taxonomy_by_project,
+            voted_project_ids,
         )
 
     async def _viewer_has_voted(self, project_id: UUID, user_id: UUID) -> bool:

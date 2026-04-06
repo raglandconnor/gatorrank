@@ -3703,6 +3703,8 @@ async def test_list_endpoints_include_taxonomy_payloads(api_client, db_session):
     owner = await _seed_user(
         db_session, "creator_taxonomy_list@ufl.edu", "Creator Taxonomy List"
     )
+    created_project_id: str | None = None
+    created_project_slug: str | None = None
 
     async def override_get_db():
         yield db_session
@@ -3713,49 +3715,108 @@ async def test_list_endpoints_include_taxonomy_payloads(api_client, db_session):
         create_response = await api_client.post(
             "/api/v1/projects",
             json=_create_project_payload(
-                categories=["Web"],
-                tags=["Backend"],
-                tech_stack=["FastAPI"],
+                categories=["Zoology", "AI"],
+                tags=["Backend", "API"],
+                tech_stack=["React", "Bun"],
             ),
         )
         assert create_response.status_code == 201
+        created_project_id = create_response.json()["id"]
+        created_project_slug = create_response.json()["slug"]
 
         publish_response = await api_client.post(
-            f"/api/v1/projects/{create_response.json()['id']}/publish"
+            f"/api/v1/projects/{created_project_id}/publish"
+        )
+        assert publish_response.status_code == 200
+
+        vote_response = await api_client.post(
+            f"/api/v1/projects/{created_project_id}/vote"
         )
     finally:
         app.dependency_overrides.clear()
 
     assert publish_response.status_code == 200
+    assert vote_response.status_code == 204
+    assert created_project_id is not None
+    assert created_project_slug is not None
 
     app.dependency_overrides[get_db] = override_get_db
     app.dependency_overrides[get_current_user_optional] = _override_authed_user(owner)
+    app.dependency_overrides[get_current_user] = _override_authed_user(owner)
     try:
+        detail_response = await api_client.get(f"/api/v1/projects/{created_project_id}")
+        detail_by_slug_response = await api_client.get(
+            f"/api/v1/projects/slug/{created_project_slug}"
+        )
         feed_response = await api_client.get("/api/v1/projects")
         user_projects_response = await api_client.get(
             f"/api/v1/users/{owner.id}/projects"
         )
+        username_projects_response = await api_client.get(
+            f"/api/v1/users/by-username/{owner.username}/projects"
+        )
+        my_votes_response = await api_client.get("/api/v1/users/me/votes")
     finally:
         app.dependency_overrides.clear()
 
+    assert detail_response.status_code == 200
+    assert detail_by_slug_response.status_code == 200
     assert feed_response.status_code == 200
     assert user_projects_response.status_code == 200
+    assert username_projects_response.status_code == 200
+    assert my_votes_response.status_code == 200
+
+    expected_categories = ["Zoology", "AI"]
+    expected_tags = ["Backend", "API"]
+    expected_tech_stack = ["React", "Bun"]
+
+    detail_payload = detail_response.json()
+    assert [
+        term["name"] for term in detail_payload["categories"]
+    ] == expected_categories
+    assert [term["name"] for term in detail_payload["tags"]] == expected_tags
+    assert [
+        term["name"] for term in detail_payload["tech_stack"]
+    ] == expected_tech_stack
+
+    detail_by_slug_payload = detail_by_slug_response.json()
+    assert [
+        term["name"] for term in detail_by_slug_payload["categories"]
+    ] == expected_categories
+    assert [term["name"] for term in detail_by_slug_payload["tags"]] == expected_tags
+    assert [
+        term["name"] for term in detail_by_slug_payload["tech_stack"]
+    ] == expected_tech_stack
 
     feed_items = feed_response.json()["items"]
     assert len(feed_items) >= 1
-    feed_item = next(
-        item for item in feed_items if item["created_by_id"] == str(owner.id)
-    )
-    assert [term["name"] for term in feed_item["categories"]] == ["Web"]
-    assert [term["name"] for term in feed_item["tags"]] == ["Backend"]
-    assert [term["name"] for term in feed_item["tech_stack"]] == ["FastAPI"]
+    feed_item = next(item for item in feed_items if item["id"] == created_project_id)
+    assert [term["name"] for term in feed_item["categories"]] == expected_categories
+    assert [term["name"] for term in feed_item["tags"]] == expected_tags
+    assert [term["name"] for term in feed_item["tech_stack"]] == expected_tech_stack
 
     user_items = user_projects_response.json()["items"]
     assert len(user_items) >= 1
-    user_item = user_items[0]
-    assert [term["name"] for term in user_item["categories"]] == ["Web"]
-    assert [term["name"] for term in user_item["tags"]] == ["Backend"]
-    assert [term["name"] for term in user_item["tech_stack"]] == ["FastAPI"]
+    user_item = next(item for item in user_items if item["id"] == created_project_id)
+    assert [term["name"] for term in user_item["categories"]] == expected_categories
+    assert [term["name"] for term in user_item["tags"]] == expected_tags
+    assert [term["name"] for term in user_item["tech_stack"]] == expected_tech_stack
+
+    username_items = username_projects_response.json()["items"]
+    assert len(username_items) >= 1
+    username_item = next(
+        item for item in username_items if item["id"] == created_project_id
+    )
+    assert [term["name"] for term in username_item["categories"]] == expected_categories
+    assert [term["name"] for term in username_item["tags"]] == expected_tags
+    assert [term["name"] for term in username_item["tech_stack"]] == expected_tech_stack
+
+    voted_items = my_votes_response.json()["items"]
+    assert len(voted_items) >= 1
+    voted_item = next(item for item in voted_items if item["id"] == created_project_id)
+    assert [term["name"] for term in voted_item["categories"]] == expected_categories
+    assert [term["name"] for term in voted_item["tags"]] == expected_tags
+    assert [term["name"] for term in voted_item["tech_stack"]] == expected_tech_stack
 
 
 @pytest.mark.asyncio
