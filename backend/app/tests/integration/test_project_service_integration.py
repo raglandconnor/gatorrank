@@ -7,6 +7,7 @@ from sqlmodel import select
 from sqlalchemy.sql.dml import Update
 
 from app.models.project import Project, ProjectMember, Vote
+from app.models.taxonomy import Category
 from app.models.user import User
 from app.schemas.project import ProjectCreateRequest, ProjectUpdateRequest
 from app.services.project import (
@@ -505,6 +506,64 @@ async def test_create_project_rolls_back_when_commit_fails(db_session, monkeypat
         await service.create_project(created_by_id=creator.id, payload=payload)
 
     assert rollback_spy.await_count == 1
+
+
+@pytest.mark.asyncio
+async def test_create_project_rolls_back_taxonomy_term_when_assignment_fails(
+    async_engine, monkeypatch
+):
+    unique = uuid4().hex[:8]
+    from sqlalchemy.ext.asyncio import async_sessionmaker
+    from sqlmodel.ext.asyncio.session import AsyncSession as SQLModelAsyncSession
+
+    session_factory = async_sessionmaker(
+        async_engine,
+        expire_on_commit=False,
+        class_=SQLModelAsyncSession,
+    )
+    term = f"Rollback Term {unique}"
+    normalized_term = f"rollback term {unique}"
+    creator_email = f"creator-taxonomy-rollback-{unique}@ufl.edu"
+    payload_title = f"Rollback Taxonomy {unique}"
+
+    async with session_factory() as session:
+        creator = await _seed_user(session, creator_email, "Creator Rollback")
+        service = ProjectService(session)
+        payload = ProjectCreateRequest(
+            title=payload_title,
+            short_description="Rollback taxonomy assignment coverage",
+            github_url=f"https://github.com/example/rollback-taxonomy-{unique}",
+            categories=[term],
+        )
+
+        async def fail_replace_join_assignments(*args, **kwargs):
+            raise RuntimeError("taxonomy join insert failed")
+
+        monkeypatch.setattr(
+            service, "_replace_join_assignments", fail_replace_join_assignments
+        )
+
+        with pytest.raises(RuntimeError, match="taxonomy join insert failed"):
+            await service.create_project(created_by_id=creator.id, payload=payload)
+
+    async with session_factory() as verify_session:
+        created_project_result = await verify_session.exec(
+            select(Project).where(Project.title == payload_title)
+        )
+        assert created_project_result.one_or_none() is None
+
+        category_result = await verify_session.exec(
+            select(Category).where(Category.normalized_name == normalized_term)
+        )
+        assert category_result.one_or_none() is None
+
+        user_result = await verify_session.exec(
+            select(User).where(User.email == creator_email)
+        )
+        creator = user_result.one_or_none()
+        if creator is not None:
+            await verify_session.delete(creator)
+            await verify_session.commit()
 
 
 @pytest.mark.asyncio

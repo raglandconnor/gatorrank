@@ -3584,3 +3584,525 @@ async def test_list_endpoints_include_taxonomy_payloads(api_client, db_session):
     assert [term["name"] for term in user_item["categories"]] == ["Web"]
     assert [term["name"] for term in user_item["tags"]] == ["Backend"]
     assert [term["name"] for term in user_item["tech_stack"]] == ["FastAPI"]
+
+
+@pytest.mark.asyncio
+async def test_create_project_taxonomy_create_on_miss_concurrency_converges_one_term(
+    api_client, async_engine
+):
+    now = datetime.now(timezone.utc)
+    unique = uuid4().hex[:8]
+    owner_email = f"owner_taxonomy_create_race_{unique}@ufl.edu"
+    category_term = f"GraphQL {unique}"
+    normalized_term = f"graphql {unique}"
+    session_factory = async_sessionmaker(
+        async_engine,
+        expire_on_commit=False,
+        class_=SQLModelAsyncSession,
+    )
+
+    async with session_factory() as setup_session:
+        owner = User(
+            email=owner_email,
+            password_hash="integration-password-hash",
+            full_name="Owner Taxonomy Create Race",
+            created_at=now,
+            updated_at=now,
+        )
+        setup_session.add(owner)
+        await setup_session.commit()
+        owner_id = owner.id
+
+    async def override_get_db():
+        async with session_factory() as session:
+            yield session
+
+    class CurrentUser:
+        id = owner_id
+        email = owner_email
+
+    category_cols = getattr(Category, "__table__").c
+    project_category_cols = getattr(ProjectCategory, "__table__").c
+    project_member_cols = getattr(ProjectMember, "__table__").c
+    project_cols = getattr(Project, "__table__").c
+    user_cols = getattr(User, "__table__").c
+    created_project_ids: list[str] = []
+
+    app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_current_user] = lambda: CurrentUser()
+    try:
+        try:
+            first_response, second_response = await asyncio.gather(
+                api_client.post(
+                    "/api/v1/projects",
+                    json=_create_project_payload(
+                        title=f"Create Race A {unique}",
+                        categories=[category_term],
+                    ),
+                ),
+                api_client.post(
+                    "/api/v1/projects",
+                    json=_create_project_payload(
+                        title=f"Create Race B {unique}",
+                        categories=[f"  {category_term.lower()}  "],
+                    ),
+                ),
+            )
+        finally:
+            app.dependency_overrides.clear()
+
+        assert first_response.status_code == 201
+        assert second_response.status_code == 201
+        created_project_ids = [
+            first_response.json()["id"],
+            second_response.json()["id"],
+        ]
+
+        async with session_factory() as verify_session:
+            categories_result = await verify_session.exec(
+                select(Category).where(category_cols.normalized_name == normalized_term)
+            )
+            categories = categories_result.all()
+            assert len(categories) == 1
+            category_id = categories[0].id
+
+            assignment_result = await verify_session.exec(
+                select(ProjectCategory).where(
+                    project_category_cols.project_id.in_(created_project_ids)
+                )
+            )
+            assignments = assignment_result.all()
+            assert len(assignments) == 2
+            assert {row.category_id for row in assignments} == {category_id}
+    finally:
+        async with session_factory() as cleanup_session:
+            if created_project_ids:
+                await cleanup_session.exec(
+                    delete(ProjectCategory).where(
+                        project_category_cols.project_id.in_(created_project_ids)
+                    )
+                )
+                await cleanup_session.exec(
+                    delete(ProjectMember).where(
+                        project_member_cols.project_id.in_(created_project_ids)
+                    )
+                )
+                await cleanup_session.exec(
+                    delete(Project).where(project_cols.id.in_(created_project_ids))
+                )
+            await cleanup_session.exec(
+                delete(Category).where(category_cols.normalized_name == normalized_term)
+            )
+            await cleanup_session.exec(delete(User).where(user_cols.id == owner_id))
+            await cleanup_session.commit()
+
+
+@pytest.mark.asyncio
+async def test_update_project_taxonomy_create_on_miss_concurrency_converges_one_term(
+    api_client, async_engine
+):
+    now = datetime.now(timezone.utc)
+    unique = uuid4().hex[:8]
+    owner_email = f"owner_taxonomy_update_race_{unique}@ufl.edu"
+    category_term = f"Supabase {unique}"
+    normalized_term = f"supabase {unique}"
+    session_factory = async_sessionmaker(
+        async_engine,
+        expire_on_commit=False,
+        class_=SQLModelAsyncSession,
+    )
+
+    async with session_factory() as setup_session:
+        owner = User(
+            email=owner_email,
+            password_hash="integration-password-hash",
+            full_name="Owner Taxonomy Update Race",
+            created_at=now,
+            updated_at=now,
+        )
+        setup_session.add(owner)
+        await setup_session.flush()
+        first_project = Project(
+            created_by_id=owner.id,
+            title=f"Update Race A {unique}",
+            short_description="Update race A",
+            vote_count=0,
+            is_group_project=False,
+            is_published=False,
+            published_at=None,
+            created_at=now,
+            updated_at=now,
+            github_url=f"https://github.com/example/update-race-a-{unique}",
+        )
+        second_project = Project(
+            created_by_id=owner.id,
+            title=f"Update Race B {unique}",
+            short_description="Update race B",
+            vote_count=0,
+            is_group_project=False,
+            is_published=False,
+            published_at=None,
+            created_at=now,
+            updated_at=now,
+            github_url=f"https://github.com/example/update-race-b-{unique}",
+        )
+        setup_session.add(first_project)
+        setup_session.add(second_project)
+        await setup_session.commit()
+        owner_id = owner.id
+        first_project_id = first_project.id
+        second_project_id = second_project.id
+
+    async def override_get_db():
+        async with session_factory() as session:
+            yield session
+
+    class CurrentUser:
+        id = owner_id
+        email = owner_email
+
+    category_cols = getattr(Category, "__table__").c
+    project_category_cols = getattr(ProjectCategory, "__table__").c
+    project_cols = getattr(Project, "__table__").c
+    user_cols = getattr(User, "__table__").c
+    try:
+        app.dependency_overrides[get_db] = override_get_db
+        app.dependency_overrides[get_current_user] = lambda: CurrentUser()
+        try:
+            first_response, second_response = await asyncio.gather(
+                api_client.patch(
+                    f"/api/v1/projects/{first_project_id}",
+                    json={
+                        "categories": [category_term],
+                        "demo_url": f"https://example.com/update-race-a-{unique}",
+                    },
+                ),
+                api_client.patch(
+                    f"/api/v1/projects/{second_project_id}",
+                    json={
+                        "categories": [f"  {category_term.lower()}  "],
+                        "demo_url": f"https://example.com/update-race-b-{unique}",
+                    },
+                ),
+            )
+        finally:
+            app.dependency_overrides.clear()
+
+        assert first_response.status_code == 200
+        assert second_response.status_code == 200
+
+        async with session_factory() as verify_session:
+            categories_result = await verify_session.exec(
+                select(Category).where(category_cols.normalized_name == normalized_term)
+            )
+            categories = categories_result.all()
+            assert len(categories) == 1
+            category_id = categories[0].id
+
+            assignment_result = await verify_session.exec(
+                select(ProjectCategory).where(
+                    project_category_cols.project_id.in_(
+                        [first_project_id, second_project_id]
+                    )
+                )
+            )
+            assignments = assignment_result.all()
+            assert len(assignments) == 2
+            assert {row.category_id for row in assignments} == {category_id}
+    finally:
+        async with session_factory() as cleanup_session:
+            await cleanup_session.exec(
+                delete(ProjectCategory).where(
+                    project_category_cols.project_id.in_(
+                        [first_project_id, second_project_id]
+                    )
+                )
+            )
+            await cleanup_session.exec(
+                delete(Project).where(
+                    project_cols.id.in_([first_project_id, second_project_id])
+                )
+            )
+            await cleanup_session.exec(
+                delete(Category).where(category_cols.normalized_name == normalized_term)
+            )
+            await cleanup_session.exec(delete(User).where(user_cols.id == owner_id))
+            await cleanup_session.commit()
+
+
+@pytest.mark.asyncio
+async def test_concurrent_create_normalization_variants_share_single_taxonomy_term(
+    api_client, async_engine
+):
+    now = datetime.now(timezone.utc)
+    unique = uuid4().hex[:8]
+    owner_email = f"owner_taxonomy_norm_race_{unique}@ufl.edu"
+    normalized_term = f"ai {unique}"
+    raw_variant_a = f"AI {unique}"
+    raw_variant_b = f"  ai {unique}  "
+    session_factory = async_sessionmaker(
+        async_engine,
+        expire_on_commit=False,
+        class_=SQLModelAsyncSession,
+    )
+
+    async with session_factory() as setup_session:
+        owner = User(
+            email=owner_email,
+            password_hash="integration-password-hash",
+            full_name="Owner Taxonomy Norm Race",
+            created_at=now,
+            updated_at=now,
+        )
+        setup_session.add(owner)
+        await setup_session.commit()
+        owner_id = owner.id
+
+    async def override_get_db():
+        async with session_factory() as session:
+            yield session
+
+    class CurrentUser:
+        id = owner_id
+        email = owner_email
+
+    category_cols = getattr(Category, "__table__").c
+    project_category_cols = getattr(ProjectCategory, "__table__").c
+    project_member_cols = getattr(ProjectMember, "__table__").c
+    project_cols = getattr(Project, "__table__").c
+    user_cols = getattr(User, "__table__").c
+    created_project_ids: list[str] = []
+    try:
+        app.dependency_overrides[get_db] = override_get_db
+        app.dependency_overrides[get_current_user] = lambda: CurrentUser()
+        try:
+            first_response, second_response = await asyncio.gather(
+                api_client.post(
+                    "/api/v1/projects",
+                    json=_create_project_payload(
+                        title=f"Normalization Race A {unique}",
+                        categories=[raw_variant_a],
+                    ),
+                ),
+                api_client.post(
+                    "/api/v1/projects",
+                    json=_create_project_payload(
+                        title=f"Normalization Race B {unique}",
+                        categories=[raw_variant_b],
+                    ),
+                ),
+            )
+        finally:
+            app.dependency_overrides.clear()
+
+        assert first_response.status_code == 201
+        assert second_response.status_code == 201
+        created_project_ids = [
+            first_response.json()["id"],
+            second_response.json()["id"],
+        ]
+
+        async with session_factory() as verify_session:
+            categories_result = await verify_session.exec(
+                select(Category).where(category_cols.normalized_name == normalized_term)
+            )
+            categories = categories_result.all()
+            assert len(categories) == 1
+            category_id = categories[0].id
+
+            assignment_result = await verify_session.exec(
+                select(ProjectCategory).where(
+                    project_category_cols.project_id.in_(created_project_ids)
+                )
+            )
+            assignments = assignment_result.all()
+            assert len(assignments) == 2
+            assert {row.category_id for row in assignments} == {category_id}
+    finally:
+        async with session_factory() as cleanup_session:
+            if created_project_ids:
+                await cleanup_session.exec(
+                    delete(ProjectCategory).where(
+                        project_category_cols.project_id.in_(created_project_ids)
+                    )
+                )
+                await cleanup_session.exec(
+                    delete(ProjectMember).where(
+                        project_member_cols.project_id.in_(created_project_ids)
+                    )
+                )
+                await cleanup_session.exec(
+                    delete(Project).where(project_cols.id.in_(created_project_ids))
+                )
+            await cleanup_session.exec(
+                delete(Category).where(category_cols.normalized_name == normalized_term)
+            )
+            await cleanup_session.exec(delete(User).where(user_cols.id == owner_id))
+            await cleanup_session.commit()
+
+
+@pytest.mark.asyncio
+async def test_concurrent_cross_vocabulary_create_on_miss_is_independent(
+    api_client, async_engine
+):
+    now = datetime.now(timezone.utc)
+    unique = uuid4().hex[:8]
+    owner_email = f"owner_taxonomy_vocab_race_{unique}@ufl.edu"
+    shared_term = f"Platform {unique}"
+    normalized_term = f"platform {unique}"
+    session_factory = async_sessionmaker(
+        async_engine,
+        expire_on_commit=False,
+        class_=SQLModelAsyncSession,
+    )
+
+    async with session_factory() as setup_session:
+        owner = User(
+            email=owner_email,
+            password_hash="integration-password-hash",
+            full_name="Owner Taxonomy Vocab Race",
+            created_at=now,
+            updated_at=now,
+        )
+        setup_session.add(owner)
+        await setup_session.commit()
+        owner_id = owner.id
+
+    async def override_get_db():
+        async with session_factory() as session:
+            yield session
+
+    class CurrentUser:
+        id = owner_id
+        email = owner_email
+
+    category_cols = getattr(Category, "__table__").c
+    tag_cols = getattr(Tag, "__table__").c
+    tech_stack_cols = getattr(TechStack, "__table__").c
+    project_category_cols = getattr(ProjectCategory, "__table__").c
+    project_tag_cols = getattr(ProjectTag, "__table__").c
+    project_tech_stack_cols = getattr(ProjectTechStack, "__table__").c
+    project_member_cols = getattr(ProjectMember, "__table__").c
+    project_cols = getattr(Project, "__table__").c
+    user_cols = getattr(User, "__table__").c
+    created_project_ids: list[str] = []
+    try:
+        app.dependency_overrides[get_db] = override_get_db
+        app.dependency_overrides[get_current_user] = lambda: CurrentUser()
+        try:
+            category_response, tag_response, stack_response = await asyncio.gather(
+                api_client.post(
+                    "/api/v1/projects",
+                    json=_create_project_payload(
+                        title=f"Vocab Race Category {unique}",
+                        categories=[shared_term],
+                    ),
+                ),
+                api_client.post(
+                    "/api/v1/projects",
+                    json=_create_project_payload(
+                        title=f"Vocab Race Tag {unique}",
+                        tags=[shared_term],
+                    ),
+                ),
+                api_client.post(
+                    "/api/v1/projects",
+                    json=_create_project_payload(
+                        title=f"Vocab Race Stack {unique}",
+                        tech_stack=[shared_term],
+                    ),
+                ),
+            )
+        finally:
+            app.dependency_overrides.clear()
+
+        assert category_response.status_code == 201
+        assert tag_response.status_code == 201
+        assert stack_response.status_code == 201
+        created_project_ids = [
+            category_response.json()["id"],
+            tag_response.json()["id"],
+            stack_response.json()["id"],
+        ]
+
+        async with session_factory() as verify_session:
+            category_result = await verify_session.exec(
+                select(Category).where(category_cols.normalized_name == normalized_term)
+            )
+            tag_result = await verify_session.exec(
+                select(Tag).where(tag_cols.normalized_name == normalized_term)
+            )
+            stack_result = await verify_session.exec(
+                select(TechStack).where(
+                    tech_stack_cols.normalized_name == normalized_term
+                )
+            )
+
+            categories = category_result.all()
+            tags = tag_result.all()
+            stacks = stack_result.all()
+            assert len(categories) == 1
+            assert len(tags) == 1
+            assert len(stacks) == 1
+            assert categories[0].id != tags[0].id
+            assert categories[0].id != stacks[0].id
+            assert tags[0].id != stacks[0].id
+
+            category_assignment_result = await verify_session.exec(
+                select(ProjectCategory).where(
+                    project_category_cols.project_id == created_project_ids[0]
+                )
+            )
+            tag_assignment_result = await verify_session.exec(
+                select(ProjectTag).where(
+                    project_tag_cols.project_id == created_project_ids[1]
+                )
+            )
+            stack_assignment_result = await verify_session.exec(
+                select(ProjectTechStack).where(
+                    project_tech_stack_cols.project_id == created_project_ids[2]
+                )
+            )
+
+            assert len(category_assignment_result.all()) == 1
+            assert len(tag_assignment_result.all()) == 1
+            assert len(stack_assignment_result.all()) == 1
+    finally:
+        async with session_factory() as cleanup_session:
+            if created_project_ids:
+                await cleanup_session.exec(
+                    delete(ProjectCategory).where(
+                        project_category_cols.project_id.in_(created_project_ids)
+                    )
+                )
+                await cleanup_session.exec(
+                    delete(ProjectTag).where(
+                        project_tag_cols.project_id.in_(created_project_ids)
+                    )
+                )
+                await cleanup_session.exec(
+                    delete(ProjectTechStack).where(
+                        project_tech_stack_cols.project_id.in_(created_project_ids)
+                    )
+                )
+                await cleanup_session.exec(
+                    delete(ProjectMember).where(
+                        project_member_cols.project_id.in_(created_project_ids)
+                    )
+                )
+                await cleanup_session.exec(
+                    delete(Project).where(project_cols.id.in_(created_project_ids))
+                )
+            await cleanup_session.exec(
+                delete(Category).where(category_cols.normalized_name == normalized_term)
+            )
+            await cleanup_session.exec(
+                delete(Tag).where(tag_cols.normalized_name == normalized_term)
+            )
+            await cleanup_session.exec(
+                delete(TechStack).where(
+                    tech_stack_cols.normalized_name == normalized_term
+                )
+            )
+            await cleanup_session.exec(delete(User).where(user_cols.id == owner_id))
+            await cleanup_session.commit()
