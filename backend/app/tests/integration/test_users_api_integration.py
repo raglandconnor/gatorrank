@@ -38,10 +38,14 @@ def generate_token(user_id, email, jwt_secret):
     )
 
 
-async def seed_auth_user(db_session, *, user_id, email: str) -> None:
+async def seed_auth_user(
+    db_session, *, user_id, email: str, username: str | None = None
+) -> None:
+    resolved_username = username or f"user_{uuid4().hex[:10]}"
     user = User(  # pyright: ignore[reportCallIssue]
         id=user_id,
         email=email,
+        username=resolved_username,
         password_hash="integration-password-hash",
         role="student",
     )
@@ -56,7 +60,8 @@ async def test_get_current_user_profile(api_client, db_session, monkeypatch):
 
     user_id = uuid4()
     email = f"user-{uuid4().hex[:8]}@ufl.edu"
-    await seed_auth_user(db_session, user_id=user_id, email=email)
+    username = "profile_user"
+    await seed_auth_user(db_session, user_id=user_id, email=email, username=username)
     token = generate_token(user_id, email, jwt_secret)
 
     async def override_get_db():
@@ -72,6 +77,7 @@ async def test_get_current_user_profile(api_client, db_session, monkeypatch):
         data = response.json()
         assert data["id"] == str(user_id)
         assert data["email"] == email
+        assert data["username"] == username
         assert data["full_name"] is None
         assert "updated_at" in data
     finally:
@@ -240,6 +246,33 @@ async def test_patch_current_user_profile_rejects_null_full_name(
 
 
 @pytest.mark.asyncio
+async def test_patch_current_user_profile_rejects_username_update(
+    api_client, db_session, monkeypatch
+):
+    jwt_secret = "integration-test-jwt-secret-at-least-32b"
+    monkeypatch.setattr(settings, "DATABASE_JWT_SECRET", jwt_secret)
+
+    user_id = uuid4()
+    email = f"user-{uuid4().hex[:8]}@ufl.edu"
+    await seed_auth_user(db_session, user_id=user_id, email=email)
+    token = generate_token(user_id, email, jwt_secret)
+
+    async def override_get_db():
+        yield db_session
+
+    app.dependency_overrides[get_db] = override_get_db
+    try:
+        response = await api_client.patch(
+            "/api/v1/users/me",
+            headers={"Authorization": f"Bearer {token}"},
+            json={"username": "new_username"},
+        )
+        assert response.status_code == 422
+    finally:
+        app.dependency_overrides.clear()
+
+
+@pytest.mark.asyncio
 async def test_get_current_user_profile_unknown_user_returns_401(
     api_client, db_session, monkeypatch
 ):
@@ -274,6 +307,7 @@ async def test_get_user_profile(api_client, db_session, monkeypatch):
     user = User(  # pyright: ignore[reportCallIssue]
         id=user_id,
         email=email,
+        username="public_user",
         password_hash="integration-password-hash",
         full_name="Public User",
         role="student",
@@ -290,8 +324,40 @@ async def test_get_user_profile(api_client, db_session, monkeypatch):
         assert response.status_code == 200
         data = response.json()
         assert data["id"] == str(user_id)
+        assert data["username"] == "public_user"
         assert data["full_name"] == "Public User"
         assert "email" not in data  # Public info
+    finally:
+        app.dependency_overrides.clear()
+
+
+@pytest.mark.asyncio
+async def test_get_user_profile_by_username_case_insensitive(api_client, db_session):
+    user_id = uuid4()
+    email = f"user-{uuid4().hex[:8]}@ufl.edu"
+    username = "public_lookup_user"
+
+    user = User(  # pyright: ignore[reportCallIssue]
+        id=user_id,
+        email=email,
+        username=username,
+        password_hash="integration-password-hash",
+        full_name="Public User",
+        role="student",
+    )
+    db_session.add(user)
+    await db_session.commit()
+
+    async def override_get_db():
+        yield db_session
+
+    app.dependency_overrides[get_db] = override_get_db
+    try:
+        response = await api_client.get(f"/api/v1/users/by-username/{username.upper()}")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["id"] == str(user_id)
+        assert data["username"] == username
     finally:
         app.dependency_overrides.clear()
 
@@ -305,6 +371,7 @@ async def test_list_user_projects(api_client, db_session):
     user = User(  # pyright: ignore[reportCallIssue]
         id=user_id,
         email=email,
+        username="author_user",
         password_hash="integration-password-hash",
         full_name="Author",
         role="student",
@@ -342,6 +409,58 @@ async def test_list_user_projects(api_client, db_session):
     app.dependency_overrides[get_db] = override_get_db
     try:
         response = await api_client.get(f"/api/v1/users/{user_id}/projects")
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data["items"]) == 1
+        assert data["items"][0]["id"] == str(p1.id)
+    finally:
+        app.dependency_overrides.clear()
+
+
+@pytest.mark.asyncio
+async def test_list_user_projects_by_username(api_client, db_session):
+    user_id = uuid4()
+    email = f"user-{uuid4().hex[:8]}@ufl.edu"
+    username = "author_lookup_user"
+
+    user = User(  # pyright: ignore[reportCallIssue]
+        id=user_id,
+        email=email,
+        username=username,
+        password_hash="integration-password-hash",
+        full_name="Author",
+        role="student",
+    )
+    db_session.add(user)
+    await db_session.commit()
+
+    now = datetime.now(UTC)
+    p1 = Project(
+        id=uuid4(),
+        title="Published Project",
+        short_description="Desc",
+        is_published=True,
+        published_at=now,
+        created_by_id=user_id,
+    )  # pyright: ignore[reportCallIssue]
+    p2 = Project(
+        id=uuid4(),
+        title="Draft Project",
+        short_description="Desc",
+        is_published=False,
+        created_by_id=user_id,
+    )  # pyright: ignore[reportCallIssue]
+    db_session.add_all([p1, p2])
+    await db_session.commit()
+
+    async def override_get_db():
+        yield db_session
+
+    app.dependency_overrides[get_db] = override_get_db
+    try:
+        response = await api_client.get(
+            f"/api/v1/users/by-username/{username.upper()}/projects"
+        )
         assert response.status_code == 200
         data = response.json()
         assert len(data["items"]) == 1

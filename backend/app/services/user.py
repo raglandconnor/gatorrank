@@ -5,6 +5,7 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.models.user import User
 from app.schemas.user import UserUpdate
+from app.utils.username import normalize_username
 
 
 class UserService:
@@ -13,6 +14,12 @@ class UserService:
 
     async def get_user_by_id(self, user_id: UUID) -> User | None:
         statement = select(User).where(User.id == user_id)
+        result = await self.db.exec(statement)
+        return result.first()
+
+    async def get_user_by_username(self, username: str) -> User | None:
+        normalized_username = normalize_username(username)
+        statement = select(User).where(User.username == normalized_username)
         result = await self.db.exec(statement)
         return result.first()
 
