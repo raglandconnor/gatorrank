@@ -39,7 +39,8 @@ async def get_current_user_profile(
     description=(
         "Partially update the authenticated user's profile. "
         "At least one field must be provided. "
-        "`full_name` may be omitted but cannot be `null` when provided."
+        "`full_name` may be omitted but cannot be `null` when provided. "
+        "`username` is immutable and cannot be updated."
     ),
     response_model=UserPrivate,
     responses={
@@ -124,6 +125,30 @@ async def get_user_profile(
 
 
 @router.get(
+    "/users/by-username/{username}",
+    summary="Get public user profile by username",
+    description=(
+        "Return public-safe profile fields for a specific username. "
+        "Lookup is case-insensitive and resolves against canonical lowercase storage."
+    ),
+    response_model=UserPublic,
+    responses={
+        404: {"description": "User not found"},
+    },
+)
+async def get_user_profile_by_username(
+    username: str,
+    db: AsyncSession = Depends(get_db),
+) -> UserPublic:
+    """Return public-safe fields for a given username (case-insensitive lookup)."""
+    service = UserService(db)
+    user = await service.get_user_by_username(username)
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    return UserPublic.model_validate(user)
+
+
+@router.get(
     "/users/{user_id}/projects",
     summary="List published projects for a user",
     description=(
@@ -182,6 +207,72 @@ async def list_user_projects(
             published_from=published_from,
             published_to=published_to,
             created_by_id=user_id,
+            current_user_id=current_user.id if current_user else None,
+        )
+    except CursorError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.get(
+    "/users/by-username/{username}/projects",
+    summary="List published projects for a user by username",
+    description=(
+        "Return published projects authored by the given username, with cursor "
+        "pagination and computed `team_size`. Username lookup is case-insensitive "
+        "and resolves against canonical lowercase storage."
+    ),
+    response_model=ProjectListResponse,
+    responses={
+        400: {"description": "Invalid cursor"},
+        401: {"description": "Invalid or expired bearer token"},
+        404: {"description": "User not found"},
+    },
+)
+async def list_user_projects_by_username(
+    username: str,
+    limit: int = Query(
+        default=20,
+        gt=0,
+        le=100,
+        description="Page size (1-100).",
+    ),
+    cursor: str | None = Query(
+        default=None,
+        description=(
+            "Opaque pagination cursor from a previous response. "
+            "Reuse with the same `sort` and date-range values."
+        ),
+    ),
+    sort: Literal["top", "new"] = Query(
+        default="new",
+        description="Sort order: `new` by creation time, `top` by vote rank in date window.",
+    ),
+    published_from: date | None = Query(
+        default=None,
+        description="Inclusive `published_at` start date (`YYYY-MM-DD`) for `sort=top`.",
+    ),
+    published_to: date | None = Query(
+        default=None,
+        description="Inclusive `published_at` end date (`YYYY-MM-DD`) for `sort=top`.",
+    ),
+    db: AsyncSession = Depends(get_db),
+    current_user: User | None = Depends(get_current_user_optional),
+) -> ProjectListResponse:
+    """Return published projects authored by username, including computed team size."""
+    user_service = UserService(db)
+    user = await user_service.get_user_by_username(username)
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    project_service = ProjectService(db)
+    try:
+        return await project_service.list_projects(
+            sort=sort,
+            limit=limit,
+            cursor=cursor,
+            published_from=published_from,
+            published_to=published_to,
+            created_by_id=user.id,
             current_user_id=current_user.id if current_user else None,
         )
     except CursorError as exc:

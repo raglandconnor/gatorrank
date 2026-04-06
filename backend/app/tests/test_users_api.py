@@ -20,12 +20,19 @@ async def _override_get_db():
     yield MockSession()
 
 
-def _override_current_user(user_id: UUID, email: str = "test@example.com"):
+def _override_current_user(
+    user_id: UUID,
+    email: str = "test@example.com",
+    username: str = "test_user",
+):
     # Return a mock User-like object
     class MockUser:
-        def __init__(self, id, email, full_name=None, profile_picture_url=None):
+        def __init__(
+            self, id, email, username, full_name=None, profile_picture_url=None
+        ):
             self.id = id
             self.email = email
+            self.username = username
             self.role = "student"
             self.full_name = full_name
             self.profile_picture_url = profile_picture_url
@@ -35,7 +42,9 @@ def _override_current_user(user_id: UUID, email: str = "test@example.com"):
             self.created_at = datetime.now(timezone.utc)
             self.updated_at = datetime.now(timezone.utc)
 
-    return lambda: MockUser(user_id, email, "Test User", "http://example.com/pic.jpg")
+    return lambda: MockUser(
+        user_id, email, username, "Test User", "http://example.com/pic.jpg"
+    )
 
 
 def test_get_current_user_profile():
@@ -52,6 +61,7 @@ def test_get_current_user_profile():
     payload = response.json()
     assert payload["id"] == str(user_id)
     assert payload["email"] == "test@example.com"
+    assert payload["username"] == "test_user"
     assert payload["full_name"] == "Test User"
     assert "updated_at" in payload
 
@@ -67,6 +77,7 @@ def test_update_current_user_profile():
     updated_user = User(
         id=user_id,
         email="test@example.com",
+        username="test_user",
         password_hash="test-password-hash",
         full_name="New Name",
         profile_picture_url="http://new.pic",
@@ -104,6 +115,7 @@ def test_update_current_user_allows_partial_payload():
     updated_user = User(
         id=user_id,
         email="test@example.com",
+        username="test_user",
         password_hash="test-password-hash",
         full_name="Test User",
         profile_picture_url="https://new.pic/avatar.jpg",
@@ -173,6 +185,19 @@ def test_update_current_user_rejects_null_full_name():
     assert response.status_code == 422
 
 
+def test_update_current_user_rejects_username_change():
+    user_id = uuid4()
+
+    app.dependency_overrides[get_db] = _override_get_db
+    app.dependency_overrides[get_current_user] = _override_current_user(user_id)
+    try:
+        response = client.patch("/api/v1/users/me", json={"username": "new_handle"})
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 422
+
+
 def test_update_current_user_missing_user_returns_500():
     user_id = uuid4()
 
@@ -203,6 +228,7 @@ def test_get_user_profile():
     target_user = User(
         id=target_user_id,
         email="hidden@example.com",
+        username="hidden_user",
         password_hash="test-password-hash",
         full_name="Target User",
         profile_picture_url=None,
@@ -224,6 +250,7 @@ def test_get_user_profile():
     assert response.status_code == 200
     payload = response.json()
     assert payload["id"] == str(target_user_id)
+    assert payload["username"] == "hidden_user"
     assert payload["full_name"] == "Target User"
     assert "email" not in payload
     assert "updated_at" not in payload
@@ -245,6 +272,57 @@ def test_get_user_profile_not_found():
     assert response.status_code == 404
 
 
+def test_get_user_profile_by_username_case_insensitive():
+    target_user_id = uuid4()
+
+    from datetime import datetime, timezone
+
+    now = datetime.now(timezone.utc)
+    target_user = User(
+        id=target_user_id,
+        email="hidden@example.com",
+        username="target_user",
+        password_hash="test-password-hash",
+        full_name="Target User",
+        profile_picture_url=None,
+        role="student",
+        created_at=now,
+        updated_at=now,
+    )
+
+    app.dependency_overrides[get_db] = _override_get_db
+    try:
+        with patch(
+            "app.api.v1.users.UserService.get_user_by_username",
+            new=AsyncMock(return_value=target_user),
+        ) as mock_get_by_username:
+            response = client.get("/api/v1/users/by-username/TARGET_USER")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["id"] == str(target_user_id)
+    assert payload["username"] == "target_user"
+    await_args = mock_get_by_username.await_args
+    assert await_args is not None
+    assert await_args.args[0] == "TARGET_USER"
+
+
+def test_get_user_profile_by_username_not_found():
+    app.dependency_overrides[get_db] = _override_get_db
+    try:
+        with patch(
+            "app.api.v1.users.UserService.get_user_by_username",
+            new=AsyncMock(return_value=None),
+        ):
+            response = client.get("/api/v1/users/by-username/unknown_user")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 404
+
+
 def test_list_user_projects():
     target_user_id = uuid4()
 
@@ -254,6 +332,7 @@ def test_list_user_projects():
     target_user = User(
         id=target_user_id,
         email="test@test.com",
+        username="test_user",
         password_hash="test-password-hash",
         created_at=now,
         updated_at=now,
@@ -312,6 +391,7 @@ def test_list_user_projects_invalid_cursor_returns_400():
     target_user = User(
         id=target_user_id,
         email="test@test.com",
+        username="test_user",
         password_hash="test-password-hash",
         created_at=now,
         updated_at=now,
@@ -339,6 +419,50 @@ def test_list_user_projects_invalid_cursor_returns_400():
     assert response.json()["detail"] == "Invalid cursor"
 
 
+def test_list_user_projects_by_username():
+    target_user_id = uuid4()
+
+    from datetime import datetime, timezone
+
+    now = datetime.now(timezone.utc)
+    target_user = User(
+        id=target_user_id,
+        email="test@test.com",
+        username="test_user",
+        password_hash="test-password-hash",
+        created_at=now,
+        updated_at=now,
+    )
+    empty_project_list = ProjectListResponse(items=[], next_cursor=None)
+
+    app.dependency_overrides[get_db] = _override_get_db
+    try:
+        with (
+            patch(
+                "app.api.v1.users.UserService.get_user_by_username",
+                new=AsyncMock(return_value=target_user),
+            ),
+            patch(
+                "app.api.v1.users.ProjectService.list_projects",
+                new=AsyncMock(return_value=empty_project_list),
+            ) as mock_list_projects,
+        ):
+            response = client.get(
+                "/api/v1/users/by-username/TEST_USER/projects?limit=10"
+            )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    assert response.json()["items"] == []
+
+    await_args = mock_list_projects.await_args
+    assert await_args is not None
+    assert await_args.kwargs["created_by_id"] == target_user_id
+    assert await_args.kwargs["limit"] == 10
+    assert await_args.kwargs["current_user_id"] is None
+
+
 def test_list_user_projects_passes_current_user_when_authenticated():
     target_user_id = uuid4()
     current_user_id = uuid4()
@@ -349,6 +473,7 @@ def test_list_user_projects_passes_current_user_when_authenticated():
     target_user = User(
         id=target_user_id,
         email="test@test.com",
+        username="test_user",
         password_hash="test-password-hash",
         created_at=now,
         updated_at=now,
