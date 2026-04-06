@@ -39,6 +39,7 @@ async def _seed_user_with_password(
     user = User(  # pyright: ignore[reportCallIssue]
         id=uuid4(),
         email=email,
+        username=f"user_{uuid4().hex[:10]}",
         password_hash=service.hash_password(password),
         role="student",
     )

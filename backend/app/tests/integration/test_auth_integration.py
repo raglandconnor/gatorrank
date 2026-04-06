@@ -51,6 +51,7 @@ async def test_get_current_user_returns_existing_user(
     existing_user = User(  # pyright: ignore[reportCallIssue]
         id=user_id,
         email=email,
+        username=f"user_{uuid4().hex[:10]}",
         password_hash="integration-password-hash",
         role="student",
     )
