@@ -1,7 +1,7 @@
 """Seed frontend-realistic mock data directly in the database (dev-only).
 
 Usage:
-  uv run python app/scripts/seed_mock_data.py
+  PYTHONPATH=. uv run python app/scripts/seed_mock_data.py
 """
 
 from __future__ import annotations

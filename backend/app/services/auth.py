@@ -3,6 +3,7 @@ from datetime import UTC, datetime, timedelta
 import hashlib
 import hmac
 import secrets
+from typing import Literal
 
 import jwt
 import sqlalchemy as sa
@@ -53,6 +54,21 @@ class TokenPair:
 
 
 class AuthService:
+    _UNIQUE_VIOLATION_SQLSTATE = "23505"
+    _USERNAME_CONSTRAINT_MARKERS = (
+        "ix_users_username",
+        "users_username_key",
+        "uq_users_username",
+        "users.username",
+        "(username)",
+    )
+    _EMAIL_CONSTRAINT_MARKERS = (
+        "users_email_key",
+        "uq_users_email",
+        "users.email",
+        "(email)",
+    )
+
     def __init__(self, db: AsyncSession):
         self.db = db
         self.settings = get_settings()
@@ -70,9 +86,34 @@ class AuthService:
         return normalized or None
 
     @staticmethod
-    def _integrity_error_is_username_conflict(exc: IntegrityError) -> bool:
-        raw = str(getattr(exc, "orig", exc)).lower()
-        return "username" in raw
+    def _classify_unique_integrity_error(
+        exc: IntegrityError,
+    ) -> Literal["username", "email", "other"]:
+        orig = getattr(exc, "orig", exc)
+        raw = str(orig).lower()
+        pgcode = getattr(orig, "pgcode", None) or getattr(orig, "sqlstate", None)
+        constraint_name = getattr(getattr(orig, "diag", None), "constraint_name", None)
+
+        is_unique_violation = (
+            pgcode == AuthService._UNIQUE_VIOLATION_SQLSTATE
+            or "unique constraint" in raw
+            or "is not unique" in raw
+        )
+        if not is_unique_violation:
+            return "other"
+
+        normalized_constraint_name = (
+            str(constraint_name).lower() if constraint_name is not None else ""
+        )
+        markers = " ".join((normalized_constraint_name, raw))
+
+        if any(
+            marker in markers for marker in AuthService._USERNAME_CONSTRAINT_MARKERS
+        ):
+            return "username"
+        if any(marker in markers for marker in AuthService._EMAIL_CONSTRAINT_MARKERS):
+            return "email"
+        return "other"
 
     @staticmethod
     def _refresh_ttl(remember_me: bool) -> timedelta:
@@ -163,9 +204,12 @@ class AuthService:
             await self.db.refresh(user)
         except IntegrityError as exc:
             await self.db.rollback()
-            if self._integrity_error_is_username_conflict(exc):
+            error_type = self._classify_unique_integrity_error(exc)
+            if error_type == "username":
                 raise DuplicateUsernameError("Username already taken") from exc
-            raise DuplicateEmailError("Email already registered") from exc
+            if error_type == "email":
+                raise DuplicateEmailError("Email already registered") from exc
+            raise
         except Exception:
             await self.db.rollback()
             raise

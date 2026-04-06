@@ -1,5 +1,5 @@
 from datetime import date
-from typing import Literal
+from typing import Annotated, Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -15,6 +15,47 @@ from app.services.user import UserService
 from app.services.vote import VoteService
 
 router = APIRouter()
+
+ProjectsPageLimit = Annotated[
+    int,
+    Query(
+        ...,
+        gt=0,
+        le=100,
+        description="Page size (1-100).",
+    ),
+]
+ProjectsCursor = Annotated[
+    str | None,
+    Query(
+        ...,
+        description=(
+            "Opaque pagination cursor from a previous response. "
+            "Reuse with the same `sort` and date-range values."
+        ),
+    ),
+]
+ProjectsSort = Annotated[
+    Literal["top", "new"],
+    Query(
+        ...,
+        description="Sort order: `new` by creation time, `top` by vote rank in date window.",
+    ),
+]
+ProjectsPublishedFrom = Annotated[
+    date | None,
+    Query(
+        ...,
+        description="Inclusive `published_at` start date (`YYYY-MM-DD`) for `sort=top`.",
+    ),
+]
+ProjectsPublishedTo = Annotated[
+    date | None,
+    Query(
+        ...,
+        description="Inclusive `published_at` end date (`YYYY-MM-DD`) for `sort=top`.",
+    ),
+]
 
 
 @router.get(
@@ -148,6 +189,49 @@ async def get_user_profile_by_username(
     return UserPublic.model_validate(user)
 
 
+async def _get_user_or_404_by_id(db: AsyncSession, *, user_id: UUID) -> User:
+    """Resolve a user by id or raise 404 for missing users."""
+    user = await UserService(db).get_user_by_id(user_id)
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    return user
+
+
+async def _get_user_or_404_by_username(db: AsyncSession, *, username: str) -> User:
+    """Resolve a user by username (case-insensitive) or raise 404."""
+    user = await UserService(db).get_user_by_username(username)
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    return user
+
+
+async def _list_published_projects_for_creator(
+    *,
+    db: AsyncSession,
+    created_by_id: UUID,
+    current_user_id: UUID | None,
+    limit: int,
+    cursor: str | None,
+    sort: Literal["top", "new"],
+    published_from: date | None,
+    published_to: date | None,
+) -> ProjectListResponse:
+    """List published projects for a specific creator with shared paging/sort behavior."""
+    project_service = ProjectService(db)
+    try:
+        return await project_service.list_projects(
+            sort=sort,
+            limit=limit,
+            cursor=cursor,
+            published_from=published_from,
+            published_to=published_to,
+            created_by_id=created_by_id,
+            current_user_id=current_user_id,
+        )
+    except CursorError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
 @router.get(
     "/users/{user_id}/projects",
     summary="List published projects for a user",
@@ -164,53 +248,26 @@ async def get_user_profile_by_username(
 )
 async def list_user_projects(
     user_id: UUID,
-    limit: int = Query(
-        default=20,
-        gt=0,
-        le=100,
-        description="Page size (1-100).",
-    ),
-    cursor: str | None = Query(
-        default=None,
-        description=(
-            "Opaque pagination cursor from a previous response. "
-            "Reuse with the same `sort` and date-range values."
-        ),
-    ),
-    sort: Literal["top", "new"] = Query(
-        default="new",
-        description="Sort order: `new` by creation time, `top` by vote rank in date window.",
-    ),
-    published_from: date | None = Query(
-        default=None,
-        description="Inclusive `published_at` start date (`YYYY-MM-DD`) for `sort=top`.",
-    ),
-    published_to: date | None = Query(
-        default=None,
-        description="Inclusive `published_at` end date (`YYYY-MM-DD`) for `sort=top`.",
-    ),
+    limit: ProjectsPageLimit = 20,
+    cursor: ProjectsCursor = None,
+    sort: ProjectsSort = "new",
+    published_from: ProjectsPublishedFrom = None,
+    published_to: ProjectsPublishedTo = None,
     db: AsyncSession = Depends(get_db),
     current_user: User | None = Depends(get_current_user_optional),
 ) -> ProjectListResponse:
     """Return published projects authored by the specified user, including computed team size."""
-    user_service = UserService(db)
-    user = await user_service.get_user_by_id(user_id)
-    if user is None:
-        raise HTTPException(status_code=404, detail="User not found")
-
-    project_service = ProjectService(db)
-    try:
-        return await project_service.list_projects(
-            sort=sort,
-            limit=limit,
-            cursor=cursor,
-            published_from=published_from,
-            published_to=published_to,
-            created_by_id=user_id,
-            current_user_id=current_user.id if current_user else None,
-        )
-    except CursorError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    user = await _get_user_or_404_by_id(db, user_id=user_id)
+    return await _list_published_projects_for_creator(
+        db=db,
+        created_by_id=user.id,
+        current_user_id=current_user.id if current_user else None,
+        limit=limit,
+        cursor=cursor,
+        sort=sort,
+        published_from=published_from,
+        published_to=published_to,
+    )
 
 
 @router.get(
@@ -230,50 +287,23 @@ async def list_user_projects(
 )
 async def list_user_projects_by_username(
     username: str,
-    limit: int = Query(
-        default=20,
-        gt=0,
-        le=100,
-        description="Page size (1-100).",
-    ),
-    cursor: str | None = Query(
-        default=None,
-        description=(
-            "Opaque pagination cursor from a previous response. "
-            "Reuse with the same `sort` and date-range values."
-        ),
-    ),
-    sort: Literal["top", "new"] = Query(
-        default="new",
-        description="Sort order: `new` by creation time, `top` by vote rank in date window.",
-    ),
-    published_from: date | None = Query(
-        default=None,
-        description="Inclusive `published_at` start date (`YYYY-MM-DD`) for `sort=top`.",
-    ),
-    published_to: date | None = Query(
-        default=None,
-        description="Inclusive `published_at` end date (`YYYY-MM-DD`) for `sort=top`.",
-    ),
+    limit: ProjectsPageLimit = 20,
+    cursor: ProjectsCursor = None,
+    sort: ProjectsSort = "new",
+    published_from: ProjectsPublishedFrom = None,
+    published_to: ProjectsPublishedTo = None,
     db: AsyncSession = Depends(get_db),
     current_user: User | None = Depends(get_current_user_optional),
 ) -> ProjectListResponse:
     """Return published projects authored by username, including computed team size."""
-    user_service = UserService(db)
-    user = await user_service.get_user_by_username(username)
-    if user is None:
-        raise HTTPException(status_code=404, detail="User not found")
-
-    project_service = ProjectService(db)
-    try:
-        return await project_service.list_projects(
-            sort=sort,
-            limit=limit,
-            cursor=cursor,
-            published_from=published_from,
-            published_to=published_to,
-            created_by_id=user.id,
-            current_user_id=current_user.id if current_user else None,
-        )
-    except CursorError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    user = await _get_user_or_404_by_username(db, username=username)
+    return await _list_published_projects_for_creator(
+        db=db,
+        created_by_id=user.id,
+        current_user_id=current_user.id if current_user else None,
+        limit=limit,
+        cursor=cursor,
+        sort=sort,
+        published_from=published_from,
+        published_to=published_to,
+    )
