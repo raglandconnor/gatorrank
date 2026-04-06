@@ -361,6 +361,14 @@ class ProjectBaseResponse(BaseModel):
     id: UUID
     created_by_id: UUID
     title: str
+    slug: str = Field(
+        min_length=1,
+        description=(
+            "Project slug generated from title using transliteration and deterministic "
+            "collision suffixes (for example: `my-project`, `my-project-2`). "
+            "Slug is immutable after creation."
+        ),
+    )
     short_description: str
     long_description: str | None = None
     demo_url: str | None = None

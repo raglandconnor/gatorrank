@@ -43,6 +43,7 @@ async def _seed_project(
     project = Project(
         created_by_id=created_by_id,
         title=title,
+        slug=title.lower().replace(" ", "-"),
         short_description=f"{title} description",
         vote_count=vote_count,
         is_group_project=False,
@@ -425,6 +426,81 @@ async def test_create_project_creates_draft_and_owner_membership_and_returns_det
     )
     owner_member = member_result.one()
     assert owner_member.role == "owner"
+
+
+@pytest.mark.asyncio
+async def test_create_project_generates_transliterated_slug_and_collision_suffix(
+    db_session,
+):
+    creator = await _seed_user(db_session, "slug-creator@ufl.edu", "Slug Creator")
+    service = ProjectService(db_session)
+
+    first = await service.create_project(
+        created_by_id=creator.id,
+        payload=ProjectCreateRequest(
+            title="  Café Déjà Vu!  ",
+            short_description="Slug transliteration coverage A",
+            github_url="https://github.com/example/slug-a",
+        ),
+    )
+    second = await service.create_project(
+        created_by_id=creator.id,
+        payload=ProjectCreateRequest(
+            title="Cafe Deja Vu",
+            short_description="Slug transliteration coverage B",
+            github_url="https://github.com/example/slug-b",
+        ),
+    )
+
+    assert first.slug == "cafe-deja-vu"
+    assert second.slug == "cafe-deja-vu-2"
+
+
+@pytest.mark.asyncio
+async def test_create_project_slug_fallback_for_empty_normalized_base(db_session):
+    creator = await _seed_user(
+        db_session, "slug-fallback-creator@ufl.edu", "Slug Fallback Creator"
+    )
+    service = ProjectService(db_session)
+
+    first = await service.create_project(
+        created_by_id=creator.id,
+        payload=ProjectCreateRequest(
+            title="🔥🔥🔥",
+            short_description="Fallback slug coverage A",
+            github_url="https://github.com/example/fallback-a",
+        ),
+    )
+    second = await service.create_project(
+        created_by_id=creator.id,
+        payload=ProjectCreateRequest(
+            title="!!!",
+            short_description="Fallback slug coverage B",
+            github_url="https://github.com/example/fallback-b",
+        ),
+    )
+
+    assert first.slug == "project"
+    assert second.slug == "project-2"
+
+
+@pytest.mark.asyncio
+async def test_get_project_detail_by_slug_resolves_existing_project(db_session):
+    creator = await _seed_user(db_session, "slug-detail-owner@ufl.edu", "Slug Owner")
+    service = ProjectService(db_session)
+    created = await service.create_project(
+        created_by_id=creator.id,
+        payload=ProjectCreateRequest(
+            title="Slug Lookup Detail",
+            short_description="Slug lookup coverage",
+            github_url="https://github.com/example/slug-lookup",
+        ),
+    )
+
+    by_slug = await service.get_project_detail_by_slug(created.slug, creator.id)
+    assert by_slug is not None
+    assert by_slug.id == created.id
+    assert by_slug.slug == created.slug
 
 
 @pytest.mark.asyncio

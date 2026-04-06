@@ -374,6 +374,7 @@ async def get_or_create_project(
         project = Project(  # pyright: ignore[reportCallIssue]
             created_by_id=owner_user_id,
             title=title,
+            slug=title.lower().replace(" ", "-"),
             short_description=project_short_description(index, rng),
             long_description=project_long_description(index, rng),
             demo_url=demo_url,

@@ -33,6 +33,12 @@ router = APIRouter()
 @router.post(
     "/projects",
     summary="Create project draft",
+    description=(
+        "Create a draft project and auto-generate an immutable slug from the normalized "
+        "project title (`trim + lowercase + hyphenate` after transliteration). "
+        "If the slug collides, deterministic numeric suffixes are applied "
+        "(`slug`, `slug-2`, `slug-3`, ...)."
+    ),
     response_model=ProjectDetailResponse,
     status_code=status.HTTP_201_CREATED,
     responses={
@@ -58,6 +64,38 @@ async def create_project(
     """
     service = ProjectService(db)
     return await service.create_project(created_by_id=current_user.id, payload=payload)
+
+
+@router.get(
+    "/projects/slug/{slug}",
+    summary="Get project detail by slug",
+    description=(
+        "Return project details for the provided immutable project slug, including computed "
+        "`team_size`. Visibility semantics match `GET /projects/{project_id}`."
+    ),
+    response_model=ProjectDetailResponse,
+    responses={
+        403: {"description": "Authenticated user cannot access this draft project"},
+        404: {
+            "description": "Project not found (or hidden draft for anonymous requester)"
+        },
+    },
+)
+async def get_project_detail_by_slug(
+    slug: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User | None = Depends(get_current_user_optional),
+) -> ProjectDetailResponse:
+    """Return project details by immutable slug when requester can view."""
+    service = ProjectService(db)
+    current_user_id = current_user.id if current_user else None
+    try:
+        project = await service.get_project_detail_by_slug(slug, current_user_id)
+    except ProjectAccessForbiddenError as exc:
+        raise HTTPException(status_code=403, detail="Project access forbidden") from exc
+    if project is None:
+        raise HTTPException(status_code=404, detail="Project not found")
+    return project
 
 
 @router.get(
