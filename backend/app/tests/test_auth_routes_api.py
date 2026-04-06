@@ -10,6 +10,7 @@ from app.main import app
 from app.models.user import User
 from app.services.auth import (
     DuplicateEmailError,
+    DuplicateUsernameError,
     InvalidCredentialsError,
     InvalidRefreshTokenError,
     TokenPair,
@@ -25,11 +26,14 @@ async def _override_get_db():
     yield MockSession()
 
 
-def _build_user(email: str = "api-auth@ufl.edu") -> User:
+def _build_user(
+    email: str = "api-auth@ufl.edu", username: str = "api_auth_user"
+) -> User:
     now = datetime.now(UTC)
     return User(  # pyright: ignore[reportCallIssue]
         id=uuid4(),
         email=email,
+        username=username,
         password_hash="test-password-hash",
         role="student",
         full_name="Auth User",
@@ -49,7 +53,7 @@ def _build_token_pair() -> TokenPair:
 
 
 def test_signup_returns_201_and_token_payload():
-    user = _build_user(email="signup@ufl.edu")
+    user = _build_user(email="signup@ufl.edu", username="signup_user")
     token_pair = _build_token_pair()
     app.dependency_overrides[get_db] = _override_get_db
     try:
@@ -67,6 +71,7 @@ def test_signup_returns_201_and_token_payload():
                 "/api/v1/auth/signup",
                 json={
                     "email": "signup@ufl.edu",
+                    "username": "signup_user",
                     "password": "long-password-123",
                     "remember_me": False,
                 },
@@ -79,6 +84,7 @@ def test_signup_returns_201_and_token_payload():
     assert payload["access_token"] == token_pair.access_token
     assert payload["refresh_token"] == token_pair.refresh_token
     assert payload["user"]["email"] == "signup@ufl.edu"
+    assert payload["user"]["username"] == "signup_user"
 
 
 def test_signup_duplicate_email_returns_409():
@@ -92,6 +98,7 @@ def test_signup_duplicate_email_returns_409():
                 "/api/v1/auth/signup",
                 json={
                     "email": "dup@ufl.edu",
+                    "username": "dup_user",
                     "password": "long-password-123",
                 },
             )
@@ -100,6 +107,28 @@ def test_signup_duplicate_email_returns_409():
 
     assert response.status_code == 409
     assert response.json()["detail"] == "Email already registered"
+
+
+def test_signup_duplicate_username_returns_409():
+    app.dependency_overrides[get_db] = _override_get_db
+    try:
+        with patch(
+            "app.api.v1.auth.AuthService.create_user",
+            new=AsyncMock(side_effect=DuplicateUsernameError("Username already taken")),
+        ):
+            response = client.post(
+                "/api/v1/auth/signup",
+                json={
+                    "email": "dup2@ufl.edu",
+                    "username": "dup_user",
+                    "password": "long-password-123",
+                },
+            )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 409
+    assert response.json()["detail"] == "Username already taken"
 
 
 def test_login_invalid_credentials_returns_401():
@@ -129,7 +158,7 @@ def test_auth_me_requires_authentication():
 
 
 def test_auth_me_returns_current_user():
-    user = _build_user(email="me@ufl.edu")
+    user = _build_user(email="me@ufl.edu", username="me_user")
     app.dependency_overrides[get_current_user] = lambda: user
     try:
         response = client.get("/api/v1/auth/me")
@@ -140,6 +169,7 @@ def test_auth_me_returns_current_user():
     payload = response.json()
     assert payload["id"] == str(user.id)
     assert payload["email"] == "me@ufl.edu"
+    assert payload["username"] == "me_user"
 
 
 def test_refresh_invalid_token_returns_401():
@@ -181,7 +211,7 @@ def test_logout_is_idempotent_and_returns_204():
 
 
 def test_refresh_success_returns_token_payload():
-    user = _build_user(email="refresh@ufl.edu")
+    user = _build_user(email="refresh@ufl.edu", username="refresh_user")
     token_pair = _build_token_pair()
     app.dependency_overrides[get_db] = _override_get_db
     try:
@@ -200,6 +230,7 @@ def test_refresh_success_returns_token_payload():
     payload = response.json()
     assert payload["access_token"] == token_pair.access_token
     assert payload["user"]["email"] == "refresh@ufl.edu"
+    assert payload["user"]["username"] == "refresh_user"
 
 
 def test_signup_password_policy_validation_returns_422():
@@ -207,6 +238,7 @@ def test_signup_password_policy_validation_returns_422():
         "/api/v1/auth/signup",
         json={
             "email": "policy@ufl.edu",
+            "username": "policy_user",
             "password": "short",
             "remember_me": False,
         },

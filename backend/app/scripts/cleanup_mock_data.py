@@ -5,7 +5,7 @@ Deletes only rows associated with seeded mock identifiers:
 - projects.created_by_id in mock user ids (plus legacy '[MOCK] title fallback)
 
 Usage:
-  uv run python -m app.scripts.cleanup_mock_data --yes
+  PYTHONPATH=. uv run python app/scripts/cleanup_mock_data.py --yes
 """
 
 from __future__ import annotations

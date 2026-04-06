@@ -16,6 +16,7 @@ from app.schemas.auth import (
 from app.services.auth import (
     AuthService,
     DuplicateEmailError,
+    DuplicateUsernameError,
     InvalidCredentialsError,
     InvalidRefreshTokenError,
 )
@@ -28,13 +29,14 @@ router = APIRouter()
     summary="Sign up with email and password",
     description=(
         "Create a first-party user account and return an authenticated token payload. "
-        "This endpoint enforces password policy and supports optional `remember_me` "
-        "refresh-session duration selection."
+        "This endpoint enforces password policy, requires a canonical lowercase "
+        "username, and supports optional `remember_me` refresh-session duration "
+        "selection."
     ),
     response_model=AuthTokenResponse,
     status_code=status.HTTP_201_CREATED,
     responses={
-        409: {"description": "Email already registered"},
+        409: {"description": "Email or username already registered"},
         422: {"description": "Validation error"},
     },
 )
@@ -47,10 +49,13 @@ async def signup(
     try:
         user = await service.create_user(
             email=payload.email,
+            username=payload.username,
             password=payload.password,
             full_name=payload.full_name,
         )
     except DuplicateEmailError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except DuplicateUsernameError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     except InvalidCredentialsError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
