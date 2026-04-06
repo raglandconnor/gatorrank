@@ -12,6 +12,7 @@ from app.tests.integration._db_url_utils import to_sync_migration_url
 
 BACKEND_ROOT = Path(__file__).resolve().parents[3]
 PRE_SLUG_REVISION = "377b094d6028"
+SLUG_REVISION = "d76e8fdc877a"
 
 
 def test_alembic_roundtrip_latest_revision() -> None:
@@ -107,8 +108,10 @@ def test_slug_backfill_is_deterministic_for_collisions() -> None:
                     {"creator_id": creator_id},
                 )
 
+            # Keep this test scoped to slug migration behavior only.
+            # Username rollout intentionally assumes dev DB reset/no-backfill.
             subprocess.run(
-                ["uv", "run", "alembic", "upgrade", "head"],
+                ["uv", "run", "alembic", "upgrade", SLUG_REVISION],
                 cwd=BACKEND_ROOT,
                 env=env,
                 check=True,
