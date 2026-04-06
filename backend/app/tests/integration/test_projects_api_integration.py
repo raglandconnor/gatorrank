@@ -3470,3 +3470,117 @@ async def test_create_project_rejects_taxonomy_limit_exceeded(api_client, db_ses
         app.dependency_overrides.clear()
 
     assert response.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_update_project_taxonomy_rewrites_position_order_on_replace(
+    api_client, db_session
+):
+    creator = await _seed_user(
+        db_session, "creator_taxonomy_order@ufl.edu", "Creator Taxonomy Order"
+    )
+
+    async def override_get_db():
+        yield db_session
+
+    app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_current_user] = _override_authed_user(creator)
+    try:
+        create_response = await api_client.post(
+            "/api/v1/projects",
+            json=_create_project_payload(categories=["Aaa", "Bbb", "Ccc"]),
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert create_response.status_code == 201
+    project_id = create_response.json()["id"]
+
+    app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_current_user] = _override_authed_user(creator)
+    try:
+        update_response = await api_client.patch(
+            f"/api/v1/projects/{project_id}",
+            json={
+                "categories": ["Ccc", "Aaa"],
+                "demo_url": "https://example.com/reorder",
+            },
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert update_response.status_code == 200
+    updated_payload = update_response.json()
+    assert [term["name"] for term in updated_payload["categories"]] == ["Ccc", "Aaa"]
+
+    project_category_cols = getattr(ProjectCategory, "__table__").c
+    category_cols = getattr(Category, "__table__").c
+    rows_result = await db_session.exec(
+        select(ProjectCategory, Category)
+        .join(Category, category_cols.id == project_category_cols.category_id)
+        .where(project_category_cols.project_id == project_id)
+        .order_by(project_category_cols.position.asc())
+    )
+    rows = rows_result.all()
+    assert [row.position for row, _ in rows] == [0, 1]
+    assert [category.name for _, category in rows] == ["Ccc", "Aaa"]
+
+
+@pytest.mark.asyncio
+async def test_list_endpoints_include_taxonomy_payloads(api_client, db_session):
+    owner = await _seed_user(
+        db_session, "creator_taxonomy_list@ufl.edu", "Creator Taxonomy List"
+    )
+
+    async def override_get_db():
+        yield db_session
+
+    app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_current_user] = _override_authed_user(owner)
+    try:
+        create_response = await api_client.post(
+            "/api/v1/projects",
+            json=_create_project_payload(
+                categories=["Web"],
+                tags=["Backend"],
+                tech_stack=["FastAPI"],
+            ),
+        )
+        assert create_response.status_code == 201
+
+        publish_response = await api_client.post(
+            f"/api/v1/projects/{create_response.json()['id']}/publish"
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert publish_response.status_code == 200
+
+    app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_current_user_optional] = _override_authed_user(owner)
+    try:
+        feed_response = await api_client.get("/api/v1/projects")
+        user_projects_response = await api_client.get(
+            f"/api/v1/users/{owner.id}/projects"
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert feed_response.status_code == 200
+    assert user_projects_response.status_code == 200
+
+    feed_items = feed_response.json()["items"]
+    assert len(feed_items) >= 1
+    feed_item = next(
+        item for item in feed_items if item["created_by_id"] == str(owner.id)
+    )
+    assert [term["name"] for term in feed_item["categories"]] == ["Web"]
+    assert [term["name"] for term in feed_item["tags"]] == ["Backend"]
+    assert [term["name"] for term in feed_item["tech_stack"]] == ["FastAPI"]
+
+    user_items = user_projects_response.json()["items"]
+    assert len(user_items) >= 1
+    user_item = user_items[0]
+    assert [term["name"] for term in user_item["categories"]] == ["Web"]
+    assert [term["name"] for term in user_item["tags"]] == ["Backend"]
+    assert [term["name"] for term in user_item["tech_stack"]] == ["FastAPI"]
