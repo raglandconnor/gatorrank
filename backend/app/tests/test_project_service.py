@@ -28,6 +28,7 @@ def make_project(*, is_published: bool, created_by_id=None) -> Project:
         id=uuid4(),
         created_by_id=created_by_id or uuid4(),
         title="Test Project",
+        slug="test-project",
         short_description="Description",
         long_description=None,
         demo_url=None,
@@ -111,6 +112,14 @@ def test_can_edit_project_rejects_contributor():
     assert can_edit is False
 
 
+def test_build_slug_base_transliterates_and_hyphenates():
+    assert ProjectService._build_slug_base("  Café Déjà Vu!  ") == "cafe-deja-vu"
+
+
+def test_build_slug_base_falls_back_to_project_when_empty():
+    assert ProjectService._build_slug_base("🔥🔥🔥") == "project"
+
+
 def test_decode_cursor_rejects_malformed_cursor():
     service = ProjectService(cast(AsyncSession, DummySession()))
 
@@ -149,6 +158,9 @@ async def test_create_project_skips_taxonomy_assignment_when_create_lists_empty(
     detail_stub = type("Detail", (), {"id": project_id})()
 
     service.get_project_detail = AsyncMock(return_value=detail_stub)  # type: ignore[method-assign]
+    service._generate_unique_slug = AsyncMock(
+        return_value="project-create-empty-taxonomy"
+    )  # type: ignore[method-assign]
     replace_spy = AsyncMock(return_value=None)
     service._replace_project_taxonomy_assignments = replace_spy  # type: ignore[method-assign]
 

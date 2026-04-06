@@ -34,6 +34,7 @@ def _build_project_response(project_id: UUID) -> ProjectDetailResponse:
         id=project_id,
         created_by_id=uuid4(),
         title="Project",
+        slug="project",
         short_description="Project description",
         demo_url=None,
         github_url=None,
@@ -57,6 +58,7 @@ def _build_project_list_response() -> ProjectListResponse:
                 id=uuid4(),
                 created_by_id=uuid4(),
                 title="Listed Project",
+                slug="listed-project",
                 short_description="Listed project description",
                 demo_url=None,
                 github_url=None,
@@ -103,6 +105,7 @@ def _build_draft_project_response(
         id=project_id,
         created_by_id=created_by_id,
         title="New Project",
+        slug="new-project",
         short_description="A project description",
         demo_url=None,
         github_url="https://github.com/example/repo",
@@ -514,6 +517,50 @@ def test_get_project_detail_published_visible_anonymous():
     assert payload["members"] == []
 
     _assert_service_called_with(mock_get_project_detail, project_id, None)
+
+
+def test_get_project_detail_by_slug_published_visible_anonymous():
+    response_model = _build_project_response(uuid4())
+    slug = "project"
+
+    app.dependency_overrides[get_db] = _override_get_db
+    app.dependency_overrides[get_current_user_optional] = lambda: None
+    try:
+        with patch(
+            "app.api.v1.projects.ProjectService.get_project_detail_by_slug",
+            new=AsyncMock(return_value=response_model),
+        ) as mock_get_project_detail_by_slug:
+            response = client.get(f"/api/v1/projects/slug/{slug}")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    await_args = mock_get_project_detail_by_slug.await_args
+    assert await_args is not None
+    assert await_args.args == (slug, None)
+
+
+def test_get_project_detail_by_slug_forbidden_returns_403():
+    slug = "hidden-project"
+    member_id = uuid4()
+
+    app.dependency_overrides[get_db] = _override_get_db
+    app.dependency_overrides[get_current_user_optional] = lambda: SimpleNamespace(
+        id=member_id
+    )
+    try:
+        with patch(
+            "app.api.v1.projects.ProjectService.get_project_detail_by_slug",
+            new=AsyncMock(
+                side_effect=ProjectAccessForbiddenError("Project access forbidden")
+            ),
+        ):
+            response = client.get(f"/api/v1/projects/slug/{slug}")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 403
+    assert response.json()["detail"] == "Project access forbidden"
 
 
 def test_get_project_detail_unpublished_hidden_anonymous():

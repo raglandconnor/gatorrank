@@ -36,6 +36,7 @@ async def _seed_project(db_session, *, created_by_id) -> Project:
     project = Project(
         created_by_id=created_by_id,
         title="Taxonomy Integration Project",
+        slug=f"taxonomy-integration-project-{uuid4().hex[:8]}",
         short_description="Taxonomy integration test project",
         vote_count=0,
         is_group_project=False,
