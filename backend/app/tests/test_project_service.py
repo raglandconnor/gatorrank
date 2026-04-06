@@ -1,10 +1,13 @@
 from datetime import datetime, timezone
 from typing import cast
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, Mock
 from uuid import uuid4
 
 import pytest
 from app.models.project import Project
+from app.models.taxonomy import ProjectCategory
+from app.schemas.project import ProjectCreateRequest
+from app.schemas.taxonomy import TaxonomyTermResponse
 from app.services.project import (
     CursorError,
     ProjectAccessForbiddenError,
@@ -126,6 +129,53 @@ def test_decode_cursor_rejects_sort_mismatch():
 
     with pytest.raises(CursorError, match="Invalid cursor"):
         service._decode_cursor(top_cursor, "new")
+
+
+@pytest.mark.asyncio
+async def test_create_project_skips_taxonomy_assignment_when_create_lists_empty():
+    db = AsyncMock()
+    db.add = Mock()
+    service = ProjectService(cast(AsyncSession, db))
+    creator_id = uuid4()
+    project_id = uuid4()
+    payload = ProjectCreateRequest(
+        title="Project Create Empty Taxonomy",
+        short_description="Description",
+        github_url="https://github.com/example/project",
+        categories=[],
+        tags=[],
+        tech_stack=[],
+    )
+    detail_stub = type("Detail", (), {"id": project_id})()
+
+    service.get_project_detail = AsyncMock(return_value=detail_stub)  # type: ignore[method-assign]
+    replace_spy = AsyncMock(return_value=None)
+    service._replace_project_taxonomy_assignments = replace_spy  # type: ignore[method-assign]
+
+    created = await service.create_project(created_by_id=creator_id, payload=payload)
+
+    assert created is detail_stub
+    await_args = replace_spy.await_args
+    assert await_args is not None
+    kwargs = await_args.kwargs
+    assert kwargs["categories"] is None
+    assert kwargs["tags"] is None
+    assert kwargs["tech_stack"] is None
+
+
+@pytest.mark.asyncio
+async def test_replace_join_assignments_invalid_term_fk_field_raises():
+    db = AsyncMock()
+    service = ProjectService(cast(AsyncSession, db))
+    term = TaxonomyTermResponse(id=uuid4(), name="Term")
+
+    with pytest.raises(ValueError, match="Unsupported taxonomy term_fk_field"):
+        await service._replace_join_assignments(
+            join_model=ProjectCategory,
+            term_fk_field="invalid_fk",  # type: ignore[arg-type]
+            project_id=uuid4(),
+            terms=[term],
+        )
 
 
 @pytest.mark.asyncio
