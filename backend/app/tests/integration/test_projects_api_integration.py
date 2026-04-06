@@ -1,6 +1,7 @@
 import asyncio
 from datetime import date, datetime, timedelta, timezone
 from time import perf_counter
+from urllib.parse import quote
 from uuid import uuid4
 
 import pytest
@@ -193,6 +194,69 @@ async def test_get_project_detail_by_slug_unpublished_hidden_anonymous(
         title="Hidden Slug API Project",
         is_published=False,
     )
+
+    async def override_get_db():
+        yield db_session
+
+    app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_current_user_optional] = lambda: None
+    try:
+        response = await api_client.get(f"/api/v1/projects/slug/{project.slug}")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Project not found"
+
+
+@pytest.mark.asyncio
+async def test_get_project_detail_by_slug_normalizes_case_and_whitespace(
+    api_client, db_session
+):
+    owner = await _seed_user(
+        db_session, "owner_api_slug_normalize@ufl.edu", "Owner API Slug Normalize"
+    )
+    project = await _seed_project(
+        db_session,
+        created_by_id=owner.id,
+        title="Normalize Slug API Project",
+        is_published=True,
+    )
+    slug_with_whitespace_and_case = quote(f"  {project.slug.upper()}  ", safe="")
+
+    async def override_get_db():
+        yield db_session
+
+    app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_current_user_optional] = lambda: None
+    try:
+        response = await api_client.get(
+            f"/api/v1/projects/slug/{slug_with_whitespace_and_case}"
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["id"] == str(project.id)
+    assert payload["slug"] == project.slug
+
+
+@pytest.mark.asyncio
+async def test_get_project_detail_by_slug_soft_deleted_returns_404(
+    api_client, db_session
+):
+    owner = await _seed_user(
+        db_session, "owner_api_slug_deleted@ufl.edu", "Owner API Slug Deleted"
+    )
+    project = await _seed_project(
+        db_session,
+        created_by_id=owner.id,
+        title="Deleted Slug API Project",
+        is_published=True,
+    )
+    project.deleted_at = datetime.now(timezone.utc)
+    await db_session.commit()
 
     async def override_get_db():
         yield db_session
@@ -605,6 +669,47 @@ async def test_patch_project_owner_updates_non_url_fields_with_existing_url(
     assert payload["title"] == "Retitled Project"
     assert payload["short_description"] == "Revised summary"
     assert payload["github_url"] == "https://github.com/example/existing-url"
+
+
+@pytest.mark.asyncio
+async def test_patch_project_title_does_not_mutate_slug(api_client, db_session):
+    owner = await _seed_user(
+        db_session, "owner_patch_slug_immutable@ufl.edu", "Owner Patch Immutable"
+    )
+    project = await _seed_project(
+        db_session,
+        created_by_id=owner.id,
+        title="Immutable Slug Source Title",
+        is_published=False,
+    )
+    project.github_url = "https://github.com/example/immutable-slug"
+    await db_session.flush()
+    original_slug = project.slug
+
+    async def override_get_db():
+        yield db_session
+
+    app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_current_user] = _override_authed_user(owner)
+    try:
+        response = await api_client.patch(
+            f"/api/v1/projects/{project.id}",
+            json={"title": "Completely Changed Title"},
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["title"] == "Completely Changed Title"
+    assert payload["slug"] == original_slug
+
+    project_result = await db_session.exec(
+        select(Project).where(Project.id == project.id)
+    )
+    stored_project = project_result.one()
+    assert stored_project.title == "Completely Changed Title"
+    assert stored_project.slug == original_slug
 
 
 @pytest.mark.asyncio
