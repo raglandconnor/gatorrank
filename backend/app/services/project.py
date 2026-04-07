@@ -456,7 +456,7 @@ class ProjectService:
             return None
 
         members = await self.get_project_members(project.id)
-        taxonomy_by_project = await self._get_project_taxonomy_by_project_ids(
+        taxonomy_by_project = await self.get_project_taxonomy_by_project_ids(
             [project.id]
         )
         taxonomy = taxonomy_by_project.get(project.id, self._empty_taxonomy_payload())
@@ -748,7 +748,7 @@ class ProjectService:
         members_by_project = await self._get_members_for_projects(
             [p.id for p in projects]
         )
-        taxonomy_by_project = await self._get_project_taxonomy_by_project_ids(
+        taxonomy_by_project = await self.get_project_taxonomy_by_project_ids(
             [p.id for p in projects]
         )
         voted_project_ids: set[UUID] = set()
@@ -884,9 +884,10 @@ class ProjectService:
                 raise ValueError(f"Unsupported taxonomy term_fk_field: {term_fk_field}")
             self.db.add(assignment)
 
-    async def _get_project_taxonomy_by_project_ids(
+    async def get_project_taxonomy_by_project_ids(
         self, project_ids: list[UUID]
     ) -> dict[UUID, dict[str, list[TaxonomyTermResponse]]]:
+        """Return taxonomy payloads for projects keyed by project id."""
         if not project_ids:
             return {}
 
@@ -949,12 +950,6 @@ class ProjectService:
             )
 
         return payload
-
-    async def get_project_taxonomy_by_project_ids(
-        self, project_ids: list[UUID]
-    ) -> dict[UUID, dict[str, list[TaxonomyTermResponse]]]:
-        """Return taxonomy payloads for projects keyed by project id."""
-        return await self._get_project_taxonomy_by_project_ids(project_ids)
 
     @staticmethod
     def _empty_taxonomy_payload() -> dict[str, list[TaxonomyTermResponse]]:
@@ -1048,21 +1043,6 @@ class ProjectService:
             categories=taxonomy["categories"],
             tags=taxonomy["tags"],
             tech_stack=taxonomy["tech_stack"],
-        )
-
-    @staticmethod
-    def to_project_list_item(
-        project: Project,
-        members_by_project: dict[UUID, list[ProjectMemberInfo]],
-        taxonomy_by_project: dict[UUID, dict[str, list[TaxonomyTermResponse]]],
-        voted_project_ids: set[UUID],
-    ) -> ProjectListItemResponse:
-        """Build a project list item with member/team/vote/taxonomy parity."""
-        return ProjectService._to_project_list_item(
-            project,
-            members_by_project,
-            taxonomy_by_project,
-            voted_project_ids,
         )
 
     async def _viewer_has_voted(self, project_id: UUID, user_id: UUID) -> bool:
