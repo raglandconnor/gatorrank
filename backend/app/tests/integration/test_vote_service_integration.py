@@ -10,6 +10,14 @@ from sqlmodel import delete, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.models.project import Project, Vote
+from app.models.taxonomy import (
+    Category,
+    ProjectCategory,
+    ProjectTag,
+    ProjectTechStack,
+    Tag,
+    TechStack,
+)
 from app.models.user import User
 from app.services.vote import VoteService, VoteTargetNotFoundError
 from app.utils.pagination import CursorError
@@ -334,6 +342,90 @@ async def test_list_my_voted_projects_excludes_soft_deleted_projects(db_session)
 
     response = await service.list_my_voted_projects(user_id=voter.id, limit=10)
     assert [item.id for item in response.items] == [visible.id]
+
+
+@pytest.mark.asyncio
+async def test_list_my_voted_projects_includes_taxonomy_in_assignment_order(db_session):
+    unique = uuid4().hex[:8]
+    now = datetime.now(timezone.utc)
+    owner = await _seed_user(
+        db_session, f"vote-owner-taxonomy-{unique}@ufl.edu", "Owner Taxonomy"
+    )
+    voter = await _seed_user(
+        db_session, f"vote-voter-taxonomy-{unique}@ufl.edu", "Voter Taxonomy"
+    )
+    project = await _seed_project(
+        db_session,
+        created_by_id=owner.id,
+        title=f"Taxonomy Vote Target {unique}",
+    )
+
+    category_a = Category(
+        name="Zoology",
+        normalized_name="zoology",
+        created_at=now,
+    )
+    category_b = Category(name="AI", normalized_name="ai", created_at=now)
+    tag_a = Tag(name="Backend", normalized_name="backend", created_at=now)
+    tag_b = Tag(name="API", normalized_name="api", created_at=now)
+    stack_a = TechStack(name="React", normalized_name="react", created_at=now)
+    stack_b = TechStack(name="Bun", normalized_name="bun", created_at=now)
+    db_session.add_all([category_a, category_b, tag_a, tag_b, stack_a, stack_b])
+    await db_session.flush()
+
+    db_session.add_all(
+        [
+            ProjectCategory(
+                project_id=project.id,
+                category_id=category_a.id,
+                position=0,
+                created_at=now,
+            ),
+            ProjectCategory(
+                project_id=project.id,
+                category_id=category_b.id,
+                position=1,
+                created_at=now,
+            ),
+            ProjectTag(
+                project_id=project.id,
+                tag_id=tag_a.id,
+                position=0,
+                created_at=now,
+            ),
+            ProjectTag(
+                project_id=project.id,
+                tag_id=tag_b.id,
+                position=1,
+                created_at=now,
+            ),
+            ProjectTechStack(
+                project_id=project.id,
+                tech_stack_id=stack_a.id,
+                position=0,
+                created_at=now,
+            ),
+            ProjectTechStack(
+                project_id=project.id,
+                tech_stack_id=stack_b.id,
+                position=1,
+                created_at=now,
+            ),
+        ]
+    )
+    await db_session.commit()
+
+    service = VoteService(db_session)
+    await service.add_vote(project_id=project.id, user_id=voter.id)
+
+    response = await service.list_my_voted_projects(user_id=voter.id, limit=10)
+
+    assert len(response.items) == 1
+    item = response.items[0]
+    assert item.id == project.id
+    assert [term.name for term in item.categories] == ["Zoology", "AI"]
+    assert [term.name for term in item.tags] == ["Backend", "API"]
+    assert [term.name for term in item.tech_stack] == ["React", "Bun"]
 
 
 @pytest.mark.asyncio
