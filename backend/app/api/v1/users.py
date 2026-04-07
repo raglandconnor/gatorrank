@@ -112,7 +112,8 @@ async def update_current_user_profile(
     summary="List my voted projects",
     description=(
         "Return published, non-deleted projects voted by the authenticated user, ordered by most "
-        "recent vote first, with cursor pagination and computed `team_size`."
+        "recent vote first, with cursor pagination, computed `team_size`, and taxonomy fields "
+        "(`categories`, `tags`, `tech_stack`)."
     ),
     response_model=ProjectListResponse,
     responses={
@@ -134,7 +135,7 @@ async def list_my_voted_projects(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> ProjectListResponse:
-    """Return published, non-deleted projects voted by the authenticated user, including computed team size."""
+    """Return voted project cards, including computed team size and taxonomy fields."""
     service = VoteService(db)
     try:
         return await service.list_my_voted_projects(
@@ -216,7 +217,7 @@ async def _list_published_projects_for_creator(
     published_from: date | None,
     published_to: date | None,
 ) -> ProjectListResponse:
-    """List published projects for a specific creator with shared paging/sort behavior."""
+    """List published project cards for a creator with shared team/taxonomy parity."""
     project_service = ProjectService(db)
     try:
         return await project_service.list_projects(
@@ -237,7 +238,8 @@ async def _list_published_projects_for_creator(
     summary="List published projects for a user",
     description=(
         "Return published projects authored by the given user, with cursor pagination "
-        "and computed `team_size`."
+        "and computed `team_size`, plus taxonomy fields (`categories`, `tags`, "
+        "`tech_stack`)."
     ),
     response_model=ProjectListResponse,
     responses={
@@ -256,7 +258,7 @@ async def list_user_projects(
     db: AsyncSession = Depends(get_db),
     current_user: User | None = Depends(get_current_user_optional),
 ) -> ProjectListResponse:
-    """Return published projects authored by the specified user, including computed team size."""
+    """Return a user's published project cards with team and taxonomy parity."""
     user = await _get_user_or_404_by_id(db, user_id=user_id)
     return await _list_published_projects_for_creator(
         db=db,
@@ -275,8 +277,9 @@ async def list_user_projects(
     summary="List published projects for a user by username",
     description=(
         "Return published projects authored by the given username, with cursor "
-        "pagination and computed `team_size`. Username lookup is case-insensitive "
-        "and resolves against canonical lowercase storage."
+        "pagination and computed `team_size`, plus taxonomy fields (`categories`, "
+        "`tags`, `tech_stack`). Username lookup is case-insensitive and resolves "
+        "against canonical lowercase storage."
     ),
     response_model=ProjectListResponse,
     responses={
@@ -295,7 +298,7 @@ async def list_user_projects_by_username(
     db: AsyncSession = Depends(get_db),
     current_user: User | None = Depends(get_current_user_optional),
 ) -> ProjectListResponse:
-    """Return published projects authored by username, including computed team size."""
+    """Return username-authored project cards with team and taxonomy parity."""
     user = await _get_user_or_404_by_username(db, username=username)
     return await _list_published_projects_for_creator(
         db=db,

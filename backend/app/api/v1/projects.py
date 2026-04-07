@@ -71,7 +71,8 @@ async def create_project(
     summary="Get project detail by slug",
     description=(
         "Return project details for the provided immutable project slug, including computed "
-        "`team_size`. Visibility semantics match `GET /projects/{project_id}`."
+        "`team_size` and taxonomy fields (`categories`, `tags`, `tech_stack`). "
+        "Visibility semantics match `GET /projects/{project_id}`."
     ),
     response_model=ProjectDetailResponse,
     responses={
@@ -86,7 +87,7 @@ async def get_project_detail_by_slug(
     db: AsyncSession = Depends(get_db),
     current_user: User | None = Depends(get_current_user_optional),
 ) -> ProjectDetailResponse:
-    """Return project details by immutable slug when requester can view."""
+    """Return project details by immutable slug with team and taxonomy parity."""
     service = ProjectService(db)
     current_user_id = current_user.id if current_user else None
     try:
@@ -103,7 +104,8 @@ async def get_project_detail_by_slug(
     summary="Get project detail",
     description=(
         "Return project details if visible to the current requester, including "
-        "computed `team_size` from active project memberships."
+        "computed `team_size` from active project memberships and taxonomy fields "
+        "(`categories`, `tags`, `tech_stack`)."
     ),
     response_model=ProjectDetailResponse,
     responses={
@@ -118,7 +120,7 @@ async def get_project_detail(
     db: AsyncSession = Depends(get_db),
     current_user: User | None = Depends(get_current_user_optional),
 ) -> ProjectDetailResponse:
-    """Return project details, including computed team size, when requester can view."""
+    """Return project details with team and taxonomy parity when requester can view."""
     service = ProjectService(db)
     current_user_id = current_user.id if current_user else None
     try:
@@ -489,7 +491,8 @@ async def unpublish_project(
     summary="List projects",
     description=(
         "Return published project cards with cursor pagination, including computed "
-        "`team_size` from active project memberships."
+        "`team_size` from active project memberships and taxonomy fields "
+        "(`categories`, `tags`, `tech_stack`)."
     ),
     response_model=ProjectListResponse,
     responses={
@@ -532,13 +535,16 @@ async def list_projects(
     db: AsyncSession = Depends(get_db),
     current_user: User | None = Depends(get_current_user_optional),
 ) -> ProjectListResponse:
-    """Return the published projects feed with cursor pagination.
+    """Return the published projects feed with project-card taxonomy parity.
 
     `sort=new` returns newest-first ordering.
 
     `sort=top` returns vote-ranked results within a published date window
     (`published_at`). The default window is the last 90 days, and callers may
     override it with `published_from` / `published_to` in `YYYY-MM-DD` format.
+
+    Every project card includes computed `team_size` plus taxonomy fields
+    (`categories`, `tags`, `tech_stack`) in stored assignment order.
 
     Reuse the same `sort` and date-range values when paginating with a cursor.
     """

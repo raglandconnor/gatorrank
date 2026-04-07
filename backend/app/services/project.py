@@ -441,6 +441,7 @@ class ProjectService:
         project_id: UUID,
         current_user_id: UUID | None,
     ) -> ProjectDetailResponse | None:
+        """Return visible project detail with team size and taxonomy in assignment order."""
         project = await self.get_project_by_id(project_id)
         if project is None:
             return None
@@ -455,7 +456,7 @@ class ProjectService:
             return None
 
         members = await self.get_project_members(project.id)
-        taxonomy_by_project = await self._get_project_taxonomy_by_project_ids(
+        taxonomy_by_project = await self.get_project_taxonomy_by_project_ids(
             [project.id]
         )
         taxonomy = taxonomy_by_project.get(project.id, self._empty_taxonomy_payload())
@@ -477,6 +478,7 @@ class ProjectService:
         slug: str,
         current_user_id: UUID | None,
     ) -> ProjectDetailResponse | None:
+        """Return visible project detail by slug with the same payload parity guarantees."""
         project = await self.get_project_by_slug(slug)
         if project is None:
             return None
@@ -664,6 +666,7 @@ class ProjectService:
         created_by_id: UUID | None = None,
         current_user_id: UUID | None = None,
     ) -> ProjectListResponse:
+        """Return project cards with team size and taxonomy hydrated for every endpoint."""
         limit = max(1, min(limit, 100))
 
         project_cols = getattr(Project, "__table__").c
@@ -745,7 +748,7 @@ class ProjectService:
         members_by_project = await self._get_members_for_projects(
             [p.id for p in projects]
         )
-        taxonomy_by_project = await self._get_project_taxonomy_by_project_ids(
+        taxonomy_by_project = await self.get_project_taxonomy_by_project_ids(
             [p.id for p in projects]
         )
         voted_project_ids: set[UUID] = set()
@@ -881,9 +884,10 @@ class ProjectService:
                 raise ValueError(f"Unsupported taxonomy term_fk_field: {term_fk_field}")
             self.db.add(assignment)
 
-    async def _get_project_taxonomy_by_project_ids(
+    async def get_project_taxonomy_by_project_ids(
         self, project_ids: list[UUID]
     ) -> dict[UUID, dict[str, list[TaxonomyTermResponse]]]:
+        """Return taxonomy payloads for projects keyed by project id."""
         if not project_ids:
             return {}
 
