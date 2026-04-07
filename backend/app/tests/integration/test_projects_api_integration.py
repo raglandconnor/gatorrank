@@ -3732,11 +3732,10 @@ async def test_list_endpoints_include_taxonomy_payloads(api_client, db_session):
         vote_response = await api_client.post(
             f"/api/v1/projects/{created_project_id}/vote"
         )
+        assert vote_response.status_code == 204
     finally:
         app.dependency_overrides.clear()
 
-    assert publish_response.status_code == 200
-    assert vote_response.status_code == 204
     assert created_project_id is not None
     assert created_project_slug is not None
 

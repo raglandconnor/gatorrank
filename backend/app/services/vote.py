@@ -133,13 +133,21 @@ class VoteService:
             [project.id for project in projects]
         )
         items: list[ProjectListItemResponse] = []
+        voted_project_ids = {project.id for project in projects}
         for _, project in page_rows:
+            members = members_by_project.get(project.id, [])
+            taxonomy = taxonomy_by_project.get(
+                project.id, {"categories": [], "tags": [], "tech_stack": []}
+            )
             items.append(
-                project_service.to_project_list_item(
-                    project,
-                    members_by_project,
-                    taxonomy_by_project,
-                    {project.id},
+                ProjectListItemResponse(
+                    **project.model_dump(),
+                    members=members,
+                    team_size=len(members),
+                    viewer_has_voted=project.id in voted_project_ids,
+                    categories=taxonomy["categories"],
+                    tags=taxonomy["tags"],
+                    tech_stack=taxonomy["tech_stack"],
                 )
             )
 
