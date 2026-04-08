@@ -1,11 +1,28 @@
 'use client';
 
+import { FormEvent, useMemo } from 'react';
 import { GatorRankLogo } from '@/components/GatorRankLogo';
 import { useAuth } from '@/components/auth/AuthProvider';
-import { Box, HStack, Text, Flex, Link, Menu, Portal } from '@chakra-ui/react';
+import {
+  Box,
+  HStack,
+  Text,
+  Flex,
+  Link,
+  Menu,
+  Portal,
+  Input,
+  Button,
+} from '@chakra-ui/react';
 import NextLink from 'next/link';
-import { useRouter } from 'next/navigation';
-import { LuChevronDown, LuUser, LuPlus, LuLogOut } from 'react-icons/lu';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import {
+  LuChevronDown,
+  LuUser,
+  LuPlus,
+  LuLogOut,
+  LuSearch,
+} from 'react-icons/lu';
 
 function getInitials(name: string): string {
   const parts = name.trim().split(/\s+/);
@@ -16,10 +33,34 @@ function getInitials(name: string): string {
 export function Navbar() {
   const { user, isReady, logout } = useAuth();
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const navSearchDefault =
+    pathname === '/projects/search' ? (searchParams.get('q') ?? '') : '';
+
+  const showSearch = useMemo(() => {
+    if (!pathname) return true;
+    if (pathname === '/projects/create') return false;
+    if (pathname === '/projects/edit') return false;
+    if (pathname === '/profile/edit') return false;
+    if (/^\/profile\/[^/]+\/edit$/.test(pathname)) return false;
+    return true;
+  }, [pathname]);
 
   const handleLogout = async () => {
     await logout();
     router.push('/login?signedOut=1');
+  };
+
+  const handleSearchSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const formData = new FormData(event.currentTarget);
+    const normalized = String(formData.get('q') ?? '').trim();
+    if (!normalized) return;
+    const params = new URLSearchParams();
+    params.set('q', normalized);
+    params.set('sort', 'top');
+    router.push(`/projects/search?${params.toString()}`);
   };
 
   return (
@@ -31,11 +72,46 @@ export function Navbar() {
       borderColor="black"
     >
       <Box maxW="1280px" mx="auto" px="36px" h="100%">
-        <Flex h="100%" align="center" justify="space-between">
+        <Flex h="100%" align="center" justify="space-between" gap="20px">
           {/* Left side: logo + nav links */}
           <HStack gap="32px" align="center">
             <GatorRankLogo size="sm" />
           </HStack>
+
+          {showSearch ? (
+            <Box flex="1" maxW="520px" key={`${pathname}-${navSearchDefault}`}>
+              <form onSubmit={handleSearchSubmit}>
+                <HStack gap="8px" align="center">
+                  <Input
+                    name="q"
+                    defaultValue={navSearchDefault}
+                    placeholder="Search projects"
+                    bg="white"
+                    border="1px solid"
+                    borderColor="gray.300"
+                    borderRadius="12px"
+                    h="42px"
+                    minW="0"
+                  />
+                  <Button
+                    type="submit"
+                    aria-label="Search projects"
+                    h="42px"
+                    minW="42px"
+                    px="12px"
+                    borderRadius="12px"
+                    bg="gray.900"
+                    color="white"
+                    _hover={{ bg: 'gray.700' }}
+                  >
+                    <LuSearch size={16} />
+                  </Button>
+                </HStack>
+              </form>
+            </Box>
+          ) : (
+            <Box flex="1" />
+          )}
 
           {/* Right side: auth-aware controls */}
           <HStack gap="16px" align="center" minH="44px">
