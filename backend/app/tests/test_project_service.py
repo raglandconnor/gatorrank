@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from typing import cast
 from unittest.mock import AsyncMock, Mock
 from uuid import uuid4
@@ -6,7 +6,7 @@ from uuid import uuid4
 import pytest
 from app.models.project import Project
 from app.models.taxonomy import ProjectCategory
-from app.schemas.project import ProjectCreateRequest
+from app.schemas.project import ProjectCreateRequest, ProjectListResponse
 from app.schemas.taxonomy import TaxonomyTermResponse
 from app.services.project import (
     CursorError,
@@ -139,6 +139,73 @@ def test_decode_cursor_rejects_sort_mismatch():
 
     with pytest.raises(CursorError, match="Invalid cursor"):
         service._decode_cursor(top_cursor, "new")
+
+
+def test_decode_owner_projects_cursor_rejects_sort_mismatch():
+    service = ProjectService(cast(AsyncSession, DummySession()))
+    project = make_project(is_published=False)
+    cursor = service._encode_owner_projects_cursor(
+        project,
+        sort="new",
+        visibility="all",
+    )
+
+    with pytest.raises(CursorError, match="Cursor sort does not match requested sort"):
+        service._decode_owner_projects_cursor(
+            cursor=cursor,
+            sort="top",
+            visibility="all",
+        )
+
+
+def test_decode_owner_projects_cursor_rejects_top_range_mismatch_for_published_phase():
+    service = ProjectService(cast(AsyncSession, DummySession()))
+    project = make_project(is_published=True)
+    cursor = service._encode_owner_projects_cursor(
+        project,
+        sort="top",
+        visibility="all",
+        phase="published",
+        top_range=(date(2025, 1, 1), date(2025, 3, 31)),
+    )
+    payload = service._decode_owner_projects_cursor(
+        cursor=cursor,
+        sort="top",
+        visibility="all",
+    )
+
+    with pytest.raises(CursorError, match="Invalid cursor"):
+        service._validate_owner_requested_top_range(
+            cursor_top_range=service._owner_top_range_from_cursor(payload),
+            published_from=date(2025, 1, 1),
+            published_to=date(2025, 4, 1),
+        )
+
+
+@pytest.mark.asyncio
+async def test_list_projects_for_owner_draft_top_ignores_published_date_filters():
+    db = AsyncMock()
+    service = ProjectService(cast(AsyncSession, db))
+    owner_id = uuid4()
+
+    service._hydrate_project_list_response = AsyncMock(  # type: ignore[method-assign]
+        return_value=ProjectListResponse(items=[], next_cursor=None)
+    )
+    db.exec = AsyncMock(return_value=Mock(all=lambda: []))
+
+    await service.list_projects_for_owner(
+        owner_id=owner_id,
+        sort="top",
+        visibility="draft",
+        published_from=date(2025, 1, 1),
+        published_to=date(2025, 3, 31),
+    )
+
+    statement = db.exec.await_args.args[0]
+    compiled = str(statement)
+    assert "projects.is_published IS false" in compiled
+    assert "projects.published_at >=" not in compiled
+    assert "projects.published_at <" not in compiled
 
 
 @pytest.mark.asyncio

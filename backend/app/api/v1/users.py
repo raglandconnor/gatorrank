@@ -42,6 +42,17 @@ ProjectsSort = Annotated[
         description="Sort order: `new` by creation time, `top` by vote rank in date window.",
     ),
 ]
+MyProjectsVisibility = Annotated[
+    Literal["all", "published", "draft"],
+    Query(
+        ...,
+        description=(
+            "Visibility scope for authored projects: `all` includes drafts and "
+            "published projects, `published` includes only published projects, and "
+            "`draft` includes only drafts."
+        ),
+    ),
+]
 ProjectsPublishedFrom = Annotated[
     date | None,
     Query(
@@ -140,6 +151,52 @@ async def list_my_voted_projects(
     try:
         return await service.list_my_voted_projects(
             user_id=current_user.id, limit=limit, cursor=cursor
+        )
+    except CursorError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.get(
+    "/users/me/projects",
+    summary="List my projects",
+    description=(
+        "Return the authenticated user's authored, non-deleted projects with cursor "
+        "pagination, computed `team_size`, and taxonomy fields (`categories`, "
+        "`tags`, `tech_stack`). Drafts are included by default. "
+        "`sort=new` returns one newest-first stream across the selected visibility. "
+        "`sort=top` reuses published date-window semantics for published results; "
+        "when drafts are included, published results are returned first and drafts "
+        "follow in newest-first order. `published_from` and `published_to` apply "
+        "only to published results under `sort=top` and are ignored for draft-only listings."
+    ),
+    response_model=ProjectListResponse,
+    responses={
+        400: {"description": "Invalid cursor"},
+        401: {"description": "Authentication required"},
+    },
+)
+async def list_my_projects(
+    limit: ProjectsPageLimit = 20,
+    cursor: ProjectsCursor = None,
+    visibility: MyProjectsVisibility = "all",
+    sort: ProjectsSort = "new",
+    published_from: ProjectsPublishedFrom = None,
+    published_to: ProjectsPublishedTo = None,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> ProjectListResponse:
+    """Return authored project cards, including drafts, with taxonomy parity."""
+    service = ProjectService(db)
+    try:
+        return await service.list_projects_for_owner(
+            owner_id=current_user.id,
+            sort=sort,
+            visibility=visibility,
+            limit=limit,
+            cursor=cursor,
+            published_from=published_from,
+            published_to=published_to,
+            current_user_id=current_user.id,
         )
     except CursorError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
