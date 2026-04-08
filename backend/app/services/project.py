@@ -1,6 +1,6 @@
 from datetime import UTC, date, datetime, time, timedelta
 import re
-from typing import Literal
+from typing import Any, Literal
 import unicodedata
 from uuid import UUID
 
@@ -46,6 +46,7 @@ from app.utils.pagination import (
 )
 
 ProjectSort = Literal["top", "new"]
+OwnerProjectVisibility = Literal["all", "published", "draft"]
 
 
 class ProjectAccessForbiddenError(PermissionError):
@@ -774,6 +775,83 @@ class ProjectService:
 
         return ProjectListResponse(items=items, next_cursor=next_cursor)
 
+    async def list_projects_for_owner(
+        self,
+        *,
+        owner_id: UUID,
+        sort: ProjectSort = "new",
+        visibility: OwnerProjectVisibility = "all",
+        limit: int = 20,
+        cursor: str | None = None,
+        published_from: date | None = None,
+        published_to: date | None = None,
+        current_user_id: UUID | None = None,
+    ) -> ProjectListResponse:
+        """Return authored project cards, including drafts, with owner-only cursor rules."""
+        limit = max(1, min(limit, 100))
+
+        cursor_payload: dict[str, Any] | None = None
+        top_range: tuple[date, date] | None = None
+        if cursor is not None:
+            cursor_payload = self._decode_owner_projects_cursor(
+                cursor=cursor,
+                sort=sort,
+                visibility=visibility,
+            )
+            if sort == "top" and visibility in {"published", "all"}:
+                top_range = self._owner_top_range_from_cursor(cursor_payload)
+                self._validate_owner_requested_top_range(
+                    cursor_top_range=top_range,
+                    published_from=published_from,
+                    published_to=published_to,
+                )
+
+        if sort == "top" and visibility == "published":
+            top_range = self._resolve_top_date_range(
+                sort=sort,
+                published_from=published_from if top_range is None else top_range[0],
+                published_to=published_to if top_range is None else top_range[1],
+            )
+            if top_range is None:
+                raise CursorError("Invalid date range")
+            return await self._list_owner_published_projects(
+                owner_id=owner_id,
+                sort="top",
+                limit=limit,
+                cursor_payload=cursor_payload,
+                top_range=top_range,
+                current_user_id=current_user_id,
+                cursor_visibility=visibility,
+            )
+
+        if sort == "top" and visibility == "draft":
+            return await self._list_owner_draft_projects(
+                owner_id=owner_id,
+                limit=limit,
+                cursor_payload=cursor_payload,
+                current_user_id=current_user_id,
+                sort=sort,
+                visibility=visibility,
+            )
+
+        if sort == "new":
+            return await self._list_owner_new_projects(
+                owner_id=owner_id,
+                visibility=visibility,
+                limit=limit,
+                cursor_payload=cursor_payload,
+                current_user_id=current_user_id,
+            )
+
+        return await self._list_owner_top_all_projects(
+            owner_id=owner_id,
+            limit=limit,
+            cursor_payload=cursor_payload,
+            published_from=published_from,
+            published_to=published_to,
+            current_user_id=current_user_id,
+        )
+
     async def _replace_project_taxonomy_assignments(
         self,
         *,
@@ -1019,6 +1097,21 @@ class ProjectService:
             stmt = stmt.where(project_cols.created_by_id == created_by_id)
         return stmt
 
+    @staticmethod
+    def _base_owner_projects_query(
+        owner_id: UUID, *, visibility: OwnerProjectVisibility
+    ):
+        project_cols = getattr(Project, "__table__").c
+        stmt = select(Project).where(
+            project_cols.created_by_id == owner_id,
+            project_cols.deleted_at.is_(None),
+        )
+        if visibility == "published":
+            stmt = stmt.where(project_cols.is_published.is_(True))
+        elif visibility == "draft":
+            stmt = stmt.where(project_cols.is_published.is_(False))
+        return stmt
+
     async def _get_members_for_projects(
         self, project_ids: list[UUID]
     ) -> dict[UUID, list[ProjectMemberInfo]]:
@@ -1067,6 +1160,294 @@ class ProjectService:
         result = await self.db.exec(statement)
         return {row for row in result.all()}
 
+    async def _hydrate_project_list_response(
+        self,
+        *,
+        projects: list[Project],
+        next_cursor: str | None,
+        current_user_id: UUID | None,
+    ) -> ProjectListResponse:
+        members_by_project = await self._get_members_for_projects(
+            [p.id for p in projects]
+        )
+        taxonomy_by_project = await self.get_project_taxonomy_by_project_ids(
+            [p.id for p in projects]
+        )
+        voted_project_ids: set[UUID] = set()
+        if current_user_id is not None:
+            voted_project_ids = await self._get_voted_project_ids(
+                user_id=current_user_id,
+                project_ids=[project.id for project in projects],
+            )
+
+        items = [
+            self._to_project_list_item(
+                project,
+                members_by_project,
+                taxonomy_by_project,
+                voted_project_ids,
+            )
+            for project in projects
+        ]
+
+        return ProjectListResponse(items=items, next_cursor=next_cursor)
+
+    async def _list_owner_new_projects(
+        self,
+        *,
+        owner_id: UUID,
+        visibility: OwnerProjectVisibility,
+        limit: int,
+        cursor_payload: dict[str, Any] | None,
+        current_user_id: UUID | None,
+    ) -> ProjectListResponse:
+        project_cols = getattr(Project, "__table__").c
+        statement = self._base_owner_projects_query(owner_id, visibility=visibility)
+        if cursor_payload is not None:
+            created_at = self._parse_datetime(cursor_payload["created_at"])
+            cursor_id = UUID(str(cursor_payload["id"]))
+            statement = statement.where(
+                (project_cols.created_at < created_at)
+                | (
+                    (project_cols.created_at == created_at)
+                    & (project_cols.id < cursor_id)
+                )
+            )
+        statement = statement.order_by(
+            project_cols.created_at.desc(),
+            project_cols.id.desc(),
+        ).limit(limit + 1)
+        result = await self.db.exec(statement)
+        rows = list(result.all())
+        has_more = len(rows) > limit
+        projects = rows[:limit]
+        next_cursor = None
+        if has_more and projects:
+            next_cursor = self._encode_owner_projects_cursor(
+                projects[-1],
+                sort="new",
+                visibility=visibility,
+            )
+        return await self._hydrate_project_list_response(
+            projects=projects,
+            next_cursor=next_cursor,
+            current_user_id=current_user_id,
+        )
+
+    async def _list_owner_published_projects(
+        self,
+        *,
+        owner_id: UUID,
+        sort: ProjectSort,
+        limit: int,
+        cursor_payload: dict[str, Any] | None,
+        top_range: tuple[date, date],
+        current_user_id: UUID | None,
+        cursor_visibility: OwnerProjectVisibility,
+    ) -> ProjectListResponse:
+        project_cols = getattr(Project, "__table__").c
+        statement = self._base_owner_projects_query(owner_id, visibility="published")
+        if sort == "top":
+            range_start_dt, range_end_exclusive_dt = self._top_range_bounds(top_range)
+            statement = statement.where(
+                project_cols.published_at.is_not(None),
+                project_cols.published_at >= range_start_dt,
+                project_cols.published_at < range_end_exclusive_dt,
+            )
+            if cursor_payload is not None:
+                vote_count = int(cursor_payload["vote_count"])
+                created_at = self._parse_datetime(cursor_payload["created_at"])
+                cursor_id = UUID(str(cursor_payload["id"]))
+                statement = statement.where(
+                    (project_cols.vote_count < vote_count)
+                    | (
+                        (project_cols.vote_count == vote_count)
+                        & (project_cols.created_at < created_at)
+                    )
+                    | (
+                        (project_cols.vote_count == vote_count)
+                        & (project_cols.created_at == created_at)
+                        & (project_cols.id < cursor_id)
+                    )
+                )
+            statement = statement.order_by(
+                project_cols.vote_count.desc(),
+                project_cols.created_at.desc(),
+                project_cols.id.desc(),
+            )
+        statement = statement.limit(limit + 1)
+        result = await self.db.exec(statement)
+        rows = list(result.all())
+        has_more = len(rows) > limit
+        projects = rows[:limit]
+        next_cursor = None
+        if has_more and projects:
+            next_cursor = self._encode_owner_projects_cursor(
+                projects[-1],
+                sort=sort,
+                visibility=cursor_visibility,
+                phase="published",
+                top_range=top_range,
+            )
+        return await self._hydrate_project_list_response(
+            projects=projects,
+            next_cursor=next_cursor,
+            current_user_id=current_user_id,
+        )
+
+    async def _list_owner_draft_projects(
+        self,
+        *,
+        owner_id: UUID,
+        limit: int,
+        cursor_payload: dict[str, Any] | None,
+        current_user_id: UUID | None,
+        sort: ProjectSort,
+        visibility: OwnerProjectVisibility,
+    ) -> ProjectListResponse:
+        project_cols = getattr(Project, "__table__").c
+        statement = self._base_owner_projects_query(owner_id, visibility="draft")
+        if cursor_payload is not None:
+            created_at = self._parse_datetime(cursor_payload["created_at"])
+            cursor_id = UUID(str(cursor_payload["id"]))
+            statement = statement.where(
+                (project_cols.created_at < created_at)
+                | (
+                    (project_cols.created_at == created_at)
+                    & (project_cols.id < cursor_id)
+                )
+            )
+        statement = statement.order_by(
+            project_cols.created_at.desc(),
+            project_cols.id.desc(),
+        ).limit(limit + 1)
+        result = await self.db.exec(statement)
+        rows = list(result.all())
+        has_more = len(rows) > limit
+        projects = rows[:limit]
+        next_cursor = None
+        if has_more and projects:
+            next_cursor = self._encode_owner_projects_cursor(
+                projects[-1],
+                sort=sort,
+                visibility=visibility,
+                phase="draft",
+            )
+        return await self._hydrate_project_list_response(
+            projects=projects,
+            next_cursor=next_cursor,
+            current_user_id=current_user_id,
+        )
+
+    async def _list_owner_top_all_projects(
+        self,
+        *,
+        owner_id: UUID,
+        limit: int,
+        cursor_payload: dict[str, Any] | None,
+        published_from: date | None,
+        published_to: date | None,
+        current_user_id: UUID | None,
+    ) -> ProjectListResponse:
+        phase = "published"
+        if cursor_payload is not None:
+            phase = str(cursor_payload["phase"])
+
+        if phase == "draft":
+            return await self._list_owner_draft_projects(
+                owner_id=owner_id,
+                limit=limit,
+                cursor_payload=cursor_payload,
+                current_user_id=current_user_id,
+                sort="top",
+                visibility="all",
+            )
+
+        top_range = self._resolve_top_date_range(
+            sort="top",
+            published_from=published_from,
+            published_to=published_to,
+        )
+        if cursor_payload is not None:
+            top_range = self._owner_top_range_from_cursor(cursor_payload)
+        if top_range is None:
+            raise CursorError("Invalid date range")
+
+        project_cols = getattr(Project, "__table__").c
+        published_statement = self._base_owner_projects_query(
+            owner_id, visibility="published"
+        )
+        range_start_dt, range_end_exclusive_dt = self._top_range_bounds(top_range)
+        published_statement = published_statement.where(
+            project_cols.published_at.is_not(None),
+            project_cols.published_at >= range_start_dt,
+            project_cols.published_at < range_end_exclusive_dt,
+        )
+        if cursor_payload is not None:
+            vote_count = int(cursor_payload["vote_count"])
+            created_at = self._parse_datetime(cursor_payload["created_at"])
+            cursor_id = UUID(str(cursor_payload["id"]))
+            published_statement = published_statement.where(
+                (project_cols.vote_count < vote_count)
+                | (
+                    (project_cols.vote_count == vote_count)
+                    & (project_cols.created_at < created_at)
+                )
+                | (
+                    (project_cols.vote_count == vote_count)
+                    & (project_cols.created_at == created_at)
+                    & (project_cols.id < cursor_id)
+                )
+            )
+        published_statement = published_statement.order_by(
+            project_cols.vote_count.desc(),
+            project_cols.created_at.desc(),
+            project_cols.id.desc(),
+        ).limit(limit + 1)
+        published_result = await self.db.exec(published_statement)
+        published_rows = list(published_result.all())
+        has_more_published = len(published_rows) > limit
+        published_projects = published_rows[:limit]
+
+        if has_more_published:
+            return await self._hydrate_project_list_response(
+                projects=published_projects,
+                next_cursor=self._encode_owner_projects_cursor(
+                    published_projects[-1],
+                    sort="top",
+                    visibility="all",
+                    phase="published",
+                    top_range=top_range,
+                ),
+                current_user_id=current_user_id,
+            )
+
+        remaining = limit - len(published_projects)
+        draft_statement = self._base_owner_projects_query(owner_id, visibility="draft")
+        draft_statement = draft_statement.order_by(
+            project_cols.created_at.desc(),
+            project_cols.id.desc(),
+        ).limit(max(remaining, 0) + 1)
+        draft_result = await self.db.exec(draft_statement)
+        draft_rows = list(draft_result.all()) if remaining > 0 else []
+        has_more_drafts = len(draft_rows) > remaining if remaining > 0 else False
+        draft_projects = draft_rows[:remaining] if remaining > 0 else []
+
+        combined = published_projects + draft_projects
+        next_cursor = None
+        if has_more_drafts and draft_projects:
+            next_cursor = self._encode_owner_projects_cursor(
+                draft_projects[-1],
+                sort="top",
+                visibility="all",
+                phase="draft",
+            )
+        return await self._hydrate_project_list_response(
+            projects=combined,
+            next_cursor=next_cursor,
+            current_user_id=current_user_id,
+        )
+
     def _encode_cursor(
         self,
         project: Project,
@@ -1093,6 +1474,119 @@ class ProjectService:
             }
 
         return encode_cursor_payload(payload)
+
+    def _encode_owner_projects_cursor(
+        self,
+        project: Project,
+        *,
+        sort: ProjectSort,
+        visibility: OwnerProjectVisibility,
+        phase: Literal["published", "draft"] | None = None,
+        top_range: tuple[date, date] | None = None,
+    ) -> str:
+        payload: dict[str, str | int] = {
+            "scope": "owner_projects",
+            "sort": sort,
+            "visibility": visibility,
+            "id": str(project.id),
+            "created_at": project.created_at.isoformat(),
+        }
+        if sort == "top":
+            resolved_phase = phase or ("published" if project.is_published else "draft")
+            payload["phase"] = resolved_phase
+            if resolved_phase == "published":
+                if top_range is None:
+                    raise CursorError("Invalid cursor")
+                payload["vote_count"] = project.vote_count
+                payload["published_from"] = top_range[0].isoformat()
+                payload["published_to"] = top_range[1].isoformat()
+        return encode_cursor_payload(payload)
+
+    def _decode_owner_projects_cursor(
+        self,
+        *,
+        cursor: str,
+        sort: ProjectSort,
+        visibility: OwnerProjectVisibility,
+    ) -> dict[str, Any]:
+        payload = decode_cursor_payload(cursor)
+        if payload.get("scope") != "owner_projects":
+            raise CursorError("Invalid cursor")
+        if payload.get("sort") != sort:
+            raise CursorError("Cursor sort does not match requested sort")
+        if payload.get("visibility") != visibility:
+            raise CursorError("Invalid cursor")
+
+        if sort == "new":
+            required = {"scope", "sort", "visibility", "id", "created_at"}
+        elif visibility == "draft":
+            required = {"scope", "sort", "visibility", "phase", "id", "created_at"}
+        else:
+            phase = payload.get("phase")
+            if visibility == "published" and phase != "published":
+                raise CursorError("Invalid cursor")
+            if phase == "published":
+                required = {
+                    "scope",
+                    "sort",
+                    "visibility",
+                    "phase",
+                    "id",
+                    "created_at",
+                    "vote_count",
+                    "published_from",
+                    "published_to",
+                }
+            elif phase == "draft":
+                required = {"scope", "sort", "visibility", "phase", "id", "created_at"}
+            else:
+                raise CursorError("Invalid cursor")
+
+        if set(payload.keys()) != required:
+            raise CursorError("Invalid cursor")
+
+        try:
+            UUID(str(payload["id"]))
+            self._parse_datetime(payload["created_at"])
+            if sort == "top":
+                phase = str(payload["phase"])
+                if phase not in {"published", "draft"}:
+                    raise CursorError("Invalid cursor")
+                if phase == "published":
+                    int(payload["vote_count"])
+                    self._parse_date(payload["published_from"])
+                    self._parse_date(payload["published_to"])
+        except (TypeError, ValueError) as exc:
+            raise CursorError("Invalid cursor") from exc
+
+        return payload
+
+    def _owner_top_range_from_cursor(
+        self, payload: dict[str, Any]
+    ) -> tuple[date, date] | None:
+        raw_from = payload.get("published_from")
+        raw_to = payload.get("published_to")
+        if raw_from is None or raw_to is None:
+            return None
+        return (self._parse_date(raw_from), self._parse_date(raw_to))
+
+    @staticmethod
+    def _validate_owner_requested_top_range(
+        *,
+        cursor_top_range: tuple[date, date] | None,
+        published_from: date | None,
+        published_to: date | None,
+    ) -> None:
+        if cursor_top_range is None:
+            return
+        requested_range = (
+            published_from,
+            published_to,
+        )
+        if requested_range == (None, None):
+            return
+        if requested_range != cursor_top_range:
+            raise CursorError("Invalid cursor")
 
     def _decode_cursor(
         self,
