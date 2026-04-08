@@ -309,6 +309,7 @@ export default function EditProfilePage() {
       const nextAuth: AuthUser = {
         id: updated.id,
         email: updated.email,
+        username: updated.username,
         role: updated.role,
         full_name: updated.full_name,
         profile_picture_url: updated.profile_picture_url,
