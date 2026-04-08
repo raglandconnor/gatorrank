@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.api.deps.auth import get_current_user, get_current_user_optional
+from app.api.deps.search import get_search_service
 from app.db.database import get_db
 from app.models.user import User
 from app.schemas.project import (
@@ -17,6 +18,7 @@ from app.schemas.project import (
     ProjectMemberUpdateRequest,
     ProjectUpdateRequest,
 )
+from app.schemas.search import ProjectSearchRequest, ProjectSearchResponse
 from app.services.project import (
     CursorError,
     ProjectAccessForbiddenError,
@@ -25,6 +27,7 @@ from app.services.project import (
     ProjectService,
     ProjectValidationError,
 )
+from app.services.search import SearchService
 from app.services.vote import VoteService, VoteTargetNotFoundError
 
 router = APIRouter()
@@ -97,6 +100,109 @@ async def get_project_detail_by_slug(
     if project is None:
         raise HTTPException(status_code=404, detail="Project not found")
     return project
+
+
+@router.get(
+    "/projects/search",
+    summary="Search published projects",
+    description=(
+        "Search published, non-deleted projects using optional keyword query and taxonomy "
+        "filters with cursor pagination. Keyword matching is case-insensitive and limited "
+        "to `title` + `short_description`. Taxonomy filters apply OR logic within each "
+        "family and AND logic across families. Unknown taxonomy terms are treated as "
+        "non-matching values (not validation errors). "
+        "For `sort=top`, published date-window defaults match the feed (last 90 days). "
+        "Relevance sophistication is intentionally deferred in v1."
+    ),
+    response_model=ProjectSearchResponse,
+    responses={
+        400: {"description": "Invalid cursor or date range"},
+        401: {"description": "Invalid or expired bearer token"},
+    },
+)
+async def search_projects(
+    q: str | None = Query(
+        default=None,
+        description=(
+            "Optional keyword query matched against project `title` and "
+            "`short_description`."
+        ),
+    ),
+    categories: list[str] = Query(
+        default_factory=list,
+        description="Optional category filters. Repeated query params are supported.",
+    ),
+    tags: list[str] = Query(
+        default_factory=list,
+        description="Optional tag filters. Repeated query params are supported.",
+    ),
+    tech_stack: list[str] = Query(
+        default_factory=list,
+        description="Optional tech-stack filters. Repeated query params are supported.",
+    ),
+    categories_legacy: list[str] = Query(
+        default_factory=list,
+        alias="categories[]",
+        include_in_schema=False,
+    ),
+    tags_legacy: list[str] = Query(
+        default_factory=list,
+        alias="tags[]",
+        include_in_schema=False,
+    ),
+    tech_stack_legacy: list[str] = Query(
+        default_factory=list,
+        alias="tech_stack[]",
+        include_in_schema=False,
+    ),
+    limit: int = Query(
+        default=20,
+        description="Page size. Values are clamped to the service-supported range.",
+    ),
+    cursor: str | None = Query(
+        default=None,
+        description="Opaque pagination cursor returned by a previous search response.",
+    ),
+    sort: Literal["top", "new"] = Query(
+        default="top",
+        description="Sort mode (`top` or `new`). Defaults to `top`.",
+    ),
+    published_from: date | None = Query(
+        default=None,
+        description=(
+            "Start of the `published_at` date window (inclusive) for `sort=top` in "
+            "`YYYY-MM-DD` format. Ignored for `sort=new`."
+        ),
+    ),
+    published_to: date | None = Query(
+        default=None,
+        description=(
+            "End of the `published_at` date window (inclusive) for `sort=top` in "
+            "`YYYY-MM-DD` format. Ignored for `sort=new`."
+        ),
+    ),
+    search_service: SearchService = Depends(get_search_service),
+    current_user: User | None = Depends(get_current_user_optional),
+) -> ProjectSearchResponse:
+    """Search published projects with keyword/taxonomy filters and cursor pagination."""
+    request = ProjectSearchRequest(
+        q=q,
+        categories=[*categories, *categories_legacy],
+        tags=[*tags, *tags_legacy],
+        tech_stack=[*tech_stack, *tech_stack_legacy],
+        limit=limit,
+        cursor=cursor,
+        sort=sort,
+        published_from=published_from,
+        published_to=published_to,
+    )
+    try:
+        return await search_service.search_projects(
+            request=request,
+            current_user_id=current_user.id if current_user else None,
+        )
+    except CursorError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @router.get(
