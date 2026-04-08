@@ -56,6 +56,26 @@ export async function getProjectById(
   return getProject(projectId);
 }
 
+/**
+ * Fetch project detail with optional viewer context.
+ *
+ * Anonymous requests use plain fetch so public detail pages remain accessible
+ * without auth state. Authenticated requests use refresh-aware fetch behavior.
+ */
+export async function getProjectByIdForViewer(
+  projectId: string,
+  accessToken?: string | null,
+): Promise<ProjectDetail> {
+  if (!accessToken) {
+    const res = await fetch(apiUrl(`/api/v1/projects/${projectId}`), {
+      method: 'GET',
+      cache: 'no-store',
+    });
+    return parseProjectResponse<ProjectDetail>(res, 'Failed to fetch project');
+  }
+  return getProject(projectId);
+}
+
 export async function getProjectBySlug(slug: string): Promise<ProjectDetail> {
   const res = await fetchWithAuth(
     `/api/v1/projects/slug/${encodeURIComponent(slug)}`,
