@@ -6,7 +6,7 @@ import { motion } from 'framer-motion';
 import { Box, SimpleGrid, Spinner, VStack, Text } from '@chakra-ui/react';
 import { Navbar } from '@/components/Navbar';
 import { ProjectGridCard } from '@/components/projects/ProjectGridCard';
-import type { Project } from '@/data/mock-projects';
+import type { Project } from '@/types/project';
 import { listProjectsPublic } from '@/lib/api/projects';
 import type { ProjectListQuery } from '@/lib/api/types/project';
 import { getMonthRange } from '@/lib/projects/dateFilters';

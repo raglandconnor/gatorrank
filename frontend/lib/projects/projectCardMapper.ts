@@ -1,4 +1,4 @@
-import type { Project } from '@/data/mock-projects';
+import type { Project } from '@/types/project';
 import type { ProjectListItem } from '@/lib/api/types/project';
 
 export function mapProjectListItemToCardProject(

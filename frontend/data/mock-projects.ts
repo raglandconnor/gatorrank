@@ -1,11 +1,4 @@
-export interface Project {
-  id: string | number;
-  name: string;
-  description: string;
-  tags: string[];
-  votes: number;
-  comments: number;
-}
+import type { Project } from '@/types/project';
 
 export const topOverallProjects: Project[] = [
   {
