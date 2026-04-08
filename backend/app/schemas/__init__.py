@@ -16,6 +16,7 @@ from app.schemas.project import (
     ProjectMemberUpdateRequest,
 )
 from app.schemas.taxonomy import TaxonomyTermCreateRequest, TaxonomyTermResponse
+from app.schemas.search import ProjectSearchRequest, ProjectSearchResponse
 
 __all__ = [
     "AuthUserResponse",
@@ -31,6 +32,8 @@ __all__ = [
     "ProjectDetailResponse",
     "ProjectListItemResponse",
     "ProjectListResponse",
+    "ProjectSearchRequest",
+    "ProjectSearchResponse",
     "TaxonomyTermCreateRequest",
     "TaxonomyTermResponse",
 ]
