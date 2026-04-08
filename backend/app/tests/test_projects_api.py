@@ -6,6 +6,7 @@ from uuid import UUID, uuid4
 from fastapi.testclient import TestClient
 
 from app.api.deps.auth import get_current_user, get_current_user_optional
+from app.api.deps.search import get_search_service
 from app.db.database import get_db
 from app.main import app
 from app.models.project_roles import ProjectMemberRole
@@ -15,6 +16,7 @@ from app.schemas.project import (
     ProjectListResponse,
     ProjectMemberInfo,
 )
+from app.schemas.search import ProjectSearchResponse
 from app.services.project import (
     CursorError,
     ProjectAccessForbiddenError,
@@ -74,6 +76,33 @@ def _build_project_list_response() -> ProjectListResponse:
             )
         ],
         next_cursor="next-cursor-token",
+    )
+
+
+def _build_project_search_response() -> ProjectSearchResponse:
+    now = datetime.now(timezone.utc)
+    return ProjectSearchResponse(
+        items=[
+            ProjectListItemResponse(
+                id=uuid4(),
+                created_by_id=uuid4(),
+                title="Search Result Project",
+                slug="search-result-project",
+                short_description="Search result description",
+                demo_url=None,
+                github_url=None,
+                video_url=None,
+                vote_count=10,
+                team_size=0,
+                is_group_project=False,
+                is_published=True,
+                published_at=now,
+                created_at=now,
+                updated_at=now,
+                members=[],
+            )
+        ],
+        next_cursor="search-next-cursor-token",
     )
 
 
@@ -1034,6 +1063,133 @@ def test_list_projects_invalid_cursor_returns_400():
 
     assert response.status_code == 400
     assert response.json()["detail"] == "Invalid cursor"
+
+
+def test_search_projects_defaults():
+    response_model = _build_project_search_response()
+    mock_service = SimpleNamespace(
+        search_projects=AsyncMock(return_value=response_model)
+    )
+
+    app.dependency_overrides[get_search_service] = lambda: mock_service
+    app.dependency_overrides[get_current_user_optional] = lambda: None
+    try:
+        response = client.get("/api/v1/projects/search")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["next_cursor"] == "search-next-cursor-token"
+    assert len(payload["items"]) == 1
+
+    await_args = mock_service.search_projects.await_args
+    assert await_args is not None
+    kwargs = await_args.kwargs
+    request = kwargs["request"]
+    assert request.q is None
+    assert request.categories == []
+    assert request.tags == []
+    assert request.tech_stack == []
+    assert request.limit == 20
+    assert request.cursor is None
+    assert request.sort == "top"
+    assert request.published_from is None
+    assert request.published_to is None
+    assert kwargs["current_user_id"] is None
+
+
+def test_search_projects_merges_legacy_aliases_and_passes_user():
+    response_model = _build_project_search_response()
+    mock_service = SimpleNamespace(
+        search_projects=AsyncMock(return_value=response_model)
+    )
+    user_id = uuid4()
+
+    app.dependency_overrides[get_search_service] = lambda: mock_service
+    app.dependency_overrides[get_current_user_optional] = _override_current_user(
+        user_id
+    )
+    try:
+        response = client.get(
+            "/api/v1/projects/search"
+            "?q=gator"
+            "&categories=ai&categories[]=ml"
+            "&tags=python&tags[]=fastapi"
+            "&tech_stack=postgres&tech_stack[]=redis"
+            "&limit=5&cursor=abc123&sort=new"
+            "&published_from=2025-01-01&published_to=2025-03-31"
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    await_args = mock_service.search_projects.await_args
+    assert await_args is not None
+    kwargs = await_args.kwargs
+    request = kwargs["request"]
+    assert request.q == "gator"
+    assert request.categories == ["ai", "ml"]
+    assert request.tags == ["python", "fastapi"]
+    assert request.tech_stack == ["postgres", "redis"]
+    assert request.limit == 5
+    assert request.cursor == "abc123"
+    assert request.sort == "new"
+    assert str(request.published_from) == "2025-01-01"
+    assert str(request.published_to) == "2025-03-31"
+    assert kwargs["current_user_id"] == user_id
+
+
+def test_search_projects_cursor_error_returns_400():
+    mock_service = SimpleNamespace(
+        search_projects=AsyncMock(side_effect=CursorError("Invalid cursor"))
+    )
+
+    app.dependency_overrides[get_search_service] = lambda: mock_service
+    app.dependency_overrides[get_current_user_optional] = lambda: None
+    try:
+        response = client.get("/api/v1/projects/search?cursor=bad")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Invalid cursor"
+
+
+def test_search_projects_invalid_limit_returns_422():
+    mock_service = SimpleNamespace(search_projects=AsyncMock())
+
+    app.dependency_overrides[get_search_service] = lambda: mock_service
+    app.dependency_overrides[get_current_user_optional] = lambda: None
+    try:
+        response = client.get("/api/v1/projects/search?limit=0")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 422
+    payload = response.json()
+    assert payload["detail"]
+    assert any(
+        "greater than or equal to 1" in item["msg"] for item in payload["detail"]
+    )
+    mock_service.search_projects.assert_not_awaited()
+
+
+def test_search_projects_invalid_taxonomy_term_returns_422():
+    mock_service = SimpleNamespace(search_projects=AsyncMock())
+
+    app.dependency_overrides[get_search_service] = lambda: mock_service
+    app.dependency_overrides[get_current_user_optional] = lambda: None
+    try:
+        response = client.get("/api/v1/projects/search?tags=%01invalid")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 422
+    payload = response.json()
+    assert payload["detail"]
+    assert any("control characters" in item["msg"] for item in payload["detail"])
+    mock_service.search_projects.assert_not_awaited()
 
 
 def test_list_project_members_returns_200():

@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.api.deps.auth import get_current_user, get_current_user_optional
+from app.api.deps.search import get_project_search_request, get_search_service
 from app.db.database import get_db
 from app.models.user import User
 from app.schemas.project import (
@@ -17,6 +18,7 @@ from app.schemas.project import (
     ProjectMemberUpdateRequest,
     ProjectUpdateRequest,
 )
+from app.schemas.search import ProjectSearchRequest, ProjectSearchResponse
 from app.services.project import (
     CursorError,
     ProjectAccessForbiddenError,
@@ -25,6 +27,7 @@ from app.services.project import (
     ProjectService,
     ProjectValidationError,
 )
+from app.services.search import SearchService
 from app.services.vote import VoteService, VoteTargetNotFoundError
 
 router = APIRouter()
@@ -97,6 +100,39 @@ async def get_project_detail_by_slug(
     if project is None:
         raise HTTPException(status_code=404, detail="Project not found")
     return project
+
+
+@router.get(
+    "/projects/search",
+    summary="Search published projects",
+    description=(
+        "Search published, non-deleted projects using optional keyword query and taxonomy "
+        "filters with cursor pagination. Keyword matching is case-insensitive and limited "
+        "to `title` + `short_description`. Taxonomy filters apply OR logic within each "
+        "family and AND logic across families. Unknown taxonomy terms are treated as "
+        "non-matching values (not validation errors). "
+        "For `sort=top`, published date-window defaults match the feed (last 90 days). "
+        "Relevance sophistication is intentionally deferred in v1."
+    ),
+    response_model=ProjectSearchResponse,
+    responses={
+        400: {"description": "Invalid cursor or date range"},
+        401: {"description": "Invalid or expired bearer token"},
+    },
+)
+async def search_projects(
+    request: ProjectSearchRequest = Depends(get_project_search_request),
+    search_service: SearchService = Depends(get_search_service),
+    current_user: User | None = Depends(get_current_user_optional),
+) -> ProjectSearchResponse:
+    """Search published projects with keyword/taxonomy filters and cursor pagination."""
+    try:
+        return await search_service.search_projects(
+            request=request,
+            current_user_id=current_user.id if current_user else None,
+        )
+    except CursorError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @router.get(
