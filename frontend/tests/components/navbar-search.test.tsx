@@ -1,6 +1,6 @@
 import { fireEvent, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
-import { Navbar } from '@/components/Navbar';
+import { Navbar } from '@/components/layout/Navbar';
 import { renderWithChakra } from '@/tests/utils/render';
 
 const { pushMock, pathnameRef, searchParamsRef } = vi.hoisted(() => ({
@@ -15,7 +15,7 @@ vi.mock('next/navigation', () => ({
   useSearchParams: () => searchParamsRef.value,
 }));
 
-vi.mock('@/components/auth/AuthProvider', () => ({
+vi.mock('@/components/domain/AuthProvider', () => ({
   useAuth: () => ({
     user: null,
     isReady: true,

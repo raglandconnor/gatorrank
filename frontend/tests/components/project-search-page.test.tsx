@@ -16,13 +16,13 @@ vi.mock('next/navigation', () => ({
   useSearchParams: () => paramsRef.value,
 }));
 
-vi.mock('@/components/auth/AuthProvider', () => ({
+vi.mock('@/components/domain/AuthProvider', () => ({
   useAuth: () => ({
     accessToken: accessTokenRef.value,
   }),
 }));
 
-vi.mock('@/components/Navbar', () => ({
+vi.mock('@/components/layout/Navbar', () => ({
   Navbar: () => <div data-testid="navbar" />,
 }));
 
