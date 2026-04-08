@@ -1,22 +1,16 @@
 import { apiUrl } from '@/lib/api/client';
 import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
-import { buildHttpError, parseApiErrorMessage } from '@/lib/api/http';
-import type { ProjectListQuery, ProjectListResponse } from '@/lib/api/types/project';
+import {
+  buildHttpError,
+  buildQueryString,
+  parseApiErrorMessage,
+} from '@/lib/api/http';
+import type {
+  MyProjectsQuery,
+  ProjectListQuery,
+  ProjectListResponse,
+} from '@/lib/api/types/project';
 import type { UserPrivate, UserPublic, UserUpdate } from '@/lib/api/types/user';
-
-function buildQueryString(
-  query: Record<string, string | number | undefined>,
-): string {
-  const params = new URLSearchParams();
-
-  for (const [key, value] of Object.entries(query)) {
-    if (value === undefined || value === '') continue;
-    params.set(key, String(value));
-  }
-
-  const qs = params.toString();
-  return qs ? `?${qs}` : '';
-}
 
 async function parseUserResponse<T>(
   res: Response,
@@ -88,14 +82,7 @@ export async function getUserProjectsByUsername(
 }
 
 export async function getMyProjects(
-  query: {
-    limit?: number;
-    cursor?: string;
-    visibility?: 'all' | 'published' | 'draft';
-    sort?: 'top' | 'new';
-    published_from?: string;
-    published_to?: string;
-  } = { limit: 20, sort: 'new', visibility: 'all' },
+  query: MyProjectsQuery = { limit: 20, sort: 'new', visibility: 'all' },
 ): Promise<ProjectListResponse> {
   const qs = buildQueryString({
     limit: query.limit,

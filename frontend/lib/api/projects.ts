@@ -1,6 +1,10 @@
 import { apiUrl } from '@/lib/api/client';
 import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
-import { buildHttpError, parseApiErrorMessage } from '@/lib/api/http';
+import {
+  buildHttpError,
+  buildQueryString,
+  parseApiErrorMessage,
+} from '@/lib/api/http';
 import type {
   AddProjectMemberInput,
   ProjectCreateInput,
@@ -11,20 +15,6 @@ import type {
   ProjectUpdateInput,
   UpdateProjectMemberInput,
 } from '@/lib/api/types/project';
-
-function buildQueryString(
-  query: Record<string, string | number | undefined>,
-): string {
-  const params = new URLSearchParams();
-
-  for (const [key, value] of Object.entries(query)) {
-    if (value === undefined || value === '') continue;
-    params.set(key, String(value));
-  }
-
-  const qs = params.toString();
-  return qs ? `?${qs}` : '';
-}
 
 async function parseProjectResponse<T>(
   res: Response,

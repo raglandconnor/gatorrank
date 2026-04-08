@@ -103,7 +103,7 @@ export default function SignupPage() {
       });
       toast.success({
         title: 'Account created',
-        description: 'Welcome to GatorRank. Taking you to your profile...',
+        description: 'Welcome to GatorRank. Taking you to your profile…',
       });
       router.push('/profile');
     } catch (err) {
@@ -407,7 +407,7 @@ export default function SignupPage() {
               mt={4}
               disabled={!isReady || isSubmitting}
             >
-              {isSubmitting ? 'Creating account...' : 'Sign Up'}
+              {isSubmitting ? 'Creating account…' : 'Sign Up'}
             </Button>
           </Stack>
         </Box>
@@ -426,3 +426,4 @@ export default function SignupPage() {
     </Flex>
   );
 }
+
