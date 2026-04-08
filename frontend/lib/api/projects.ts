@@ -45,6 +45,30 @@ export async function listProjects(
   );
 }
 
+/**
+ * Public-safe project listing for unauthenticated pages (e.g. Home/Top Projects).
+ * Does not trigger auth refresh/redirect behavior.
+ */
+export async function listProjectsPublic(
+  query: ProjectListQuery = {},
+): Promise<ProjectListResponse> {
+  const qs = buildQueryString({
+    limit: query.limit,
+    cursor: query.cursor,
+    sort: query.sort,
+    published_from: query.published_from,
+    published_to: query.published_to,
+  });
+  const res = await fetch(apiUrl(`/api/v1/projects${qs}`), {
+    method: 'GET',
+    cache: 'no-store',
+  });
+  return parseProjectResponse<ProjectListResponse>(
+    res,
+    'Failed to fetch projects',
+  );
+}
+
 export async function getProject(projectId: string): Promise<ProjectDetail> {
   const res = await fetchWithAuth(`/api/v1/projects/${projectId}`);
   return parseProjectResponse<ProjectDetail>(res, 'Failed to fetch project');
