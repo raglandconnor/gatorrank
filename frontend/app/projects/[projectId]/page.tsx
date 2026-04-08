@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import {
   Box,
@@ -152,48 +152,48 @@ export default function ProjectDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [notFound, setNotFound] = useState(false);
+  const requestIdRef = useRef(0);
 
-  useEffect(() => {
+  const loadProject = useCallback(async () => {
     if (!isReady) return;
-    let cancelled = false;
+    const requestId = ++requestIdRef.current;
 
-    async function load() {
-      setLoading(true);
-      setError(null);
-      setNotFound(false);
+    setLoading(true);
+    setError(null);
+    setNotFound(false);
 
-      try {
-        const detail = await getProjectByIdForViewer(projectId, accessToken);
-        if (cancelled) return;
-        setProjectDetail(detail);
-      } catch (err) {
-        if (cancelled) return;
-        const status =
-          typeof err === 'object' &&
-          err !== null &&
-          'status' in err &&
-          typeof (err as { status?: unknown }).status === 'number'
-            ? (err as { status: number }).status
-            : null;
-        if (status === 404) {
-          setNotFound(true);
-          setProjectDetail(null);
-          return;
-        }
-        setError(
-          err instanceof Error ? err.message : 'Failed to load project detail.',
-        );
+    try {
+      const detail = await getProjectByIdForViewer(projectId, accessToken);
+      if (requestId !== requestIdRef.current) return;
+      setProjectDetail(detail);
+    } catch (err) {
+      if (requestId !== requestIdRef.current) return;
+      const status =
+        typeof err === 'object' &&
+        err !== null &&
+        'status' in err &&
+        typeof (err as { status?: unknown }).status === 'number'
+          ? (err as { status: number }).status
+          : null;
+      if (status === 404) {
+        setNotFound(true);
         setProjectDetail(null);
-      } finally {
-        if (!cancelled) setLoading(false);
+        return;
+      }
+      setError(
+        err instanceof Error ? err.message : 'Failed to load project detail.',
+      );
+      setProjectDetail(null);
+    } finally {
+      if (requestId === requestIdRef.current) {
+        setLoading(false);
       }
     }
-
-    void load();
-    return () => {
-      cancelled = true;
-    };
   }, [accessToken, isReady, projectId]);
+
+  useEffect(() => {
+    void loadProject();
+  }, [loadProject]);
 
   const project = useMemo(() => {
     if (!projectDetail) return null;
@@ -286,7 +286,7 @@ export default function ProjectDetailPage() {
             </Text>
             <Button
               type="button"
-              onClick={() => router.refresh()}
+              onClick={() => void loadProject()}
               bg="gray.900"
               color="white"
               borderRadius="14px"
