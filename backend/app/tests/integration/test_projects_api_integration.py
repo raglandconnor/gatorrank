@@ -2615,6 +2615,36 @@ async def test_search_projects_mixed_duplicate_plain_and_alias_params(
 
 
 @pytest.mark.asyncio
+async def test_search_projects_invalid_limit_returns_422(api_client, db_session):
+    owner = await _seed_user(
+        db_session, "owner_api_search_invalid_limit@ufl.edu", "Owner Search Limit"
+    )
+    await _seed_project(
+        db_session,
+        created_by_id=owner.id,
+        title="Search Invalid Limit Project",
+        is_published=True,
+    )
+
+    async def override_get_db():
+        yield db_session
+
+    app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_current_user_optional] = lambda: None
+    try:
+        response = await api_client.get("/api/v1/projects/search?limit=0")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 422
+    payload = response.json()
+    assert payload["detail"]
+    assert any(
+        "greater than or equal to 1" in item["msg"] for item in payload["detail"]
+    )
+
+
+@pytest.mark.asyncio
 async def test_get_project_members_published_visible_anonymous(api_client, db_session):
     owner = await _seed_user(
         db_session, "owner_members_pub@ufl.edu", "Owner Members Pub"

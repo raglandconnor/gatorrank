@@ -1156,6 +1156,42 @@ def test_search_projects_cursor_error_returns_400():
     assert response.json()["detail"] == "Invalid cursor"
 
 
+def test_search_projects_invalid_limit_returns_422():
+    mock_service = SimpleNamespace(search_projects=AsyncMock())
+
+    app.dependency_overrides[get_search_service] = lambda: mock_service
+    app.dependency_overrides[get_current_user_optional] = lambda: None
+    try:
+        response = client.get("/api/v1/projects/search?limit=0")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 422
+    payload = response.json()
+    assert payload["detail"]
+    assert any(
+        "greater than or equal to 1" in item["msg"] for item in payload["detail"]
+    )
+    mock_service.search_projects.assert_not_awaited()
+
+
+def test_search_projects_invalid_taxonomy_term_returns_422():
+    mock_service = SimpleNamespace(search_projects=AsyncMock())
+
+    app.dependency_overrides[get_search_service] = lambda: mock_service
+    app.dependency_overrides[get_current_user_optional] = lambda: None
+    try:
+        response = client.get("/api/v1/projects/search?tags=%01invalid")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 422
+    payload = response.json()
+    assert payload["detail"]
+    assert any("control characters" in item["msg"] for item in payload["detail"])
+    mock_service.search_projects.assert_not_awaited()
+
+
 def test_list_project_members_returns_200():
     project_id = uuid4()
     member = _build_member_info(uuid4(), role="maintainer")
