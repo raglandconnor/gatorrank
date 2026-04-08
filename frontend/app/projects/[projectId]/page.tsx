@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import {
   Box,
@@ -24,9 +24,9 @@ import {
   LuChevronUp,
 } from 'react-icons/lu';
 import { Navbar } from '@/components/Navbar';
-import { getProjectDetailById } from '@/data/mock-project';
-import { mockProfile } from '@/data/mock-profile';
-import { RoleBadge } from '@/components/ui/rolebadge';
+import { useAuth } from '@/components/auth/AuthProvider';
+import { getProjectByIdForViewer } from '@/lib/api/projects';
+import type { ProjectDetail } from '@/lib/api/types/project';
 
 function getYouTubeEmbedUrl(url: string): string | null {
   const trimmed = url.trim();
@@ -144,10 +144,99 @@ function UpvoteBox({ votes }: { votes: number }) {
 export default function ProjectDetailPage() {
   const params = useParams();
   const router = useRouter();
+  const { accessToken, isReady } = useAuth();
   const projectId = params.projectId as string;
-  const project = getProjectDetailById(projectId);
+  const [projectDetail, setProjectDetail] = useState<ProjectDetail | null>(
+    null,
+  );
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [notFound, setNotFound] = useState(false);
+  const requestIdRef = useRef(0);
 
-  if (!project) {
+  const loadProject = useCallback(async () => {
+    if (!isReady) return;
+    const requestId = ++requestIdRef.current;
+
+    setLoading(true);
+    setError(null);
+    setNotFound(false);
+
+    try {
+      const detail = await getProjectByIdForViewer(projectId, accessToken);
+      if (requestId !== requestIdRef.current) return;
+      setProjectDetail(detail);
+    } catch (err) {
+      if (requestId !== requestIdRef.current) return;
+      const status =
+        typeof err === 'object' &&
+        err !== null &&
+        'status' in err &&
+        typeof (err as { status?: unknown }).status === 'number'
+          ? (err as { status: number }).status
+          : null;
+      if (status === 404) {
+        setNotFound(true);
+        setProjectDetail(null);
+        return;
+      }
+      setError(
+        err instanceof Error ? err.message : 'Failed to load project detail.',
+      );
+      setProjectDetail(null);
+    } finally {
+      if (requestId === requestIdRef.current) {
+        setLoading(false);
+      }
+    }
+  }, [accessToken, isReady, projectId]);
+
+  useEffect(() => {
+    void loadProject();
+  }, [loadProject]);
+
+  const project = useMemo(() => {
+    if (!projectDetail) return null;
+    return {
+      id: projectDetail.id,
+      name: projectDetail.title,
+      shortDescription: projectDetail.short_description,
+      fullDescription:
+        projectDetail.long_description ?? projectDetail.short_description,
+      imageUrl: undefined as string | undefined,
+      tags: (projectDetail.tags.length > 0
+        ? projectDetail.tags
+        : projectDetail.categories
+      ).map((term) => term.name),
+      websiteUrl: projectDetail.demo_url ?? '',
+      githubUrl: projectDetail.github_url ?? '',
+      demoVideoUrl: projectDetail.video_url ?? '',
+      votes: projectDetail.vote_count,
+    };
+  }, [projectDetail]);
+
+  const projectCreator = useMemo(() => {
+    if (!projectDetail?.members.length) return null;
+    return (
+      projectDetail.members.find((member) => member.role === 'owner') ??
+      projectDetail.members[0]
+    );
+  }, [projectDetail]);
+
+  if (!isReady || loading) {
+    return (
+      <Box minH="100vh" bg="gray.50">
+        <Navbar />
+        <Flex minH="60vh" align="center" justify="center">
+          <Text fontSize="md" color="gray.600">
+            Loading project...
+          </Text>
+        </Flex>
+      </Box>
+    );
+  }
+
+  if (notFound) {
     return (
       <Box minH="100vh" bg="gray.50">
         <Navbar />
@@ -173,6 +262,40 @@ export default function ProjectDetailPage() {
               onClick={() => router.push('/profile')}
             >
               Back to profile
+            </Button>
+          </Flex>
+        </Box>
+      </Box>
+    );
+  }
+
+  if (error || !project) {
+    return (
+      <Box minH="100vh" bg="gray.50">
+        <Navbar />
+        <Box px="36px" pt="32px" pb="64px" maxW="1280px" mx="auto">
+          <Flex
+            minH="50vh"
+            align="center"
+            justify="center"
+            direction="column"
+            gap="18px"
+          >
+            <Text fontSize="lg" color="red.500">
+              {error ?? 'Failed to load project detail.'}
+            </Text>
+            <Button
+              type="button"
+              onClick={() => void loadProject()}
+              bg="gray.900"
+              color="white"
+              borderRadius="14px"
+              h="44px"
+              px="20px"
+              fontSize="sm"
+              _hover={{ bg: 'gray.700' }}
+            >
+              Retry
             </Button>
           </Flex>
         </Box>
@@ -389,14 +512,18 @@ export default function ProjectDetailPage() {
                   overflow="hidden"
                 >
                   <Avatar.Fallback
-                    name={mockProfile.name}
+                    name={
+                      projectCreator?.full_name ??
+                      projectCreator?.username ??
+                      'U'
+                    }
                     bg="gray.300"
                     color="gray.700"
                     fontSize="md"
                     fontWeight="bold"
                   />
-                  {mockProfile.avatarUrl && (
-                    <Avatar.Image src={mockProfile.avatarUrl} />
+                  {projectCreator?.profile_picture_url && (
+                    <Avatar.Image src={projectCreator.profile_picture_url} />
                   )}
                 </Avatar.Root>
 
@@ -408,9 +535,10 @@ export default function ProjectDetailPage() {
                       color="gray.900"
                       lineHeight="22px"
                     >
-                      {mockProfile.name}
+                      {projectCreator?.full_name ??
+                        projectCreator?.username ??
+                        'Project Owner'}
                     </Text>
-                    <RoleBadge role={mockProfile.role} />
                   </HStack>
                   <Text fontSize="sm" color="gray.600" lineHeight="18px">
                     Project Creator
