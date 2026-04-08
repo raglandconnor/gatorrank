@@ -70,6 +70,7 @@ export default function ProjectSearchPage() {
         setLoadingMore(true);
       } else {
         setLoadingInitial(true);
+        setLoadingMore(false);
       }
 
       try {
