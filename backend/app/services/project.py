@@ -1429,7 +1429,7 @@ class ProjectService:
             project_cols.id.desc(),
         ).limit(max(remaining, 0) + 1)
         draft_result = await self.db.exec(draft_statement)
-        draft_rows = list(draft_result.all()) if remaining > 0 else []
+        draft_rows = list(draft_result.all())
         has_more_drafts = len(draft_rows) > remaining if remaining > 0 else False
         draft_projects = draft_rows[:remaining] if remaining > 0 else []
 
@@ -1441,6 +1441,14 @@ class ProjectService:
                 sort="top",
                 visibility="all",
                 phase="draft",
+            )
+        elif remaining == 0 and published_projects and draft_rows:
+            next_cursor = self._encode_owner_projects_cursor(
+                published_projects[-1],
+                sort="top",
+                visibility="all",
+                phase="published",
+                top_range=top_range,
             )
         return await self._hydrate_project_list_response(
             projects=combined,
