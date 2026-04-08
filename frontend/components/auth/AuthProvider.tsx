@@ -37,6 +37,7 @@ export interface AuthContextValue {
   ) => Promise<void>;
   signup: (args: {
     email: string;
+    username: string;
     password: string;
     fullName?: string;
     rememberMe?: boolean;
@@ -77,6 +78,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           const authUser: AuthUser = {
             id: me.id,
             email: me.email,
+            username: me.username,
             role: me.role,
             full_name: me.full_name,
             profile_picture_url: me.profile_picture_url,
@@ -121,12 +123,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signup = useCallback(
     async (args: {
       email: string;
+      username: string;
       password: string;
       fullName?: string;
       rememberMe?: boolean;
     }) => {
       const data = await authSignup({
         email: args.email.trim(),
+        username: args.username.trim().toLowerCase(),
         password: args.password,
         full_name: args.fullName?.trim() || undefined,
         remember_me: args.rememberMe ?? false,
