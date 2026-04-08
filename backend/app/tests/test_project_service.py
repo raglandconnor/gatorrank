@@ -209,6 +209,37 @@ async def test_list_projects_for_owner_draft_top_ignores_published_date_filters(
 
 
 @pytest.mark.asyncio
+async def test_list_projects_for_owner_top_all_draft_phase_cursor_skips_date_range():
+    db = AsyncMock()
+    service = ProjectService(cast(AsyncSession, db))
+    owner_id = uuid4()
+    draft_project = make_project(is_published=False, created_by_id=owner_id)
+
+    cursor = service._encode_owner_projects_cursor(
+        draft_project,
+        sort="top",
+        visibility="all",
+        phase="draft",
+    )
+    response = ProjectListResponse(items=[], next_cursor=None)
+
+    service._list_owner_draft_projects = AsyncMock(return_value=response)  # type: ignore[method-assign]
+
+    result = await service.list_projects_for_owner(
+        owner_id=owner_id,
+        sort="top",
+        visibility="all",
+        cursor=cursor,
+    )
+
+    assert result is response
+    await_args = service._list_owner_draft_projects.await_args  # type: ignore[attr-defined]
+    assert await_args is not None
+    assert await_args.kwargs["visibility"] == "all"
+    assert await_args.kwargs["sort"] == "top"
+
+
+@pytest.mark.asyncio
 async def test_create_project_skips_taxonomy_assignment_when_create_lists_empty():
     db = AsyncMock()
     db.add = Mock()

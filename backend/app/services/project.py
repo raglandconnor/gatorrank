@@ -1353,16 +1353,6 @@ class ProjectService:
         if cursor_payload is not None:
             phase = str(cursor_payload["phase"])
 
-        top_range = self._resolve_top_date_range(
-            sort="top",
-            published_from=published_from,
-            published_to=published_to,
-        )
-        if cursor_payload is not None:
-            top_range = self._owner_top_range_from_cursor(cursor_payload)
-        if top_range is None:
-            raise CursorError("Invalid date range")
-
         if phase == "draft":
             return await self._list_owner_draft_projects(
                 owner_id=owner_id,
@@ -1372,6 +1362,16 @@ class ProjectService:
                 sort="top",
                 visibility="all",
             )
+
+        top_range = self._resolve_top_date_range(
+            sort="top",
+            published_from=published_from,
+            published_to=published_to,
+        )
+        if cursor_payload is not None:
+            top_range = self._owner_top_range_from_cursor(cursor_payload)
+        if top_range is None:
+            raise CursorError("Invalid date range")
 
         project_cols = getattr(Project, "__table__").c
         published_statement = self._base_owner_projects_query(
