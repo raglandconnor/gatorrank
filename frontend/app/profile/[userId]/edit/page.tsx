@@ -2,35 +2,9 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import {
-  Box,
-  Flex,
-  HStack,
-  VStack,
-  Text,
-  Button,
-  Wrap,
-  Input,
-  Textarea,
-  Spinner,
-} from '@chakra-ui/react';
-import {
-  LuX,
-  LuSave,
-  LuGithub,
-  LuLinkedin,
-  LuGlobe,
-  LuMail,
-  LuLock,
-  LuEye,
-  LuEyeOff,
-  LuPlus,
-  LuCamera,
-  LuShieldCheck,
-} from 'react-icons/lu';
+import { Box, Flex, Spinner } from '@chakra-ui/react';
 import { Navbar } from '@/components/layout/Navbar';
 import { toast } from '@/lib/ui/toast';
-import { RoleBadge } from '@/components/ui/rolebadge';
 import { getMe, patchMe } from '@/lib/api/users';
 import type { AuthUser } from '@/lib/api/types/auth';
 import type { UserPrivate } from '@/lib/api/types/user';
@@ -40,8 +14,10 @@ import {
   loadExtendedProfile,
   saveExtendedProfile,
 } from '../_utils/profileShared';
+import { ProfileEditHeader } from './_components/ProfileEditHeader';
+import { ProfileEditColumns } from './_components/ProfileEditColumns';
 
-const inputBase = {
+const inputBase: Record<string, unknown> = {
   border: '1px solid',
   borderColor: 'gray.300',
   borderRadius: '10px',
@@ -53,66 +29,6 @@ const inputBase = {
   outline: 'none',
   _focus: { borderColor: 'orange.400' },
 } as const;
-
-function FieldLabel({ children }: { children: React.ReactNode }) {
-  return (
-    <Text fontSize="sm" color="gray.500" lineHeight="24px">
-      {children}
-    </Text>
-  );
-}
-
-function PasswordField({
-  placeholder,
-  value,
-  onChange,
-}: {
-  placeholder: string;
-  value: string;
-  onChange: (v: string) => void;
-}) {
-  const [show, setShow] = useState(false);
-  return (
-    <Box position="relative" w="100%">
-      <Box
-        position="absolute"
-        left="12px"
-        top="50%"
-        transform="translateY(-50%)"
-        color="gray.400"
-        pointerEvents="none"
-      >
-        <LuLock size={16} />
-      </Box>
-      <Input
-        type={show ? 'text' : 'password'}
-        placeholder={placeholder}
-        value={value}
-        onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-          onChange(e.target.value)
-        }
-        {...inputBase}
-        h="40px"
-        pl="38px"
-        pr="44px"
-      />
-      <Button
-        aria-label="toggle password visibility"
-        position="absolute"
-        right="6px"
-        top="50%"
-        transform="translateY(-50%)"
-        color="gray.400"
-        onClick={() => setShow((v) => !v)}
-        variant="ghost"
-        _hover={{ color: 'gray.700' }}
-        size="sm"
-      >
-        {show ? <LuEyeOff size={16} /> : <LuEye size={16} />}
-      </Button>
-    </Box>
-  );
-}
 
 export default function EditProfilePage() {
   const router = useRouter();
@@ -332,515 +248,56 @@ export default function EditProfilePage() {
       />
 
       <Box px="36px" pt="32px" pb="64px" maxW="1280px" mx="auto">
-        {/* Profile hero */}
-        <HStack gap="24px" mb="40px" align="flex-start">
-          {/* Avatar */}
-          <Box
-            position="relative"
-            w="96px"
-            h="96px"
-            flexShrink={0}
-            cursor="pointer"
-            onClick={() => fileInputRef.current?.click()}
-          >
-            {avatarPreview ? (
-              <img
-                src={avatarPreview}
-                alt={displayName}
-                style={{
-                  width: '96px',
-                  height: '96px',
-                  borderRadius: '50%',
-                  objectFit: 'cover',
-                  display: 'block',
-                }}
-              />
-            ) : (
-              <Flex
-                w="96px"
-                h="96px"
-                borderRadius="full"
-                bg="orange.400"
-                color="white"
-                align="center"
-                justify="center"
-                fontSize="2xl"
-                fontWeight="bold"
-              >
-                {getInitials(displayName)}
-              </Flex>
-            )}
-            <Box
-              position="absolute"
-              inset={0}
-              borderRadius="full"
-              bg="blackAlpha.500"
-              display="flex"
-              alignItems="center"
-              justifyContent="center"
-              opacity={0}
-              _hover={{ opacity: 1 }}
-              transition="opacity 0.15s"
-              color="white"
-            >
-              <LuCamera size={22} />
-            </Box>
-          </Box>
+        <ProfileEditHeader
+          avatarPreview={avatarPreview}
+          displayName={displayName}
+          name={name}
+          bio={bio}
+          github={github}
+          linkedin={linkedin}
+          website={website}
+          role={apiUser.role as 'student' | 'faculty'}
+          inputBase={inputBase}
+          saving={saving}
+          onNameChange={setName}
+          onBioChange={setBio}
+          onGithubChange={setGithub}
+          onLinkedinChange={setLinkedin}
+          onWebsiteChange={setWebsite}
+          onAvatarClick={() => fileInputRef.current?.click()}
+          onCancel={() => router.push(`/profile/${apiUser.id}`)}
+          onSave={handleSave}
+          getInitials={getInitials}
+        />
 
-          {/* Info VStack */}
-          <VStack align="start" gap="10px" flex={1} minW={0}>
-            <HStack gap="12px" align="center" w="100%" flexWrap="wrap">
-              <Input
-                value={name}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                  setName(e.target.value)
-                }
-                placeholder="Your full name"
-                {...inputBase}
-                fontSize="xl"
-                fontWeight="bold"
-                h="47px"
-                maxW="400px"
-                lineHeight="32px"
-              />
-              <RoleBadge role={apiUser.role as 'student' | 'faculty'} />
-            </HStack>
-
-            <Textarea
-              value={bio}
-              onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) =>
-                setBio(e.target.value)
-              }
-              placeholder="Tell the community about yourself…"
-              {...inputBase}
-              h="80px"
-              py="10px"
-              resize="none"
-              maxW="640px"
-              lineHeight="24px"
-            />
-
-            <VStack align="start" gap="8px" w="100%" maxW="576px">
-              <HStack gap="10px" w="100%">
-                <Box color="gray.500" flexShrink={0}>
-                  <LuGithub size={18} />
-                </Box>
-                <Input
-                  value={github}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                    setGithub(e.target.value)
-                  }
-                  placeholder="https://github.com/username"
-                  {...inputBase}
-                  h="36px"
-                />
-              </HStack>
-
-              <HStack gap="10px" w="100%">
-                <Box color="gray.500" flexShrink={0}>
-                  <LuLinkedin size={18} />
-                </Box>
-                <Input
-                  value={linkedin}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                    setLinkedin(e.target.value)
-                  }
-                  placeholder="https://linkedin.com/in/username"
-                  {...inputBase}
-                  h="36px"
-                />
-              </HStack>
-
-              <HStack gap="10px" w="100%">
-                <Box color="gray.500" flexShrink={0}>
-                  <LuGlobe size={18} />
-                </Box>
-                <Input
-                  value={website}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                    setWebsite(e.target.value)
-                  }
-                  placeholder="https://yourwebsite.com"
-                  {...inputBase}
-                  h="36px"
-                />
-              </HStack>
-            </VStack>
-          </VStack>
-
-          {/* Buttons */}
-          <HStack gap="12px" flexShrink={0} align="flex-start">
-            <Button
-              onClick={() => router.push(`/profile/${apiUser.id}`)}
-              variant="outline"
-              border="1px solid"
-              borderColor="orange.400"
-              borderRadius="14px"
-              h="44px"
-              px="20px"
-              fontSize="sm"
-              color="gray.900"
-              bg="white"
-              _hover={{ bg: 'orange.50' }}
-              transition="background 0.15s"
-              disabled={saving}
-            >
-              <HStack gap="6px">
-                <LuX size={16} />
-                <Text>Cancel</Text>
-              </HStack>
-            </Button>
-
-            <Button
-              onClick={handleSave}
-              bg="orange.400"
-              color="white"
-              borderRadius="14px"
-              h="44px"
-              px="20px"
-              fontSize="sm"
-              fontWeight="normal"
-              _hover={{ bg: 'orange.500' }}
-              transition="background 0.15s"
-              loading={saving}
-            >
-              <HStack gap="6px">
-                <LuSave size={16} />
-                <Text>Save Changes</Text>
-              </HStack>
-            </Button>
-          </HStack>
-        </HStack>
-
-        {/* Two-column lower section */}
-        <Flex gap="24px" align="start">
-          {/* Left column */}
-          <VStack w="344px" flexShrink={0} gap="16px" align="start">
-            {/* Academic Information */}
-            <Box bg="gray.100" borderRadius="13px" p="24px" w="100%">
-              <VStack align="start" gap="16px" w="100%">
-                <Text
-                  fontSize="md"
-                  fontWeight="bold"
-                  color="gray.900"
-                  lineHeight="30px"
-                >
-                  Academic Information
-                </Text>
-
-                <VStack align="start" gap="4px" w="100%">
-                  <FieldLabel>Major</FieldLabel>
-                  <Input
-                    value={major}
-                    onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                      setMajor(e.target.value)
-                    }
-                    placeholder="e.g., Computer Engineering"
-                    {...inputBase}
-                    h="43px"
-                  />
-                </VStack>
-
-                <VStack align="start" gap="4px" w="100%">
-                  <FieldLabel>Graduation Year</FieldLabel>
-                  <Input
-                    type="number"
-                    value={gradYear}
-                    onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                      setGradYear(e.target.value)
-                    }
-                    placeholder="e.g., 2026"
-                    {...inputBase}
-                    h="43px"
-                  />
-                </VStack>
-
-                <VStack align="start" gap="8px" w="100%">
-                  <FieldLabel>UF Courses</FieldLabel>
-                  <HStack gap="8px" w="100%">
-                    <Input
-                      value={courseInput}
-                      onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                        setCourseInput(e.target.value)
-                      }
-                      onKeyDown={(e: React.KeyboardEvent) => {
-                        if (e.key === 'Enter') {
-                          e.preventDefault();
-                          addCourse();
-                        }
-                      }}
-                      placeholder="e.g., COP4331"
-                      {...inputBase}
-                      h="40px"
-                      flex={1}
-                    />
-                    <Button
-                      onClick={addCourse}
-                      bg="orange.400"
-                      color="white"
-                      borderRadius="10px"
-                      h="40px"
-                      px="14px"
-                      fontSize="sm"
-                      fontWeight="normal"
-                      flexShrink={0}
-                      _hover={{ bg: 'orange.500' }}
-                      transition="background 0.15s"
-                      minW="44px"
-                    >
-                      <LuPlus size={16} />
-                    </Button>
-                  </HStack>
-                  <Wrap gap="8px">
-                    {courses.map((course: string) => (
-                      <HStack
-                        key={course}
-                        gap="4px"
-                        bg="white"
-                        border="1.6px solid"
-                        borderColor="orange.200"
-                        borderRadius="8px"
-                        pl="10px"
-                        pr="6px"
-                        py="4px"
-                      >
-                        <Text fontSize="sm" color="gray.900" lineHeight="24px">
-                          {course}
-                        </Text>
-                        <Box
-                          as="button"
-                          onClick={() => removeCourse(course)}
-                          color="gray.400"
-                          cursor="pointer"
-                          display="flex"
-                          alignItems="center"
-                          _hover={{ color: 'gray.700' }}
-                          transition="color 0.1s"
-                        >
-                          <LuX size={12} />
-                        </Box>
-                      </HStack>
-                    ))}
-                  </Wrap>
-                </VStack>
-              </VStack>
-            </Box>
-
-            {/* Account Settings */}
-            <Box bg="gray.100" borderRadius="13px" p="24px" w="100%">
-              <VStack align="start" gap="16px" w="100%">
-                <Text
-                  fontSize="md"
-                  fontWeight="bold"
-                  color="gray.900"
-                  lineHeight="30px"
-                >
-                  Account Settings
-                </Text>
-
-                <VStack align="start" gap="4px" w="100%">
-                  <FieldLabel>Email Address</FieldLabel>
-                  <Box position="relative" w="100%">
-                    <Box
-                      position="absolute"
-                      left="12px"
-                      top="50%"
-                      transform="translateY(-50%)"
-                      color="gray.400"
-                      pointerEvents="none"
-                    >
-                      <LuMail size={16} />
-                    </Box>
-                    <Input
-                      type="email"
-                      value={apiUser.email}
-                      readOnly
-                      disabled
-                      {...inputBase}
-                      h="43px"
-                      pl="38px"
-                      opacity={0.6}
-                      cursor="not-allowed"
-                    />
-                  </Box>
-                </VStack>
-
-                <VStack align="start" gap="12px" w="100%">
-                  <Text
-                    fontSize="sm"
-                    fontWeight="bold"
-                    color="gray.700"
-                    lineHeight="24px"
-                  >
-                    Change Password
-                  </Text>
-
-                  <VStack align="start" gap="4px" w="100%">
-                    <FieldLabel>Current Password</FieldLabel>
-                    <PasswordField
-                      placeholder="Enter current password"
-                      value={currentPw}
-                      onChange={setCurrentPw}
-                    />
-                  </VStack>
-
-                  <VStack align="start" gap="4px" w="100%">
-                    <FieldLabel>New Password</FieldLabel>
-                    <PasswordField
-                      placeholder="Enter new password (min 12 chars)"
-                      value={newPw}
-                      onChange={setNewPw}
-                    />
-                  </VStack>
-
-                  <VStack align="start" gap="4px" w="100%">
-                    <FieldLabel>Confirm New Password</FieldLabel>
-                    <PasswordField
-                      placeholder="Confirm new password"
-                      value={confirmPw}
-                      onChange={setConfirmPw}
-                    />
-                  </VStack>
-
-                  {pwError && (
-                    <Text fontSize="xs" color="red.500" lineHeight="20px">
-                      {pwError}
-                    </Text>
-                  )}
-                  {pwSuccess && (
-                    <Text fontSize="xs" color="green.600" lineHeight="20px">
-                      Password changed successfully.
-                    </Text>
-                  )}
-
-                  <Button
-                    onClick={handleChangePassword}
-                    disabled={pwButtonDisabled}
-                    w="100%"
-                    border="1px solid"
-                    borderColor={pwButtonDisabled ? 'gray.200' : 'orange.400'}
-                    borderRadius="10px"
-                    h="40px"
-                    fontSize="sm"
-                    color={pwButtonDisabled ? 'gray.400' : 'gray.900'}
-                    bg="white"
-                    _hover={pwButtonDisabled ? {} : { bg: 'orange.50' }}
-                    transition="background 0.15s, border-color 0.15s, color 0.15s"
-                    cursor={pwButtonDisabled ? 'not-allowed' : 'pointer'}
-                    opacity={pwButtonDisabled ? 0.5 : 1}
-                  >
-                    <HStack gap="6px">
-                      <LuShieldCheck size={15} />
-                      <Text>Change Password</Text>
-                    </HStack>
-                  </Button>
-                </VStack>
-              </VStack>
-            </Box>
-          </VStack>
-
-          {/* Right column */}
-          <VStack flex={1} align="start" gap="32px" minW={0}>
-            {/* Skills */}
-            <VStack align="start" gap="16px" w="100%">
-              <Text
-                fontSize="md"
-                fontWeight="bold"
-                color="gray.900"
-                lineHeight="30px"
-              >
-                Skills
-              </Text>
-
-              <Box bg="gray.100" borderRadius="13px" p="16px" w="100%">
-                <HStack gap="8px">
-                  <Input
-                    value={skillInput}
-                    onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                      setSkillInput(e.target.value)
-                    }
-                    onKeyDown={(e: React.KeyboardEvent) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault();
-                        addSkill();
-                      }
-                    }}
-                    placeholder="Add a skill (e.g., React, Python…)"
-                    {...inputBase}
-                    h="43px"
-                    flex={1}
-                  />
-                  <Button
-                    onClick={addSkill}
-                    bg="orange.400"
-                    color="white"
-                    borderRadius="10px"
-                    h="43px"
-                    px="20px"
-                    fontSize="sm"
-                    fontWeight="normal"
-                    flexShrink={0}
-                    _hover={{ bg: 'orange.500' }}
-                    transition="background 0.15s"
-                  >
-                    <HStack gap="6px">
-                      <LuPlus size={16} />
-                      <Text>Add</Text>
-                    </HStack>
-                  </Button>
-                </HStack>
-              </Box>
-
-              <Wrap gap="8px">
-                {skills.map((skill: string) => (
-                  <HStack
-                    key={skill}
-                    gap="4px"
-                    bg="rgba(251,146,60,0.1)"
-                    border="1.6px solid"
-                    borderColor="orange.400"
-                    borderRadius="10px"
-                    pl="16px"
-                    pr="10px"
-                    py="8px"
-                  >
-                    <Text fontSize="sm" color="orange.400" lineHeight="24px">
-                      {skill}
-                    </Text>
-                    <Box
-                      as="button"
-                      onClick={() => removeSkill(skill)}
-                      color="orange.300"
-                      cursor="pointer"
-                      display="flex"
-                      alignItems="center"
-                      _hover={{ color: 'orange.500' }}
-                      transition="color 0.1s"
-                    >
-                      <LuX size={12} />
-                    </Box>
-                  </HStack>
-                ))}
-              </Wrap>
-            </VStack>
-
-            {/* Projects (read-only — edit from individual project pages) */}
-            <VStack align="start" gap="8px" w="100%">
-              <Text
-                fontSize="md"
-                fontWeight="bold"
-                color="gray.900"
-                lineHeight="30px"
-              >
-                Projects
-              </Text>
-              <Text fontSize="sm" color="gray.400" lineHeight="24px">
-                Manage your projects from the profile view or individual project
-                pages.
-              </Text>
-            </VStack>
-          </VStack>
-        </Flex>
+        <ProfileEditColumns
+          inputBase={inputBase}
+          major={major}
+          gradYear={gradYear}
+          courseInput={courseInput}
+          courses={courses}
+          email={apiUser.email}
+          currentPw={currentPw}
+          newPw={newPw}
+          confirmPw={confirmPw}
+          pwError={pwError}
+          pwSuccess={pwSuccess}
+          pwButtonDisabled={pwButtonDisabled}
+          skillInput={skillInput}
+          skills={skills}
+          onMajorChange={setMajor}
+          onGradYearChange={setGradYear}
+          onCourseInputChange={setCourseInput}
+          onAddCourse={addCourse}
+          onRemoveCourse={removeCourse}
+          onCurrentPwChange={setCurrentPw}
+          onNewPwChange={setNewPw}
+          onConfirmPwChange={setConfirmPw}
+          onChangePassword={handleChangePassword}
+          onSkillInputChange={setSkillInput}
+          onAddSkill={addSkill}
+          onRemoveSkill={removeSkill}
+        />
       </Box>
     </Box>
   );
