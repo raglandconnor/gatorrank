@@ -63,7 +63,10 @@ export default function SignupPage() {
 
     if (!normalizedUsername) {
       newErrors.username = 'Username is required';
-    } else if (normalizedUsername.length < 3 || normalizedUsername.length > 32) {
+    } else if (
+      normalizedUsername.length < 3 ||
+      normalizedUsername.length > 32
+    ) {
       newErrors.username = 'Username must be between 3 and 32 characters';
     } else if (!USERNAME_PATTERN.test(normalizedUsername)) {
       newErrors.username =
@@ -103,7 +106,7 @@ export default function SignupPage() {
       });
       toast.success({
         title: 'Account created',
-        description: 'Welcome to GatorRank. Taking you to your profile…',
+        description: 'Welcome to GatorRank. Taking you to your profile...',
       });
       router.push('/profile');
     } catch (err) {
@@ -407,7 +410,7 @@ export default function SignupPage() {
               mt={4}
               disabled={!isReady || isSubmitting}
             >
-              {isSubmitting ? 'Creating account…' : 'Sign Up'}
+              {isSubmitting ? 'Creating account...' : 'Sign Up'}
             </Button>
           </Stack>
         </Box>
@@ -426,4 +429,3 @@ export default function SignupPage() {
     </Flex>
   );
 }
-

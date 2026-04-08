@@ -68,7 +68,10 @@ export async function getUserProjects(
   const res = await fetchWithAuth(
     `/api/v1/users/${userId}/projects${buildProjectsQuery(query)}`,
   );
-  return parseUserResponse<ProjectListResponse>(res, 'Failed to fetch projects');
+  return parseUserResponse<ProjectListResponse>(
+    res,
+    'Failed to fetch projects',
+  );
 }
 
 export async function getUserProjectsByUsername(
@@ -78,7 +81,10 @@ export async function getUserProjectsByUsername(
   const res = await fetchWithAuth(
     `/api/v1/users/by-username/${encodeURIComponent(username)}/projects${buildProjectsQuery(query)}`,
   );
-  return parseUserResponse<ProjectListResponse>(res, 'Failed to fetch projects');
+  return parseUserResponse<ProjectListResponse>(
+    res,
+    'Failed to fetch projects',
+  );
 }
 
 export async function getMyProjects(

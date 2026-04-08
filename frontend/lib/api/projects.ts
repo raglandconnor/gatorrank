@@ -39,7 +39,10 @@ export async function listProjects(
     published_to: query.published_to,
   });
   const res = await fetchWithAuth(`/api/v1/projects${qs}`);
-  return parseProjectResponse<ProjectListResponse>(res, 'Failed to fetch projects');
+  return parseProjectResponse<ProjectListResponse>(
+    res,
+    'Failed to fetch projects',
+  );
 }
 
 export async function getProject(projectId: string): Promise<ProjectDetail> {
@@ -47,7 +50,9 @@ export async function getProject(projectId: string): Promise<ProjectDetail> {
   return parseProjectResponse<ProjectDetail>(res, 'Failed to fetch project');
 }
 
-export async function getProjectById(projectId: string): Promise<ProjectDetail> {
+export async function getProjectById(
+  projectId: string,
+): Promise<ProjectDetail> {
   return getProject(projectId);
 }
 
@@ -90,7 +95,9 @@ export async function deleteProject(projectId: string): Promise<void> {
   }
 }
 
-export async function publishProject(projectId: string): Promise<ProjectDetail> {
+export async function publishProject(
+  projectId: string,
+): Promise<ProjectDetail> {
   const res = await fetchWithAuth(`/api/v1/projects/${projectId}/publish`, {
     method: 'POST',
   });
@@ -103,7 +110,10 @@ export async function unpublishProject(
   const res = await fetchWithAuth(`/api/v1/projects/${projectId}/unpublish`, {
     method: 'POST',
   });
-  return parseProjectResponse<ProjectDetail>(res, 'Failed to unpublish project');
+  return parseProjectResponse<ProjectDetail>(
+    res,
+    'Failed to unpublish project',
+  );
 }
 
 export async function listProjectMembers(
@@ -152,9 +162,12 @@ export async function removeProjectMember(
   projectId: string,
   userId: string,
 ): Promise<void> {
-  const res = await fetchWithAuth(`/api/v1/projects/${projectId}/members/${userId}`, {
-    method: 'DELETE',
-  });
+  const res = await fetchWithAuth(
+    `/api/v1/projects/${projectId}/members/${userId}`,
+    {
+      method: 'DELETE',
+    },
+  );
 
   if (!res.ok && res.status !== 204) {
     const message = await parseApiErrorMessage(
@@ -182,7 +195,10 @@ export async function addProjectVote(projectId: string): Promise<void> {
   });
 
   if (!res.ok && res.status !== 204) {
-    const message = await parseApiErrorMessage(res, 'Failed to vote for project');
+    const message = await parseApiErrorMessage(
+      res,
+      'Failed to vote for project',
+    );
     throw buildHttpError(message, res.status);
   }
 }
