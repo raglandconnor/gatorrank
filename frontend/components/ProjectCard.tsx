@@ -8,7 +8,7 @@ import {
   LuTag,
   LuArrowRight,
 } from 'react-icons/lu';
-import type { Project } from '@/data/mock-projects';
+import type { Project } from '@/types/project';
 
 interface ProjectCardProps {
   project: Project;

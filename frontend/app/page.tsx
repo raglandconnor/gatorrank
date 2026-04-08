@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { Box, Container, Spinner, Text, VStack } from '@chakra-ui/react';
 import { Navbar } from '@/components/Navbar';
 import { ProjectSection } from '@/components/ProjectSection';
-import type { Project } from '@/data/mock-projects';
+import type { Project } from '@/types/project';
 import { listProjectsPublic } from '@/lib/api/projects';
 import { getMonthRange } from '@/lib/projects/dateFilters';
 import { mapProjectListItemsToCardProjects } from '@/lib/projects/projectCardMapper';
