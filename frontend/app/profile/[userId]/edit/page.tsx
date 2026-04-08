@@ -884,4 +884,3 @@ export default function EditProfilePage() {
     </Box>
   );
 }
-
