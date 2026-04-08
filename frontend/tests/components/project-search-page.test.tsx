@@ -259,4 +259,32 @@ describe('ProjectSearchPage', () => {
       'token-abc',
     );
   });
+
+  test('invalidates pending request when query is cleared', async () => {
+    const pending = deferred<{
+      items: SearchProjectListItem[];
+      next_cursor: null;
+    }>();
+
+    searchProjectsMock.mockImplementationOnce(() => pending.promise);
+
+    const { rerender } = renderWithChakra(<ProjectSearchPage />);
+    await waitFor(() => expect(searchProjectsMock).toHaveBeenCalledTimes(1));
+
+    paramsRef.value = new URLSearchParams('sort=top');
+    rerender(<ProjectSearchPage />);
+
+    expect(
+      await screen.findByText('Enter a keyword to search projects.'),
+    ).toBeInTheDocument();
+
+    pending.resolve({
+      items: [makeItem('stale', 'Stale Result')],
+      next_cursor: null,
+    });
+
+    await waitFor(() => {
+      expect(screen.queryByText('Stale Result')).not.toBeInTheDocument();
+    });
+  });
 });

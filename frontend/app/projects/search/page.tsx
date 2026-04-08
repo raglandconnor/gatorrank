@@ -56,14 +56,16 @@ export default function ProjectSearchPage() {
 
   const loadPage = useCallback(
     async (cursor?: string) => {
+      const requestId = ++requestIdRef.current;
+
       if (!hasQuery) {
         setItems([]);
         setNextCursor(null);
         setError(null);
+        setLoadingInitial(false);
+        setLoadingMore(false);
         return;
       }
-
-      const requestId = ++requestIdRef.current;
       if (cursor) {
         setLoadingMore(true);
       } else {
