@@ -8,6 +8,25 @@ from sqlmodel import Field, SQLModel
 
 class Project(SQLModel, table=True):
     __tablename__ = "projects"  # pyright: ignore[reportAssignmentType]
+    __table_args__ = (
+        sa.Index(
+            "ix_projects_title_lower_trgm",
+            sa.text("lower(title) gin_trgm_ops"),
+            postgresql_using="gin",
+        ),
+        sa.Index(
+            "ix_projects_short_description_lower_trgm",
+            sa.text("lower(short_description) gin_trgm_ops"),
+            postgresql_using="gin",
+        ),
+        sa.Index(
+            "ix_projects_published_active_top_order",
+            sa.text("vote_count DESC"),
+            sa.text("created_at DESC"),
+            sa.text("id DESC"),
+            postgresql_where=sa.text("is_published = true AND deleted_at IS NULL"),
+        ),
+    )
 
     id: UUID = Field(default_factory=uuid4, primary_key=True, nullable=False)
     created_by_id: UUID = Field(foreign_key="users.id", nullable=False, index=True)
