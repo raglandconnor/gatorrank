@@ -18,7 +18,6 @@ import {
   LuGlobe,
   LuGithub,
   LuVideo,
-  LuTrophy,
   LuExternalLink,
   LuPencil,
   LuChevronUp,
@@ -49,15 +48,12 @@ function getYouTubeEmbedUrl(url: string): string | null {
       }
     }
 
-    // YouTube video ids are 11 chars using base64url charset: [A-Za-z0-9_-]
-    const VIDEO_ID_REGEX = /^[a-zA-Z0-9_-]{11}$/;
+    const videoIdRegex = /^[a-zA-Z0-9_-]{11}$/;
     if (!videoId) return null;
     const normalizedVideoId = videoId.trim();
-    if (!VIDEO_ID_REGEX.test(normalizedVideoId)) return null;
+    if (!videoIdRegex.test(normalizedVideoId)) return null;
 
-    return `https://www.youtube.com/embed/${encodeURIComponent(
-      normalizedVideoId,
-    )}`;
+    return `https://www.youtube.com/embed/${encodeURIComponent(normalizedVideoId)}`;
   } catch {
     return null;
   }
@@ -142,16 +138,17 @@ function UpvoteBox({ votes }: { votes: number }) {
 }
 
 export default function ProjectDetailPage() {
-  const params = useParams();
   const router = useRouter();
-  const { accessToken, isReady } = useAuth();
-  const projectId = params.projectId as string;
+  const params = useParams<{ projectId: string }>();
+  const { accessToken, isReady, user } = useAuth();
+  const projectId = params.projectId;
   const [projectDetail, setProjectDetail] = useState<ProjectDetail | null>(
     null,
   );
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [notFound, setNotFound] = useState(false);
+  const [forbidden, setForbidden] = useState(false);
   const requestIdRef = useRef(0);
 
   const loadProject = useCallback(async () => {
@@ -161,6 +158,7 @@ export default function ProjectDetailPage() {
     setLoading(true);
     setError(null);
     setNotFound(false);
+    setForbidden(false);
 
     try {
       const detail = await getProjectByIdForViewer(projectId, accessToken);
@@ -175,11 +173,19 @@ export default function ProjectDetailPage() {
         typeof (err as { status?: unknown }).status === 'number'
           ? (err as { status: number }).status
           : null;
+
       if (status === 404) {
         setNotFound(true);
         setProjectDetail(null);
         return;
       }
+
+      if (status === 403) {
+        setForbidden(true);
+        setProjectDetail(null);
+        return;
+      }
+
       setError(
         err instanceof Error ? err.message : 'Failed to load project detail.',
       );
@@ -195,26 +201,8 @@ export default function ProjectDetailPage() {
     void loadProject();
   }, [loadProject]);
 
-  const project = useMemo(() => {
-    if (!projectDetail) return null;
-    return {
-      id: projectDetail.id,
-      name: projectDetail.title,
-      shortDescription: projectDetail.short_description,
-      fullDescription:
-        projectDetail.long_description ?? projectDetail.short_description,
-      imageUrl: undefined as string | undefined,
-      tags: (projectDetail.tags.length > 0
-        ? projectDetail.tags
-        : projectDetail.categories
-      ).map((term) => term.name),
-      websiteUrl: projectDetail.demo_url ?? '',
-      githubUrl: projectDetail.github_url ?? '',
-      demoVideoUrl: projectDetail.video_url ?? '',
-      votes: projectDetail.vote_count,
-    };
-  }, [projectDetail]);
-
+  const project = projectDetail;
+  const isOwner = user?.id === project?.created_by_id;
   const projectCreator = useMemo(() => {
     if (!projectDetail?.members.length) return null;
     return (
@@ -236,7 +224,7 @@ export default function ProjectDetailPage() {
     );
   }
 
-  if (notFound) {
+  if (notFound || forbidden) {
     return (
       <Box minH="100vh" bg="gray.50">
         <Navbar />
@@ -249,7 +237,9 @@ export default function ProjectDetailPage() {
             gap="24px"
           >
             <Text fontSize="lg" color="gray.600">
-              Project not found
+              {notFound
+                ? 'Project not found'
+                : 'You do not have access to this project.'}
             </Text>
             <Button
               bg="orange.400"
@@ -304,8 +294,8 @@ export default function ProjectDetailPage() {
   }
 
   const hasLinks =
-    Boolean(project.websiteUrl?.trim()) || Boolean(project.githubUrl?.trim());
-  const youtubeEmbedUrl = getYouTubeEmbedUrl(project.demoVideoUrl ?? '');
+    Boolean(project.demo_url?.trim()) || Boolean(project.github_url?.trim());
+  const youtubeEmbedUrl = getYouTubeEmbedUrl(project.video_url ?? '');
   const hasDemoVideo = Boolean(youtubeEmbedUrl);
 
   return (
@@ -319,7 +309,6 @@ export default function ProjectDetailPage() {
         mx="auto"
         w="100%"
       >
-        {/* Top project card */}
         <Box
           bg="gray.100"
           borderRadius="16px"
@@ -333,7 +322,6 @@ export default function ProjectDetailPage() {
             pb={{ base: '20px', md: '26px' }}
           >
             <Flex align="flex-start" justify="space-between" gap="24px">
-              {/* Left content */}
               <HStack align="flex-start" gap="20px" flex="1" minW={0}>
                 <Box
                   w={{ base: '104px', md: '128px' }}
@@ -342,20 +330,13 @@ export default function ProjectDetailPage() {
                   overflow="hidden"
                   bg="gray.200"
                   flexShrink={0}
+                  display="flex"
+                  alignItems="center"
+                  justifyContent="center"
                 >
-                  {project.imageUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={project.imageUrl}
-                      alt={project.name}
-                      style={{
-                        width: '100%',
-                        height: '100%',
-                        objectFit: 'cover',
-                        display: 'block',
-                      }}
-                    />
-                  ) : null}
+                  <Box color="gray.400">
+                    <LuVideo size={28} />
+                  </Box>
                 </Box>
 
                 <VStack align="start" gap="12px" flex="1" minW={0}>
@@ -367,24 +348,23 @@ export default function ProjectDetailPage() {
                       lineHeight={{ base: '34px', md: '40px' }}
                       lineClamp={2}
                     >
-                      {project.name}
+                      {project.title}
                     </Text>
                     <HStack
                       gap="6px"
-                      bg="orange.400"
+                      bg={project.is_published ? 'green.500' : 'orange.400'}
                       color="white"
                       borderRadius="full"
                       px="12px"
                       py="5px"
                     >
-                      <LuTrophy size={16} />
                       <Text
                         fontSize="sm"
                         lineHeight="18px"
                         fontWeight="semibold"
                         whiteSpace="nowrap"
                       >
-                        #1 Trending Project This Month
+                        {project.is_published ? 'Published' : 'Draft'}
                       </Text>
                     </HStack>
                   </HStack>
@@ -396,39 +376,29 @@ export default function ProjectDetailPage() {
                     maxW="760px"
                     lineClamp={2}
                   >
-                    {project.shortDescription}
+                    {project.short_description}
                   </Text>
 
-                  {/* Tags */}
-                  {project.tags.length > 0 ? (
-                    <Wrap gap="10px">
-                      {project.tags.map((tag) => (
-                        <Box
-                          key={tag}
-                          bg="white"
-                          border="1px solid"
-                          borderColor="orange.200"
-                          borderRadius="10px"
-                          px="14px"
-                          py="7px"
-                        >
-                          <Text
-                            fontSize="sm"
-                            color="gray.700"
-                            lineHeight="20px"
-                          >
-                            {tag}
-                          </Text>
-                        </Box>
-                      ))}
-                    </Wrap>
-                  ) : null}
+                  <Wrap gap="10px">
+                    <Box
+                      bg="white"
+                      border="1px solid"
+                      borderColor="orange.200"
+                      borderRadius="10px"
+                      px="14px"
+                      py="7px"
+                    >
+                      <Text fontSize="sm" color="gray.700" lineHeight="20px">
+                        {project.team_size} team member
+                        {project.team_size === 1 ? '' : 's'}
+                      </Text>
+                    </Box>
+                  </Wrap>
 
-                  {/* Actions */}
                   <HStack gap="12px" pt="4px" flexWrap="wrap">
-                    {project.websiteUrl?.trim() ? (
+                    {project.demo_url?.trim() ? (
                       <ChakraLink
-                        href={project.websiteUrl}
+                        href={project.demo_url}
                         target="_blank"
                         rel="noopener noreferrer"
                         _hover={{ textDecoration: 'none' }}
@@ -470,39 +440,40 @@ export default function ProjectDetailPage() {
                       </Button>
                     )}
 
-                    <Button
-                      type="button"
-                      variant="outline"
-                      border="1px solid"
-                      borderColor="gray.300"
-                      bg="white"
-                      borderRadius="12px"
-                      h="44px"
-                      px="18px"
-                      fontSize="md"
-                      color="gray.800"
-                      _hover={{ bg: 'gray.50' }}
-                      onClick={() => router.push('/projects/edit')}
-                    >
-                      <HStack gap="8px">
-                        <LuPencil size={16} />
-                        <Text>Edit Project</Text>
-                      </HStack>
-                    </Button>
+                    {isOwner && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        border="1px solid"
+                        borderColor="gray.300"
+                        bg="white"
+                        borderRadius="12px"
+                        h="44px"
+                        px="18px"
+                        fontSize="md"
+                        color="gray.800"
+                        _hover={{ bg: 'gray.50' }}
+                        onClick={() =>
+                          router.push(`/projects/${project.id}/edit`)
+                        }
+                      >
+                        <HStack gap="8px">
+                          <LuPencil size={16} />
+                          <Text>Edit Project</Text>
+                        </HStack>
+                      </Button>
+                    )}
                   </HStack>
                 </VStack>
               </HStack>
 
-              {/* Right upvote */}
               <Box pt="4px" flexShrink={0}>
-                <UpvoteBox votes={project.votes} />
+                <UpvoteBox votes={project.vote_count} />
               </Box>
             </Flex>
 
-            {/* Divider */}
             <Box h="1px" bg="gray.200" my="22px" />
 
-            {/* Creator row */}
             <HStack justify="space-between" flexWrap="wrap" gap="16px">
               <HStack gap="14px">
                 <Avatar.Root
@@ -546,12 +517,11 @@ export default function ProjectDetailPage() {
                 </VStack>
               </HStack>
 
-              {/* Optional links (small, like design usually keeps them minimal) */}
               {hasLinks ? (
                 <HStack gap="16px" flexWrap="wrap">
-                  {project.websiteUrl?.trim() ? (
+                  {project.demo_url?.trim() ? (
                     <ChakraLink
-                      href={project.websiteUrl}
+                      href={project.demo_url}
                       target="_blank"
                       rel="noopener noreferrer"
                       display="inline-flex"
@@ -568,9 +538,9 @@ export default function ProjectDetailPage() {
                       Website
                     </ChakraLink>
                   ) : null}
-                  {project.githubUrl?.trim() ? (
+                  {project.github_url?.trim() ? (
                     <ChakraLink
-                      href={project.githubUrl}
+                      href={project.github_url}
                       target="_blank"
                       rel="noopener noreferrer"
                       display="inline-flex"
@@ -593,7 +563,6 @@ export default function ProjectDetailPage() {
           </Box>
         </Box>
 
-        {/* About card */}
         <Box
           mt="26px"
           bg="gray.100"
@@ -621,12 +590,12 @@ export default function ProjectDetailPage() {
               lineHeight="28px"
               whiteSpace="pre-wrap"
             >
-              {project.fullDescription}
+              {project.long_description?.trim() ||
+                'No extended project description has been added yet.'}
             </Text>
           </Box>
         </Box>
 
-        {/* Project Video card */}
         <Box
           mt="26px"
           bg="gray.100"
@@ -663,7 +632,7 @@ export default function ProjectDetailPage() {
               >
                 <iframe
                   src={youtubeEmbedUrl ?? undefined}
-                  title={`${project.name} demo video`}
+                  title={`${project.title} demo video`}
                   style={{
                     width: '100%',
                     aspectRatio: '16 / 9',
@@ -691,26 +660,28 @@ export default function ProjectDetailPage() {
                 textAlign="center"
               >
                 <Text fontSize="md" color="gray.700">
-                  {project.demoVideoUrl?.trim()
+                  {project.video_url?.trim()
                     ? 'Video link is not a valid YouTube URL.'
                     : 'No project video yet.'}
                 </Text>
                 <Text fontSize="sm" color="gray.600">
                   Add a YouTube link from the edit page to embed it here.
                 </Text>
-                <Button
-                  type="button"
-                  bg="orange.400"
-                  color="white"
-                  borderRadius="12px"
-                  h="42px"
-                  px="18px"
-                  fontSize="sm"
-                  _hover={{ bg: 'orange.500' }}
-                  onClick={() => router.push('/projects/edit')}
-                >
-                  Add Video
-                </Button>
+                {isOwner && (
+                  <Button
+                    type="button"
+                    bg="orange.400"
+                    color="white"
+                    borderRadius="12px"
+                    h="42px"
+                    px="18px"
+                    fontSize="sm"
+                    _hover={{ bg: 'orange.500' }}
+                    onClick={() => router.push(`/projects/${project.id}/edit`)}
+                  >
+                    Add Video
+                  </Button>
+                )}
               </Flex>
             )}
           </Box>

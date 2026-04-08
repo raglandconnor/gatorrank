@@ -1,9 +1,3 @@
-import type {
-  ProjectListItem,
-  ProjectListResponse,
-  ProjectMemberInfo,
-} from '@/lib/api/types/project';
-
 export interface UserPublic {
   id: string;
   username: string;
@@ -28,5 +22,3 @@ export interface UserUpdate {
   full_name?: string;
   profile_picture_url?: string | null;
 }
-
-export type { ProjectListItem, ProjectListResponse, ProjectMemberInfo };

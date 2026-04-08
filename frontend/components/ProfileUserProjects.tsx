@@ -20,7 +20,7 @@ import {
   LuPencil,
 } from 'react-icons/lu';
 import { getUserProjects } from '@/lib/api/users';
-import type { ProjectListItem } from '@/lib/api/types/user';
+import type { ProjectListItem } from '@/lib/api/types/project';
 
 /* ── Project card using backend schema ──────────────────────── */
 function UserProjectCard({
