@@ -21,12 +21,15 @@ import {
 import {
   addProjectMember,
   getProject,
+  getProjectBySlug,
   publishProject,
   removeProjectMember,
   unpublishProject,
   updateProject,
 } from '@/lib/api/projects';
 import type { ProjectDetail, ProjectMemberInfo } from '@/lib/api/types/project';
+import { isUuid } from '@/lib/profileSlug';
+import { projectEditPath, projectPath } from '@/lib/routes';
 import { toast } from '@/lib/ui/toast';
 
 type LoadState =
@@ -42,7 +45,7 @@ function toFormValues(project: ProjectDetail): ProjectFormValues {
     shortDescription: project.short_description,
     fullDescription: project.long_description ?? '',
     imageUrl: null,
-    tags: [],
+    tags: project.tags.map((tag) => tag.name),
     websiteUrl: project.demo_url ?? '',
     githubUrl: project.github_url ?? '',
     demoVideoUrl: project.video_url ?? '',
@@ -51,7 +54,7 @@ function toFormValues(project: ProjectDetail): ProjectFormValues {
 
 export default function EditProjectPage() {
   const router = useRouter();
-  const { projectId } = useParams<{ projectId: string }>();
+  const { slug } = useParams<{ slug: string }>();
   const [state, setState] = useState<LoadState>({ status: 'loading' });
   const [isSubmitDisabled, setIsSubmitDisabled] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -61,10 +64,15 @@ export default function EditProjectPage() {
   useEffect(() => {
     async function loadProject() {
       try {
-        const project = await getProject(projectId);
+        const project = isUuid(slug)
+          ? await getProject(slug)
+          : await getProjectBySlug(slug);
         setMembers(project.members);
         setShouldPublish(project.is_published);
         setState({ status: 'ready', project });
+        if (project.slug !== slug) {
+          router.replace(projectEditPath(project.slug));
+        }
       } catch (error) {
         const status =
           error instanceof Error && 'status' in error
@@ -89,7 +97,7 @@ export default function EditProjectPage() {
     }
 
     void loadProject();
-  }, [projectId]);
+  }, [router, slug]);
 
   const initialValues = useMemo<ProjectFormValues>(() => {
     if (state.status !== 'ready') {
@@ -112,11 +120,11 @@ export default function EditProjectPage() {
 
     setIsSubmitting(true);
     try {
-      let project = await updateProject(projectId, payload);
+      let project = await updateProject(state.project.id, payload);
       if (shouldPublish && !project.is_published) {
-        project = await publishProject(projectId);
+        project = await publishProject(project.id);
       } else if (!shouldPublish && project.is_published) {
-        project = await unpublishProject(projectId);
+        project = await unpublishProject(project.id);
       }
 
       setMembers(project.members);
@@ -126,7 +134,7 @@ export default function EditProjectPage() {
         title: 'Project updated',
         description: `"${project.title}" has been successfully updated.`,
       });
-      router.push(`/projects/${project.id}`);
+      router.push(projectPath(project.slug));
     } catch (error) {
       toast.error({
         title: 'Could not update project',
@@ -138,7 +146,9 @@ export default function EditProjectPage() {
   };
 
   const handleCancel = () => {
-    router.push(`/projects/${projectId}`);
+    if (state.status === 'ready') {
+      router.push(projectPath(state.project.slug));
+    }
   };
 
   if (state.status === 'loading') {
@@ -287,7 +297,9 @@ export default function EditProjectPage() {
           isBusy={isSubmitting}
           onAddMember={async (email) => {
             try {
-              const member = await addProjectMember(projectId, { email });
+              const member = await addProjectMember(state.project.id, {
+                email,
+              });
               setMembers((prev) => [...prev, member]);
               return { ok: true as const };
             } catch (error) {
@@ -302,7 +314,7 @@ export default function EditProjectPage() {
           }}
           onRemoveMember={async (userId) => {
             try {
-              await removeProjectMember(projectId, userId);
+              await removeProjectMember(state.project.id, userId);
               setMembers((prev) =>
                 prev.filter((member) => member.user_id !== userId),
               );

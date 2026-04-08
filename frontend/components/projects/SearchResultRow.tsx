@@ -11,6 +11,7 @@ import {
 } from '@chakra-ui/react';
 import { LuArrowRight, LuChevronUp, LuUsers } from 'react-icons/lu';
 import type { SearchProjectListItem } from '@/lib/api/types/search';
+import { projectPath } from '@/lib/routes';
 
 interface SearchResultRowProps {
   project: SearchProjectListItem;
@@ -33,7 +34,7 @@ export function SearchResultRow({ project }: SearchResultRowProps) {
   return (
     <ChakraLink
       as={NextLink}
-      href={`/projects/${project.id}`}
+      href={projectPath(project.slug)}
       _hover={{ textDecoration: 'none' }}
       w="100%"
     >

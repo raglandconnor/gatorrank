@@ -5,8 +5,9 @@ import { useRouter } from 'next/navigation';
 import { Box, Flex, Spinner } from '@chakra-ui/react';
 import { Navbar } from '@/components/Navbar';
 import { useAuth } from '@/components/auth/AuthProvider';
+import { profilePath } from '@/lib/routes';
 
-/** Redirects `/profile` to the canonical `/profile/{userId}`. */
+/** Redirects `/profile` to the canonical `/profile/{username}`. */
 export default function ProfileIndexPage() {
   const router = useRouter();
   const { user, isReady } = useAuth();
@@ -17,7 +18,7 @@ export default function ProfileIndexPage() {
       router.replace('/login');
       return;
     }
-    router.replace(`/profile/${user.id}`);
+    router.replace(profilePath(user.username));
   }, [isReady, user, router]);
 
   return (

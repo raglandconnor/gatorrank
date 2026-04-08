@@ -23,6 +23,7 @@ import {
   LuLogOut,
   LuSearch,
 } from 'react-icons/lu';
+import { profilePath } from '@/lib/routes';
 
 function getInitials(name: string): string {
   const parts = name.trim().split(/\s+/);
@@ -41,8 +42,8 @@ export function Navbar() {
   const showSearch = useMemo(() => {
     if (!pathname) return true;
     if (pathname === '/projects/create') return false;
-    if (pathname === '/projects/edit') return false;
     if (pathname === '/profile/edit') return false;
+    if (/^\/projects\/[^/]+\/edit$/.test(pathname)) return false;
     if (/^\/profile\/[^/]+\/edit$/.test(pathname)) return false;
     return true;
   }, [pathname]);
@@ -190,7 +191,7 @@ export function Navbar() {
                     >
                       <Menu.Item
                         value="view-profile"
-                        onClick={() => router.push(`/profile/${user.id}`)}
+                        onClick={() => router.push(profilePath(user.username))}
                         px="14px"
                         py="10px"
                         fontSize="sm"

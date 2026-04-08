@@ -25,8 +25,9 @@ import { AcademicInfoCard } from '@/components/AcademicInfoCard';
 import { RoleBadge } from '@/components/ui/rolebadge';
 import { ProfileUserProjects } from '@/components/ProfileUserProjects';
 import { useAuth } from '@/components/auth/AuthProvider';
-import { getUserPublic } from '@/lib/api/users';
+import { getUserPublic, getUserPublicByUsername } from '@/lib/api/users';
 import { isUuid } from '@/lib/profileSlug';
+import { profileEditPath, profilePath } from '@/lib/routes';
 import type { UserPublic } from '@/lib/api/types/user';
 
 function getInitials(name: string): string {
@@ -107,32 +108,29 @@ type LoadState =
 
 export default function ProfileUserPage() {
   const router = useRouter();
-  const { userId } = useParams<{ userId: string }>();
+  const { username } = useParams<{ username: string }>();
   const { user: authUser, isReady } = useAuth();
-  const [state, setState] = useState<LoadState>(() =>
-    isUuid(userId) ? { status: 'loading' } : { status: 'notfound' },
-  );
+  const [state, setState] = useState<LoadState>({ status: 'loading' });
 
   // null = projects not yet loaded; -1 = error; >= 0 = item count
   const [projectCount, setProjectCount] = useState<number | null>(null);
 
-  const isOwn = isReady && authUser?.id === userId;
-
   useEffect(() => {
     async function load() {
-      if (!isUuid(userId)) {
-        setState({ status: 'notfound' });
-        setProjectCount(null);
-        return;
-      }
-
       setState({ status: 'loading' });
       setProjectCount(null);
 
       try {
-        const publicUser = await getUserPublic(userId);
+        const publicUser = isUuid(username)
+          ? await getUserPublic(username)
+          : await getUserPublicByUsername(username);
+        if (publicUser.username !== username) {
+          router.replace(profilePath(publicUser.username));
+        }
         const extended =
-          authUser?.id === userId ? loadExtended(userId) : EMPTY_EXTENDED;
+          authUser?.id === publicUser.id
+            ? loadExtended(publicUser.id)
+            : EMPTY_EXTENDED;
         setState({ status: 'ready', publicUser, extended });
       } catch (err) {
         const isNotFound =
@@ -150,7 +148,7 @@ export default function ProfileUserPage() {
     }
 
     void load();
-  }, [userId, authUser?.id]);
+  }, [authUser?.id, router, username]);
 
   const handleProjectsLoaded = useCallback((count: number) => {
     setProjectCount(count);
@@ -218,6 +216,7 @@ export default function ProfileUserPage() {
   }
 
   const { publicUser, extended } = state;
+  const isOwn = isReady && authUser?.id === publicUser.id;
   const displayName =
     publicUser.full_name ??
     (isOwn && authUser?.email ? authUser.email : 'GatorRank User');
@@ -352,7 +351,9 @@ export default function ProfileUserPage() {
           {isOwn && (
             <HStack gap="12px" flexShrink={0} align="flex-start">
               <Button
-                onClick={() => router.push(`/profile/${userId}/edit`)}
+                onClick={() =>
+                  router.push(profileEditPath(publicUser.username))
+                }
                 variant="outline"
                 border="1px solid"
                 borderColor="orange.400"
@@ -413,7 +414,9 @@ export default function ProfileUserPage() {
                 color="white"
                 borderRadius="10px"
                 _hover={{ bg: 'orange.500' }}
-                onClick={() => router.push(`/profile/${userId}/edit`)}
+                onClick={() =>
+                  router.push(profileEditPath(publicUser.username))
+                }
               >
                 Complete your profile
               </Button>
@@ -465,7 +468,7 @@ export default function ProfileUserPage() {
 
             {/* Projects — always mounted to ensure onLoadComplete fires */}
             <ProfileUserProjects
-              userId={publicUser.id}
+              username={publicUser.username}
               isOwn={isOwn}
               onLoadComplete={handleProjectsLoaded}
             />

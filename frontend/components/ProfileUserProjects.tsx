@@ -3,14 +3,15 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
+  Badge,
   Box,
-  HStack,
-  VStack,
-  Text,
+  Button,
   Flex,
+  HStack,
   SimpleGrid,
   Spinner,
-  Button,
+  Text,
+  VStack,
 } from '@chakra-ui/react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -19,20 +20,24 @@ import {
   LuArrowRight,
   LuPencil,
 } from 'react-icons/lu';
-import { getUserProjects } from '@/lib/api/users';
+import { getMyProjects, getUserProjectsByUsername } from '@/lib/api/users';
 import type { ProjectListItem } from '@/lib/api/types/project';
+import { projectEditPath, projectPath } from '@/lib/routes';
 
-/* ── Project card using backend schema ──────────────────────── */
 function UserProjectCard({
   project,
   onEdit,
 }: {
   project: ProjectListItem;
-  onEdit?: (id: string) => void;
+  onEdit?: (slug: string) => void;
 }) {
+  const router = useRouter();
   const [isHovered, setIsHovered] = useState(false);
   const [isVoted, setIsVoted] = useState(false);
   const voteCount = project.vote_count + (isVoted ? 1 : 0);
+  const terms = (
+    project.tags.length > 0 ? project.tags : project.categories
+  ).slice(0, 2);
 
   return (
     <Box
@@ -45,6 +50,7 @@ function UserProjectCard({
       transition="background 0.15s"
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
+      onClick={() => router.push(projectPath(project.slug))}
     >
       {onEdit && (
         <Button
@@ -68,7 +74,7 @@ function UserProjectCard({
           transition="background 0.15s, color 0.15s"
           onClick={(e) => {
             e.stopPropagation();
-            onEdit(project.id);
+            onEdit(project.slug);
           }}
         >
           <LuPencil size={14} />
@@ -76,7 +82,6 @@ function UserProjectCard({
       )}
 
       <VStack align="start" gap="12px">
-        {/* Image placeholder */}
         <Box
           w="100%"
           h="144px"
@@ -86,8 +91,7 @@ function UserProjectCard({
           flexShrink={0}
         />
 
-        {/* Info */}
-        <VStack align="start" gap="6px" w="100%">
+        <VStack align="start" gap="10px" w="100%">
           <HStack gap="6px" align="center">
             <Text
               fontSize="md"
@@ -111,21 +115,25 @@ function UserProjectCard({
             </Box>
           </HStack>
 
-          <Text
-            fontSize="xs"
-            color="gray.600"
-            lineHeight="20px"
-            overflow="hidden"
-            style={{
-              display: '-webkit-box',
-              WebkitLineClamp: 2,
-              WebkitBoxOrient: 'vertical',
-            }}
-          >
-            {project.short_description}
-          </Text>
+          <HStack gap="8px" flexWrap="wrap" minH="28px">
+            {terms.map((term) => (
+              <Badge
+                key={term.id}
+                bg="white"
+                border="1px solid"
+                borderColor="orange.200"
+                color="gray.700"
+                borderRadius="8px"
+                px="8px"
+                py="3px"
+                fontSize="xs"
+                fontWeight="medium"
+              >
+                {term.name}
+              </Badge>
+            ))}
+          </HStack>
 
-          {/* Stats row */}
           <HStack gap="8px" mt="2px">
             <motion.div
               whileTap={{ scale: 1.1 }}
@@ -134,16 +142,18 @@ function UserProjectCard({
               <Flex
                 align="center"
                 justify="center"
-                gap="4px"
+                gap="6px"
                 bg="white"
                 border="1.6px solid"
                 borderColor="orange.200"
                 borderRadius="10px"
-                px="10px"
+                px="12px"
                 h="36px"
+                minW="60px"
                 cursor="pointer"
                 _hover={{ bg: 'orange.50' }}
                 transition="background 0.15s"
+                onClick={(e) => e.stopPropagation()}
               >
                 <Box color="gray.700">
                   <LuMessageSquare size={14} />
@@ -161,13 +171,14 @@ function UserProjectCard({
               <Flex
                 align="center"
                 justify="center"
-                gap="4px"
+                gap="6px"
                 bg={isVoted ? 'orange.50' : 'white'}
                 border="1.6px solid"
                 borderColor={isVoted ? 'orange.400' : 'orange.200'}
                 borderRadius="10px"
-                px="10px"
+                px="12px"
                 h="36px"
+                minW="60px"
                 cursor="pointer"
                 _hover={{ bg: isVoted ? 'orange.100' : 'orange.50' }}
                 transition="background 0.15s, border-color 0.15s"
@@ -211,16 +222,14 @@ function UserProjectCard({
   );
 }
 
-/* ── ProfileUserProjects ─────────────────────────────────────── */
 interface ProfileUserProjectsProps {
-  userId: string;
+  username: string;
   isOwn: boolean;
-  /** Called once projects finish loading (error or success). Receives item count (-1 on error). */
   onLoadComplete?: (count: number) => void;
 }
 
 export function ProfileUserProjects({
-  userId,
+  username,
   isOwn,
   onLoadComplete,
 }: ProfileUserProjectsProps) {
@@ -231,8 +240,12 @@ export function ProfileUserProjects({
 
   useEffect(() => {
     async function load() {
+      setLoading(true);
+      setError(null);
       try {
-        const data = await getUserProjects(userId);
+        const data = isOwn
+          ? await getMyProjects({ limit: 20, sort: 'new', visibility: 'all' })
+          : await getUserProjectsByUsername(username);
         setProjects(data.items);
         onLoadComplete?.(data.items.length);
       } catch {
@@ -244,7 +257,7 @@ export function ProfileUserProjects({
     }
 
     void load();
-  }, [userId, onLoadComplete]);
+  }, [isOwn, username, onLoadComplete]);
 
   return (
     <VStack align="start" gap="16px" w="100%">
@@ -253,12 +266,74 @@ export function ProfileUserProjects({
       </Text>
 
       {loading && (
-        <Flex align="center" gap="8px">
-          <Spinner size="sm" color="orange.400" />
-          <Text fontSize="sm" color="gray.500">
-            Loading projects…
-          </Text>
-        </Flex>
+        <VStack align="stretch" gap="14px" w="100%">
+          <Flex align="center" gap="10px">
+            <Spinner size="sm" color="orange.400" />
+            <Text fontSize="sm" color="gray.500">
+              Loading projects...
+            </Text>
+          </Flex>
+          <SimpleGrid columns={{ base: 1, md: 2, xl: 3 }} gap="16px" w="100%">
+            {[0, 1, 2].map((index) => (
+              <Box
+                key={index}
+                bg="gray.100"
+                borderRadius="13px"
+                p="16px"
+                w="100%"
+                opacity={0.8}
+              >
+                <VStack align="start" gap="12px" w="100%">
+                  <Box w="100%" h="144px" bg="gray.200" borderRadius="10px" />
+                  <VStack align="start" gap="10px" w="100%">
+                    <Box
+                      h="18px"
+                      w={index === 1 ? '70%' : '58%'}
+                      bg="gray.300"
+                      borderRadius="full"
+                    />
+                    <HStack gap="8px">
+                      <Box
+                        h="24px"
+                        w="70px"
+                        bg="white"
+                        borderRadius="8px"
+                        border="1px solid"
+                        borderColor="orange.100"
+                      />
+                      <Box
+                        h="24px"
+                        w="82px"
+                        bg="white"
+                        borderRadius="8px"
+                        border="1px solid"
+                        borderColor="orange.100"
+                      />
+                    </HStack>
+                    <HStack gap="8px" mt="2px">
+                      <Box
+                        h="36px"
+                        w="60px"
+                        bg="white"
+                        borderRadius="10px"
+                        border="1px solid"
+                        borderColor="orange.100"
+                      />
+                      <Box
+                        h="36px"
+                        w="60px"
+                        bg="white"
+                        borderRadius="10px"
+                        border="1px solid"
+                        borderColor="orange.100"
+                      />
+                    </HStack>
+                  </VStack>
+                </VStack>
+              </Box>
+            ))}
+          </SimpleGrid>
+        </VStack>
       )}
 
       {!loading && error && (
@@ -270,19 +345,19 @@ export function ProfileUserProjects({
       {!loading && !error && projects.length === 0 && (
         <Text fontSize="sm" color="gray.400" lineHeight="24px">
           {isOwn
-            ? 'No projects yet — add your first one to get noticed on GatorRank.'
+            ? 'No projects yet - add your first one to get noticed on GatorRank.'
             : 'No projects shared yet.'}
         </Text>
       )}
 
       {!loading && !error && projects.length > 0 && (
-        <SimpleGrid columns={3} gap="16px" w="100%">
+        <SimpleGrid columns={{ base: 1, md: 2, xl: 3 }} gap="16px" w="100%">
           {projects.map((project) => (
             <UserProjectCard
               key={project.id}
               project={project}
               onEdit={
-                isOwn ? (id) => router.push(`/projects/${id}/edit`) : undefined
+                isOwn ? (slug) => router.push(projectEditPath(slug)) : undefined
               }
             />
           ))}

@@ -35,6 +35,8 @@ import { getMe, patchMe } from '@/lib/api/users';
 import type { AuthUser } from '@/lib/api/types/auth';
 import type { UserPrivate } from '@/lib/api/types/user';
 import { useAuth } from '@/components/auth/AuthProvider';
+import { isUuid } from '@/lib/profileSlug';
+import { profilePath, profileEditPath } from '@/lib/routes';
 
 function getInitials(name: string): string {
   const parts = name.trim().split(/\s+/);
@@ -155,7 +157,7 @@ function PasswordField({
 
 export default function EditProfilePage() {
   const router = useRouter();
-  const { userId } = useParams<{ userId: string }>();
+  const { username } = useParams<{ username: string }>();
   const { user: authUser, isReady, updateCachedUser } = useAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
   /** Tracks blob: URLs from file picks only (not remote profile_picture_url). */
@@ -188,19 +190,25 @@ export default function EditProfilePage() {
   useEffect(() => {
     if (!isReady) return;
 
-    // Guard: only the owner can edit their own profile
     if (!authUser) {
       router.replace('/login');
-      return;
-    }
-    if (authUser.id !== userId) {
-      router.replace(`/profile/${userId}`);
       return;
     }
 
     async function load() {
       try {
         const user = await getMe();
+        if (isUuid(username)) {
+          if (username !== user.id) {
+            router.replace(profilePath(user.username));
+            return;
+          }
+          router.replace(profileEditPath(user.username));
+          return;
+        } else if (username !== user.username) {
+          router.replace(profileEditPath(user.username));
+          return;
+        }
         setApiUser(user);
         setName(user.full_name ?? '');
         avatarObjectUrlRef.current = null;
@@ -221,14 +229,14 @@ export default function EditProfilePage() {
           title: 'Could not load profile',
           description: 'Please try again.',
         });
-        router.push(`/profile/${userId}`);
+        router.push('/profile');
       } finally {
         setLoading(false);
       }
     }
 
     void load();
-  }, [isReady, authUser, userId, router]);
+  }, [authUser, isReady, router, username]);
 
   useEffect(() => {
     return () => {
@@ -333,7 +341,7 @@ export default function EditProfilePage() {
         title: 'Profile saved',
         description: 'Your changes have been saved.',
       });
-      router.push(`/profile/${updated.id}`);
+      router.push(profilePath(updated.username));
     } catch (err) {
       const message =
         err instanceof Error ? err.message : 'Could not save profile.';
@@ -510,7 +518,7 @@ export default function EditProfilePage() {
           {/* Buttons */}
           <HStack gap="12px" flexShrink={0} align="flex-start">
             <Button
-              onClick={() => router.push(`/profile/${apiUser.id}`)}
+              onClick={() => router.push(profilePath(apiUser.username))}
               variant="outline"
               border="1px solid"
               borderColor="orange.400"

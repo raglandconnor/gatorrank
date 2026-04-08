@@ -15,6 +15,7 @@ import {
   createProject,
   publishProject,
 } from '@/lib/api/projects';
+import { projectPath } from '@/lib/routes';
 import { toast } from '@/lib/ui/toast';
 
 export default function CreateProjectPage() {
@@ -90,7 +91,7 @@ export default function CreateProjectPage() {
         });
       }
 
-      router.push(`/projects/${project.id}`);
+      router.push(projectPath(project.slug));
     } catch (error) {
       toast.error({
         title: 'Could not create project',

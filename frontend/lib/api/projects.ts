@@ -83,6 +83,23 @@ export async function getProjectBySlug(slug: string): Promise<ProjectDetail> {
   return parseProjectResponse<ProjectDetail>(res, 'Failed to fetch project');
 }
 
+export async function getProjectBySlugForViewer(
+  slug: string,
+  accessToken?: string | null,
+): Promise<ProjectDetail> {
+  if (!accessToken) {
+    const res = await fetch(
+      apiUrl(`/api/v1/projects/slug/${encodeURIComponent(slug)}`),
+      {
+        method: 'GET',
+        cache: 'no-store',
+      },
+    );
+    return parseProjectResponse<ProjectDetail>(res, 'Failed to fetch project');
+  }
+  return getProjectBySlug(slug);
+}
+
 export async function createProject(
   payload: ProjectCreateInput,
 ): Promise<ProjectDetail> {

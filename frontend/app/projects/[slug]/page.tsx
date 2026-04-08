@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import {
+  Badge,
   Box,
   Flex,
   HStack,
@@ -15,17 +16,22 @@ import {
 } from '@chakra-ui/react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  LuGlobe,
   LuGithub,
   LuVideo,
+  LuPlay,
   LuExternalLink,
   LuPencil,
   LuChevronUp,
 } from 'react-icons/lu';
 import { Navbar } from '@/components/Navbar';
 import { useAuth } from '@/components/auth/AuthProvider';
-import { getProjectByIdForViewer } from '@/lib/api/projects';
+import {
+  getProjectByIdForViewer,
+  getProjectBySlugForViewer,
+} from '@/lib/api/projects';
 import type { ProjectDetail } from '@/lib/api/types/project';
+import { isUuid } from '@/lib/profileSlug';
+import { profilePath, projectEditPath, projectPath } from '@/lib/routes';
 
 function getYouTubeEmbedUrl(url: string): string | null {
   const trimmed = url.trim();
@@ -137,11 +143,90 @@ function UpvoteBox({ votes }: { votes: number }) {
   );
 }
 
+function ProjectLoadingState() {
+  return (
+    <Box minH="100vh" bg="gray.50">
+      <Navbar />
+      <Box
+        px={{ base: '20px', md: '32px' }}
+        pt="32px"
+        pb="64px"
+        maxW="1200px"
+        mx="auto"
+      >
+        <Flex minH="68vh" align="center" justify="center">
+          <VStack
+            gap="18px"
+            px={{ base: '28px', md: '40px' }}
+            py={{ base: '30px', md: '38px' }}
+            bg="white"
+            borderRadius="24px"
+            border="1px solid"
+            borderColor="orange.100"
+            boxShadow="0 18px 50px rgba(15,23,42,0.08)"
+            textAlign="center"
+          >
+            <Box position="relative" w="82px" h="82px">
+              <motion.div
+                animate={{ rotate: 360 }}
+                transition={{ duration: 1.4, repeat: Infinity, ease: 'linear' }}
+                style={{
+                  position: 'absolute',
+                  inset: 0,
+                  borderRadius: '9999px',
+                  border: '3px solid rgba(251,191,36,0.22)',
+                  borderTopColor: '#f59e0b',
+                }}
+              />
+              <motion.div
+                animate={{ scale: [0.94, 1.04, 0.94] }}
+                transition={{
+                  duration: 1.8,
+                  repeat: Infinity,
+                  ease: 'easeInOut',
+                }}
+                style={{
+                  position: 'absolute',
+                  inset: '12px',
+                  borderRadius: '9999px',
+                  background:
+                    'linear-gradient(135deg, rgba(251,191,36,0.18), rgba(249,115,22,0.28))',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <Box color="orange.500">
+                  <LuVideo size={24} />
+                </Box>
+              </motion.div>
+            </Box>
+
+            <VStack gap="6px">
+              <Text fontSize="lg" fontWeight="bold" color="gray.900">
+                Loading project
+              </Text>
+              <Text
+                fontSize="sm"
+                color="gray.600"
+                maxW="300px"
+                lineHeight="22px"
+              >
+                Pulling in the latest project details, links, and tags.
+              </Text>
+            </VStack>
+          </VStack>
+        </Flex>
+      </Box>
+    </Box>
+  );
+}
+
 export default function ProjectDetailPage() {
   const router = useRouter();
-  const params = useParams<{ projectId: string }>();
+  const params = useParams<{ slug: string }>();
   const { accessToken, isReady, user } = useAuth();
-  const projectId = params.projectId;
+  const slug = params.slug;
   const [projectDetail, setProjectDetail] = useState<ProjectDetail | null>(
     null,
   );
@@ -161,9 +246,14 @@ export default function ProjectDetailPage() {
     setForbidden(false);
 
     try {
-      const detail = await getProjectByIdForViewer(projectId, accessToken);
+      const detail = isUuid(slug)
+        ? await getProjectByIdForViewer(slug, accessToken)
+        : await getProjectBySlugForViewer(slug, accessToken);
       if (requestId !== requestIdRef.current) return;
       setProjectDetail(detail);
+      if (detail.slug !== slug) {
+        router.replace(projectPath(detail.slug));
+      }
     } catch (err) {
       if (requestId !== requestIdRef.current) return;
       const status =
@@ -195,7 +285,7 @@ export default function ProjectDetailPage() {
         setLoading(false);
       }
     }
-  }, [accessToken, isReady, projectId]);
+  }, [accessToken, isReady, router, slug]);
 
   useEffect(() => {
     void loadProject();
@@ -212,16 +302,7 @@ export default function ProjectDetailPage() {
   }, [projectDetail]);
 
   if (!isReady || loading) {
-    return (
-      <Box minH="100vh" bg="gray.50">
-        <Navbar />
-        <Flex minH="60vh" align="center" justify="center">
-          <Text fontSize="md" color="gray.600">
-            Loading project...
-          </Text>
-        </Flex>
-      </Box>
-    );
+    return <ProjectLoadingState />;
   }
 
   if (notFound || forbidden) {
@@ -293,10 +374,9 @@ export default function ProjectDetailPage() {
     );
   }
 
-  const hasLinks =
-    Boolean(project.demo_url?.trim()) || Boolean(project.github_url?.trim());
   const youtubeEmbedUrl = getYouTubeEmbedUrl(project.video_url ?? '');
   const hasDemoVideo = Boolean(youtubeEmbedUrl);
+  const displayTags = project.tags;
 
   return (
     <Box minH="100vh" bg="gray.50">
@@ -352,8 +432,12 @@ export default function ProjectDetailPage() {
                     </Text>
                     <HStack
                       gap="6px"
-                      bg={project.is_published ? 'green.500' : 'orange.400'}
-                      color="white"
+                      bg={project.is_published ? 'green.500' : 'yellow.200'}
+                      color={project.is_published ? 'white' : 'yellow.900'}
+                      border="1px solid"
+                      borderColor={
+                        project.is_published ? 'green.500' : 'yellow.400'
+                      }
                       borderRadius="full"
                       px="12px"
                       py="5px"
@@ -379,21 +463,27 @@ export default function ProjectDetailPage() {
                     {project.short_description}
                   </Text>
 
-                  <Wrap gap="10px">
-                    <Box
-                      bg="white"
-                      border="1px solid"
-                      borderColor="orange.200"
-                      borderRadius="10px"
-                      px="14px"
-                      py="7px"
-                    >
-                      <Text fontSize="sm" color="gray.700" lineHeight="20px">
-                        {project.team_size} team member
-                        {project.team_size === 1 ? '' : 's'}
-                      </Text>
-                    </Box>
-                  </Wrap>
+                  {displayTags.length > 0 && (
+                    <Wrap gap="10px">
+                      {displayTags.map((tag) => (
+                        <Badge
+                          key={tag.id}
+                          bg="white"
+                          border="1px solid"
+                          borderColor="orange.200"
+                          color="gray.700"
+                          borderRadius="10px"
+                          px="14px"
+                          py="7px"
+                          fontSize="sm"
+                          fontWeight="medium"
+                          textTransform="none"
+                        >
+                          {tag.name}
+                        </Badge>
+                      ))}
+                    </Wrap>
+                  )}
 
                   <HStack gap="12px" pt="4px" flexWrap="wrap">
                     {project.demo_url?.trim() ? (
@@ -421,16 +511,17 @@ export default function ProjectDetailPage() {
                       </ChakraLink>
                     ) : (
                       <Button
-                        bg="orange.400"
-                        color="white"
+                        bg="gray.200"
+                        color="gray.500"
                         borderRadius="12px"
                         h="44px"
                         px="18px"
                         fontSize="md"
                         fontWeight="semibold"
-                        opacity={0.6}
+                        border="1px solid"
+                        borderColor="gray.300"
                         cursor="not-allowed"
-                        _hover={{ bg: 'orange.400' }}
+                        _hover={{ bg: 'gray.200' }}
                         disabled
                       >
                         <HStack gap="8px">
@@ -454,7 +545,7 @@ export default function ProjectDetailPage() {
                         color="gray.800"
                         _hover={{ bg: 'gray.50' }}
                         onClick={() =>
-                          router.push(`/projects/${project.id}/edit`)
+                          router.push(projectEditPath(project.slug))
                         }
                       >
                         <HStack gap="8px">
@@ -475,7 +566,15 @@ export default function ProjectDetailPage() {
             <Box h="1px" bg="gray.200" my="22px" />
 
             <HStack justify="space-between" flexWrap="wrap" gap="16px">
-              <HStack gap="14px">
+              <HStack
+                gap="14px"
+                cursor={projectCreator ? 'pointer' : 'default'}
+                onClick={() => {
+                  if (projectCreator) {
+                    router.push(profilePath(projectCreator.username));
+                  }
+                }}
+              >
                 <Avatar.Root
                   w="52px"
                   h="52px"
@@ -517,27 +616,8 @@ export default function ProjectDetailPage() {
                 </VStack>
               </HStack>
 
-              {hasLinks ? (
+              {project.github_url?.trim() ? (
                 <HStack gap="16px" flexWrap="wrap">
-                  {project.demo_url?.trim() ? (
-                    <ChakraLink
-                      href={project.demo_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      display="inline-flex"
-                      alignItems="center"
-                      gap="6px"
-                      fontSize="md"
-                      color="gray.700"
-                      _hover={{
-                        color: 'gray.900',
-                        textDecoration: 'underline',
-                      }}
-                    >
-                      <LuGlobe size={16} />
-                      Website
-                    </ChakraLink>
-                  ) : null}
                   {project.github_url?.trim() ? (
                     <ChakraLink
                       href={project.github_url}
@@ -647,41 +727,105 @@ export default function ProjectDetailPage() {
             ) : (
               <Flex
                 direction="column"
-                align="center"
-                justify="center"
-                gap="12px"
-                minH={{ base: '180px', md: '220px' }}
-                border="1px dashed"
+                align="stretch"
+                justify="space-between"
+                gap="18px"
+                minH={{ base: '240px', md: '300px' }}
+                border="1px solid"
                 borderColor="gray.300"
                 borderRadius="14px"
-                bg="white"
-                px="20px"
-                py="24px"
-                textAlign="center"
+                bg="linear-gradient(180deg, #141414 0%, #202020 100%)"
+                px={{ base: '20px', md: '28px' }}
+                py={{ base: '20px', md: '26px' }}
+                position="relative"
+                overflow="hidden"
               >
-                <Text fontSize="md" color="gray.700">
-                  {project.video_url?.trim()
-                    ? 'Video link is not a valid YouTube URL.'
-                    : 'No project video yet.'}
-                </Text>
-                <Text fontSize="sm" color="gray.600">
-                  Add a YouTube link from the edit page to embed it here.
-                </Text>
-                {isOwner && (
-                  <Button
-                    type="button"
-                    bg="orange.400"
-                    color="white"
-                    borderRadius="12px"
-                    h="42px"
-                    px="18px"
-                    fontSize="sm"
-                    _hover={{ bg: 'orange.500' }}
-                    onClick={() => router.push(`/projects/${project.id}/edit`)}
+                <Box
+                  position="absolute"
+                  inset={0}
+                  bg="radial-gradient(circle at top right, rgba(239,68,68,0.16), transparent 34%)"
+                  pointerEvents="none"
+                />
+                <HStack justify="space-between" position="relative" zIndex={1}>
+                  <HStack
+                    gap="8px"
+                    px="12px"
+                    py="7px"
+                    bg="rgba(239, 68, 68, 0.95)"
+                    borderRadius="full"
                   >
-                    Add Video
-                  </Button>
-                )}
+                    <Box color="white">
+                      <LuPlay size={14} fill="currentColor" />
+                    </Box>
+                    <Text
+                      fontSize="xs"
+                      fontWeight="bold"
+                      letterSpacing="0.08em"
+                      color="white"
+                    >
+                      YOUTUBE
+                    </Text>
+                  </HStack>
+                  <Text
+                    fontSize="xs"
+                    color="whiteAlpha.700"
+                    letterSpacing="0.08em"
+                  >
+                    VIDEO PLACEHOLDER
+                  </Text>
+                </HStack>
+
+                <Flex
+                  flex={1}
+                  align="center"
+                  justify="center"
+                  position="relative"
+                  zIndex={1}
+                >
+                  <Flex
+                    w={{ base: '72px', md: '88px' }}
+                    h={{ base: '72px', md: '88px' }}
+                    borderRadius="full"
+                    align="center"
+                    justify="center"
+                    bg="rgba(255,255,255,0.14)"
+                    border="1px solid"
+                    borderColor="whiteAlpha.300"
+                    boxShadow="0 20px 60px rgba(239,68,68,0.24)"
+                    backdropFilter="blur(8px)"
+                  >
+                    <Box color="white" ml="4px">
+                      <LuPlay size={34} fill="currentColor" />
+                    </Box>
+                  </Flex>
+                </Flex>
+
+                <VStack align="start" gap="8px" position="relative" zIndex={1}>
+                  <Text fontSize="lg" fontWeight="bold" color="white">
+                    {project.video_url?.trim()
+                      ? 'This video link is not embeddable yet.'
+                      : 'No project video yet.'}
+                  </Text>
+                  <Text fontSize="sm" color="whiteAlpha.800" lineHeight="22px">
+                    {project.video_url?.trim()
+                      ? 'Use a standard YouTube link to unlock the embedded player on this page.'
+                      : 'Add a YouTube link from the edit page to give your project a richer showcase.'}
+                  </Text>
+                  <Box
+                    w="100%"
+                    h="6px"
+                    borderRadius="full"
+                    bg="whiteAlpha.200"
+                    overflow="hidden"
+                  >
+                    <Box
+                      w={project.video_url?.trim() ? '36%' : '18%'}
+                      h="100%"
+                      borderRadius="full"
+                      bg="rgba(239, 68, 68, 0.95)"
+                    />
+                  </Box>
+                </VStack>
               </Flex>
             )}
           </Box>

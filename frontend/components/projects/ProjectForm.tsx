@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Box,
   Flex,
@@ -11,6 +11,7 @@ import {
   Input,
   Textarea,
   Wrap,
+  Spinner,
 } from '@chakra-ui/react';
 import {
   LuPlus,
@@ -19,15 +20,17 @@ import {
   LuGithub,
   LuPlay,
   LuImage,
-  LuLock,
+  LuTag,
 } from 'react-icons/lu';
-import type { ProjectMemberInfo } from '@/lib/api/types/project';
+import { listTags } from '@/lib/api/taxonomy';
+import type { ProjectMemberInfo, TaxonomyTerm } from '@/lib/api/types/project';
 import { toast } from '@/lib/ui/toast';
 
 const PROJECT_NAME_MAX = 50;
 const SHORT_DESCRIPTION_MAX = 280;
 const FULL_DESCRIPTION_MAX = 5000;
 const URL_MAX = 2048;
+const TAG_LIMIT = 10;
 
 const inputBase = {
   border: '1px solid',
@@ -79,41 +82,6 @@ function FieldLabel({ children }: { children: React.ReactNode }) {
   );
 }
 
-function DisabledPill({
-  label,
-  description,
-}: {
-  label: string;
-  description: string;
-}) {
-  return (
-    <Box
-      w="100%"
-      border="1px dashed"
-      borderColor="gray.300"
-      borderRadius="10px"
-      bg="white"
-      px="12px"
-      py="10px"
-      opacity={0.7}
-    >
-      <HStack gap="8px" align="start">
-        <Box color="gray.400" pt="2px">
-          <LuLock size={14} />
-        </Box>
-        <VStack align="start" gap="2px">
-          <Text fontSize="sm" color="gray.700" lineHeight="20px">
-            {label}
-          </Text>
-          <Text fontSize="xs" color="gray.500" lineHeight="18px">
-            {description}
-          </Text>
-        </VStack>
-      </HStack>
-    </Box>
-  );
-}
-
 function MemberPills({
   members,
   pendingEmails,
@@ -141,7 +109,7 @@ function MemberPills({
           borderColor="gray.300"
         >
           <Text fontSize="sm" color="gray.700" lineHeight="20px">
-            {member.full_name ?? 'Unnamed member'}
+            {member.full_name ?? member.username}
           </Text>
           {member.role !== 'owner' && (
             <Button
@@ -210,10 +178,11 @@ export interface ProjectFormValues {
 export interface ProjectPayload {
   title: string;
   short_description: string;
-  long_description?: string;
-  demo_url?: string;
-  github_url?: string;
-  video_url?: string;
+  long_description?: string | null;
+  demo_url?: string | null;
+  github_url?: string | null;
+  video_url?: string | null;
+  tags?: string[];
 }
 
 interface ProjectFormProps {
@@ -235,6 +204,7 @@ interface ProjectFormProps {
 }
 
 export function ProjectForm({
+  mode,
   initialValues,
   onSubmit,
   onValidityChange,
@@ -253,6 +223,11 @@ export function ProjectForm({
   const [fullDescription, setFullDescription] = useState(
     initialValues.fullDescription,
   );
+  const [tags, setTags] = useState<string[]>(initialValues.tags);
+  const [tagInput, setTagInput] = useState('');
+  const [availableTags, setAvailableTags] = useState<TaxonomyTerm[]>([]);
+  const [tagsLoading, setTagsLoading] = useState(true);
+  const [tagsError, setTagsError] = useState<string | null>(null);
 
   const [memberInput, setMemberInput] = useState('');
   const [memberSubmitting, setMemberSubmitting] = useState(false);
@@ -272,10 +247,48 @@ export function ProjectForm({
     urls?: string;
   }>({});
 
+  function normalizeTagName(value: string): string {
+    return value.trim().toLowerCase();
+  }
+
+  function containsControlChars(value: string): boolean {
+    return /[\u0000-\u001F\u007F-\u009F]/.test(value);
+  }
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadAvailableTags() {
+      try {
+        setTagsLoading(true);
+        const terms = await listTags();
+        if (cancelled) return;
+        setAvailableTags(terms);
+        setTagsError(null);
+      } catch (error) {
+        if (cancelled) return;
+        setTagsError(
+          error instanceof Error ? error.message : 'Could not load tags.',
+        );
+      } finally {
+        if (!cancelled) {
+          setTagsLoading(false);
+        }
+      }
+    }
+
+    void loadAvailableTags();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   useEffect(() => {
     setProjectName(initialValues.title);
     setShortDescription(initialValues.shortDescription);
     setFullDescription(initialValues.fullDescription);
+    setTags(initialValues.tags);
     setWebsiteUrl(initialValues.websiteUrl);
     setGithubUrl(initialValues.githubUrl);
     setDemoVideoUrl(initialValues.demoVideoUrl);
@@ -288,12 +301,88 @@ export function ProjectForm({
     trimmedWebsite || trimmedGithub || trimmedDemo,
   );
 
+  const normalizedTagInput = tagInput.trim().toLowerCase();
+  const filteredTags = useMemo(
+    () =>
+      availableTags
+        .filter(
+          (term) =>
+            !tags.some(
+              (selected) =>
+                normalizeTagName(selected) === normalizeTagName(term.name),
+            ) &&
+            (!normalizedTagInput ||
+              term.name.toLowerCase().includes(normalizedTagInput)),
+        )
+        .slice(0, 8),
+    [availableTags, normalizedTagInput, tags],
+  );
+
   const isSubmitDisabled =
     !projectName.trim() || !shortDescription.trim() || !hasAtLeastOneUrl;
 
   useEffect(() => {
     onValidityChange?.(isSubmitDisabled);
   }, [isSubmitDisabled, onValidityChange]);
+
+  const addTag = (name: string) => {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    if (
+      tags.some(
+        (existingTag) =>
+          normalizeTagName(existingTag) === normalizeTagName(trimmed),
+      )
+    ) {
+      toast.error({
+        title: 'Duplicate tag',
+        description: 'That tag has already been added to this project.',
+      });
+      return;
+    }
+    if (tags.length >= TAG_LIMIT) {
+      toast.error({
+        title: 'Tag limit reached',
+        description: `You can add up to ${TAG_LIMIT} tags to a project.`,
+      });
+      return;
+    }
+
+    if (trimmed.length < 2 || trimmed.length > 64) {
+      toast.error({
+        title: 'Invalid tag',
+        description: 'Tags must be between 2 and 64 characters long.',
+      });
+      return;
+    }
+
+    if (containsControlChars(trimmed)) {
+      toast.error({
+        title: 'Invalid tag',
+        description: 'Tags cannot include control characters.',
+      });
+      return;
+    }
+
+    setTags((prev) => [...prev, trimmed]);
+    setTagInput('');
+  };
+
+  const handleAddTag = () => {
+    const normalized = tagInput.trim().toLowerCase();
+    if (!normalized) return;
+
+    const exact = availableTags.find(
+      (term) => term.name.toLowerCase() === normalized,
+    );
+
+    if (exact) {
+      addTag(exact.name);
+      return;
+    }
+
+    addTag(tagInput);
+  };
 
   const handleAddMember = async () => {
     const normalized = memberInput.trim().toLowerCase();
@@ -399,10 +488,15 @@ export function ProjectForm({
     const payload: ProjectPayload = {
       title: trimmedName,
       short_description: trimmedShort,
-      long_description: trimmedFull || undefined,
-      demo_url: trimmedWebsite || undefined,
-      github_url: trimmedGithub || undefined,
-      video_url: trimmedDemo || undefined,
+      long_description:
+        mode === 'edit' ? trimmedFull || null : trimmedFull || undefined,
+      demo_url:
+        mode === 'edit' ? trimmedWebsite || null : trimmedWebsite || undefined,
+      github_url:
+        mode === 'edit' ? trimmedGithub || null : trimmedGithub || undefined,
+      video_url:
+        mode === 'edit' ? trimmedDemo || null : trimmedDemo || undefined,
+      tags: mode === 'edit' ? tags : tags.length > 0 ? tags : undefined,
     };
 
     onSubmit(payload, {
@@ -410,7 +504,7 @@ export function ProjectForm({
       shortDescription,
       fullDescription,
       imageUrl: initialValues.imageUrl ?? null,
-      tags: initialValues.tags,
+      tags,
       websiteUrl,
       githubUrl,
       demoVideoUrl,
@@ -679,12 +773,111 @@ export function ProjectForm({
                 Tags
               </Text>
               <FieldLabel>
-                Add topics or technologies to help others discover your project.
+                Type your own tags or pick from suggestions. You can add up to{' '}
+                {TAG_LIMIT} tags to help others discover your project.
               </FieldLabel>
-              <DisabledPill
-                label="Tags coming soon"
-                description="This section is visible for now, but tag editing is not connected yet."
-              />
+
+              <HStack gap="8px" w="100%">
+                <Input
+                  value={tagInput}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                    setTagInput(e.target.value)
+                  }
+                  onKeyDown={(e: React.KeyboardEvent) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleAddTag();
+                    }
+                  }}
+                  placeholder="Start typing a tag"
+                  {...inputBase}
+                  h="40px"
+                  flex={1}
+                />
+                <Button
+                  type="button"
+                  bg="orange.400"
+                  color="white"
+                  borderRadius="10px"
+                  h="40px"
+                  px="10px"
+                  _hover={{ bg: 'orange.500' }}
+                  onClick={handleAddTag}
+                >
+                  <LuPlus size={16} />
+                </Button>
+              </HStack>
+
+              {tagsLoading ? (
+                <HStack gap="8px">
+                  <Spinner size="sm" color="orange.400" />
+                  <Text fontSize="sm" color="gray.500">
+                    Loading tag suggestions...
+                  </Text>
+                </HStack>
+              ) : tagsError ? (
+                <Text fontSize="sm" color="orange.600">
+                  {tagsError} You can still add your own tags manually.
+                </Text>
+              ) : filteredTags.length > 0 ? (
+                <Wrap gap="8px">
+                  {filteredTags.map((term) => (
+                    <Button
+                      key={term.id}
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      borderColor="orange.200"
+                      bg="white"
+                      color="gray.700"
+                      _hover={{ bg: 'orange.50' }}
+                      onClick={() => addTag(term.name)}
+                    >
+                      <HStack gap="6px">
+                        <LuTag size={13} />
+                        <Text>{term.name}</Text>
+                      </HStack>
+                    </Button>
+                  ))}
+                </Wrap>
+              ) : null}
+
+              {tags.length > 0 && (
+                <Wrap gap="8px">
+                  {tags.map((tag) => (
+                    <HStack
+                      key={tag}
+                      gap="4px"
+                      bg="white"
+                      border="1px solid"
+                      borderColor="orange.200"
+                      borderRadius="10px"
+                      px="10px"
+                      py="4px"
+                    >
+                      <Text fontSize="sm" color="gray.700" lineHeight="20px">
+                        {tag}
+                      </Text>
+                      <Button
+                        type="button"
+                        aria-label={`Remove ${tag}`}
+                        variant="ghost"
+                        size="xs"
+                        minW="auto"
+                        h="auto"
+                        p={0}
+                        onClick={() =>
+                          setTags((prev) =>
+                            prev.filter((value) => value !== tag),
+                          )
+                        }
+                      >
+                        <LuX size={12} />
+                      </Button>
+                    </HStack>
+                  ))}
+                </Wrap>
+              )}
             </VStack>
           </Box>
 
