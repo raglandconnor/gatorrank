@@ -29,6 +29,7 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
+.lock-*.tmp
 
 # Env files (ignore all except those explicitly committed, e.g., .env.example)
 .env
