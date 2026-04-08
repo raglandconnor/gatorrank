@@ -5,7 +5,8 @@ export default defineConfig({
     tsconfigPaths: true,
   },
   test: {
-    environment: 'jsdom',
+    // happy-dom avoids jsdom/html-encoding-sniffer ESM breakage with Vitest on Node 20+.
+    environment: 'happy-dom',
     globals: true,
     setupFiles: ['./tests/setup.ts'],
     include: ['tests/unit/**/*.test.ts', 'tests/components/**/*.test.tsx'],
