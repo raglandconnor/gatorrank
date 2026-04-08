@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { GatorRankLogo } from '@/components/GatorRankLogo';
-import { useAuth } from '@/components/auth/AuthProvider';
+import { GatorRankLogo } from '@/components/layout/GatorRankLogo';
+import { useAuth } from '@/components/domain/AuthProvider';
 import { toast } from '@/lib/ui/toast';
 import { loginErrorToast } from '@/lib/auth/toastMessages';
 import {

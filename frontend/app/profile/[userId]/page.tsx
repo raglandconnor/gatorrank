@@ -20,53 +20,20 @@ import {
   LuLinkedin,
   LuGlobe,
 } from 'react-icons/lu';
-import { Navbar } from '@/components/Navbar';
-import { AcademicInfoCard } from '@/components/AcademicInfoCard';
+import { Navbar } from '@/components/layout/Navbar';
+import { AcademicInfoCard } from '@/app/profile/[userId]/_components/AcademicInfoCard';
 import { RoleBadge } from '@/components/ui/rolebadge';
-import { ProfileUserProjects } from '@/components/ProfileUserProjects';
-import { useAuth } from '@/components/auth/AuthProvider';
+import { ProfileUserProjects } from '@/app/profile/[userId]/_components/ProfileUserProjects';
+import { useAuth } from '@/components/domain/AuthProvider';
 import { getUserPublic } from '@/lib/api/users';
 import { isUuid } from '@/lib/profileSlug';
 import type { UserPublic } from '@/lib/api/types/user';
-
-function getInitials(name: string): string {
-  const parts = name.trim().split(/\s+/);
-  if (parts.length === 1) return parts[0][0]?.toUpperCase() ?? '';
-  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
-}
-
-interface ExtendedProfile {
-  bio: string;
-  socials: { github?: string; linkedin?: string; website?: string };
-  major: string;
-  graduationYear: number;
-  courses: string[];
-  skills: string[];
-}
-
-const EMPTY_EXTENDED: ExtendedProfile = {
-  bio: '',
-  socials: {},
-  major: '',
-  graduationYear: 0,
-  courses: [],
-  skills: [],
-};
-
-function loadExtended(userId: string): ExtendedProfile {
-  if (typeof window === 'undefined') return EMPTY_EXTENDED;
-  try {
-    const raw = localStorage.getItem(`gatorrank_profile_ext_${userId}`);
-    if (raw)
-      return {
-        ...EMPTY_EXTENDED,
-        ...(JSON.parse(raw) as Partial<ExtendedProfile>),
-      };
-  } catch {
-    // ignore
-  }
-  return EMPTY_EXTENDED;
-}
+import {
+  EMPTY_EXTENDED,
+  getInitials,
+  loadExtendedProfile,
+  type ExtendedProfile,
+} from './_utils/profileShared';
 
 function SocialLink({
   href,
@@ -132,7 +99,9 @@ export default function ProfileUserPage() {
       try {
         const publicUser = await getUserPublic(userId);
         const extended =
-          authUser?.id === userId ? loadExtended(userId) : EMPTY_EXTENDED;
+          authUser?.id === userId
+            ? loadExtendedProfile(userId)
+            : EMPTY_EXTENDED;
         setState({ status: 'ready', publicUser, extended });
       } catch (err) {
         const isNotFound =

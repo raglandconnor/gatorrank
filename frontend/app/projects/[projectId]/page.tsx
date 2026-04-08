@@ -1,6 +1,5 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import {
   Box,
@@ -13,7 +12,6 @@ import {
   Avatar,
   Link as ChakraLink,
 } from '@chakra-ui/react';
-import { motion, AnimatePresence } from 'framer-motion';
 import {
   LuGlobe,
   LuGithub,
@@ -21,207 +19,20 @@ import {
   LuTrophy,
   LuExternalLink,
   LuPencil,
-  LuChevronUp,
 } from 'react-icons/lu';
-import { Navbar } from '@/components/Navbar';
-import { useAuth } from '@/components/auth/AuthProvider';
-import { getProjectByIdForViewer } from '@/lib/api/projects';
-import type { ProjectDetail } from '@/lib/api/types/project';
-
-function getYouTubeEmbedUrl(url: string): string | null {
-  const trimmed = url.trim();
-  if (!trimmed) return null;
-
-  try {
-    const parsed = new URL(trimmed);
-    const host = parsed.hostname.replace(/^www\./, '').toLowerCase();
-    let videoId = '';
-
-    if (host === 'youtu.be') {
-      videoId = parsed.pathname.split('/').filter(Boolean)[0] ?? '';
-    } else if (host === 'youtube.com' || host === 'm.youtube.com') {
-      if (parsed.pathname === '/watch') {
-        videoId = parsed.searchParams.get('v') ?? '';
-      } else if (parsed.pathname.startsWith('/shorts/')) {
-        videoId = parsed.pathname.split('/')[2] ?? '';
-      } else if (parsed.pathname.startsWith('/embed/')) {
-        videoId = parsed.pathname.split('/')[2] ?? '';
-      }
-    }
-
-    // YouTube video ids are 11 chars using base64url charset: [A-Za-z0-9_-]
-    const VIDEO_ID_REGEX = /^[a-zA-Z0-9_-]{11}$/;
-    if (!videoId) return null;
-    const normalizedVideoId = videoId.trim();
-    if (!VIDEO_ID_REGEX.test(normalizedVideoId)) return null;
-
-    return `https://www.youtube.com/embed/${encodeURIComponent(
-      normalizedVideoId,
-    )}`;
-  } catch {
-    return null;
-  }
-}
-
-function UpvoteBox({ votes }: { votes: number }) {
-  const [isVoted, setIsVoted] = useState(false);
-  const voteCount = votes + (isVoted ? 1 : 0);
-
-  return (
-    <motion.div
-      whileTap={{ scale: 1.2, y: -3 }}
-      style={{ display: 'contents' }}
-    >
-      <Button
-        type="button"
-        variant="plain"
-        display="flex"
-        flexDirection="column"
-        alignItems="center"
-        justifyContent="center"
-        p="0"
-        gap="8px"
-        w="108px"
-        minW="108px"
-        h="108px"
-        overflow="hidden"
-        bg={isVoted ? 'orange.50' : 'white'}
-        border="2px solid"
-        borderColor={isVoted ? 'orange.400' : 'orange.200'}
-        borderRadius="12px"
-        cursor="pointer"
-        userSelect="none"
-        _hover={{ bg: isVoted ? 'orange.100' : 'orange.50' }}
-        _focusVisible={{
-          borderColor: 'orange.400',
-          boxShadow: '0 0 0 3px rgba(251,146,60,0.35)',
-        }}
-        transition="background 0.15s, border-color 0.15s, box-shadow 0.15s"
-        onClick={() => setIsVoted((v) => !v)}
-        aria-label="Upvote"
-        aria-pressed={isVoted}
-      >
-        <Box color={isVoted ? 'orange.500' : 'gray.800'}>
-          <LuChevronUp size={24} />
-        </Box>
-        <Box position="relative" h="24px" w="100%" overflow="hidden">
-          <AnimatePresence mode="sync" initial={false}>
-            <motion.span
-              key={voteCount}
-              initial={{ y: 10, opacity: 0 }}
-              animate={{ y: 0, opacity: 1 }}
-              exit={{ y: -10, opacity: 0 }}
-              transition={{ duration: 0.15 }}
-              style={{
-                position: 'absolute',
-                inset: 0,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: '1.2rem',
-                fontWeight: 700,
-                lineHeight: '24px',
-                color: isVoted ? 'rgb(234,88,12)' : 'rgb(17,24,39)',
-              }}
-            >
-              {voteCount}
-            </motion.span>
-          </AnimatePresence>
-        </Box>
-        <Text
-          fontSize="xs"
-          letterSpacing="0.08em"
-          color={isVoted ? 'orange.600' : 'gray.600'}
-          lineHeight="14px"
-        >
-          UPVOTE
-        </Text>
-      </Button>
-    </motion.div>
-  );
-}
+import { Navbar } from '@/components/layout/Navbar';
+import { useAuth } from '@/components/domain/AuthProvider';
+import { UpvoteBox } from './_components/UpvoteBox';
+import { useProjectDetail } from './_hooks/useProjectDetail';
+import { getYouTubeEmbedUrl } from './_utils/youtube';
 
 export default function ProjectDetailPage() {
   const params = useParams();
   const router = useRouter();
   const { accessToken, isReady } = useAuth();
   const projectId = params.projectId as string;
-  const [projectDetail, setProjectDetail] = useState<ProjectDetail | null>(
-    null,
-  );
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [notFound, setNotFound] = useState(false);
-  const requestIdRef = useRef(0);
-
-  const loadProject = useCallback(async () => {
-    if (!isReady) return;
-    const requestId = ++requestIdRef.current;
-
-    setLoading(true);
-    setError(null);
-    setNotFound(false);
-
-    try {
-      const detail = await getProjectByIdForViewer(projectId, accessToken);
-      if (requestId !== requestIdRef.current) return;
-      setProjectDetail(detail);
-    } catch (err) {
-      if (requestId !== requestIdRef.current) return;
-      const status =
-        typeof err === 'object' &&
-        err !== null &&
-        'status' in err &&
-        typeof (err as { status?: unknown }).status === 'number'
-          ? (err as { status: number }).status
-          : null;
-      if (status === 404) {
-        setNotFound(true);
-        setProjectDetail(null);
-        return;
-      }
-      setError(
-        err instanceof Error ? err.message : 'Failed to load project detail.',
-      );
-      setProjectDetail(null);
-    } finally {
-      if (requestId === requestIdRef.current) {
-        setLoading(false);
-      }
-    }
-  }, [accessToken, isReady, projectId]);
-
-  useEffect(() => {
-    void loadProject();
-  }, [loadProject]);
-
-  const project = useMemo(() => {
-    if (!projectDetail) return null;
-    return {
-      id: projectDetail.id,
-      name: projectDetail.title,
-      shortDescription: projectDetail.short_description,
-      fullDescription:
-        projectDetail.long_description ?? projectDetail.short_description,
-      imageUrl: undefined as string | undefined,
-      tags: (projectDetail.tags.length > 0
-        ? projectDetail.tags
-        : projectDetail.categories
-      ).map((term) => term.name),
-      websiteUrl: projectDetail.demo_url ?? '',
-      githubUrl: projectDetail.github_url ?? '',
-      demoVideoUrl: projectDetail.video_url ?? '',
-      votes: projectDetail.vote_count,
-    };
-  }, [projectDetail]);
-
-  const projectCreator = useMemo(() => {
-    if (!projectDetail?.members.length) return null;
-    return (
-      projectDetail.members.find((member) => member.role === 'owner') ??
-      projectDetail.members[0]
-    );
-  }, [projectDetail]);
+  const { project, projectCreator, loading, error, notFound, loadProject } =
+    useProjectDetail(projectId, accessToken, isReady);
 
   if (!isReady || loading) {
     return (

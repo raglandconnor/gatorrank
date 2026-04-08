@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import { Mona_Sans } from 'next/font/google';
-import { AuthProvider } from '@/components/auth/AuthProvider';
+import { AuthProvider } from '@/components/domain/AuthProvider';
 import { Provider } from '@/components/ui/provider';
 import { Toaster } from '@/components/ui/toaster';
 import './globals.css';

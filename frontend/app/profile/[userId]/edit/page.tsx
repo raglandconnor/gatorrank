@@ -28,57 +28,18 @@ import {
   LuCamera,
   LuShieldCheck,
 } from 'react-icons/lu';
-import { Navbar } from '@/components/Navbar';
+import { Navbar } from '@/components/layout/Navbar';
 import { toast } from '@/lib/ui/toast';
 import { RoleBadge } from '@/components/ui/rolebadge';
 import { getMe, patchMe } from '@/lib/api/users';
 import type { AuthUser } from '@/lib/api/types/auth';
 import type { UserPrivate } from '@/lib/api/types/user';
-import { useAuth } from '@/components/auth/AuthProvider';
-
-function getInitials(name: string): string {
-  const parts = name.trim().split(/\s+/);
-  if (parts.length === 1) return parts[0][0]?.toUpperCase() ?? '';
-  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
-}
-
-interface ExtendedProfile {
-  bio: string;
-  socials: { github?: string; linkedin?: string; website?: string };
-  major: string;
-  graduationYear: number;
-  courses: string[];
-  skills: string[];
-}
-
-const EMPTY_EXTENDED: ExtendedProfile = {
-  bio: '',
-  socials: {},
-  major: '',
-  graduationYear: 0,
-  courses: [],
-  skills: [],
-};
-
-function loadExtended(userId: string): ExtendedProfile {
-  if (typeof window === 'undefined') return EMPTY_EXTENDED;
-  try {
-    const raw = localStorage.getItem(`gatorrank_profile_ext_${userId}`);
-    if (raw)
-      return {
-        ...EMPTY_EXTENDED,
-        ...(JSON.parse(raw) as Partial<ExtendedProfile>),
-      };
-  } catch {
-    // ignore
-  }
-  return EMPTY_EXTENDED;
-}
-
-function saveExtended(userId: string, ext: ExtendedProfile): void {
-  if (typeof window === 'undefined') return;
-  localStorage.setItem(`gatorrank_profile_ext_${userId}`, JSON.stringify(ext));
-}
+import { useAuth } from '@/components/domain/AuthProvider';
+import {
+  getInitials,
+  loadExtendedProfile,
+  saveExtendedProfile,
+} from '../_utils/profileShared';
 
 const inputBase = {
   border: '1px solid',
@@ -207,7 +168,7 @@ export default function EditProfilePage() {
         if (user.profile_picture_url)
           setAvatarPreview(user.profile_picture_url);
 
-        const ext = loadExtended(user.id);
+        const ext = loadExtendedProfile(user.id);
         setBio(ext.bio);
         setGithub(ext.socials.github ?? '');
         setLinkedin(ext.socials.linkedin ?? '');
@@ -316,7 +277,7 @@ export default function EditProfilePage() {
       };
       updateCachedUser(nextAuth);
 
-      saveExtended(apiUser.id, {
+      saveExtendedProfile(apiUser.id, {
         bio,
         socials: {
           github: github || undefined,

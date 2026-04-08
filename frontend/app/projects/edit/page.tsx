@@ -4,12 +4,12 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Box, Flex, HStack, VStack, Text, Button } from '@chakra-ui/react';
 import { LuX, LuSave } from 'react-icons/lu';
-import { Navbar } from '@/components/Navbar';
+import { Navbar } from '@/components/layout/Navbar';
 import {
   ProjectForm,
   ProjectFormValues,
   ProjectPayload,
-} from '@/components/projects/ProjectForm';
+} from '@/app/projects/_components/ProjectForm';
 import { toast } from '@/lib/ui/toast';
 import { mockProject } from '@/data/mock-project';
 
