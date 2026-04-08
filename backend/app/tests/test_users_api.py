@@ -511,6 +511,89 @@ def test_list_my_voted_projects_requires_auth():
     assert response.json()["detail"] == "Not authenticated"
 
 
+def test_list_my_projects_requires_auth():
+    response = client.get("/api/v1/users/me/projects")
+    assert response.status_code == 401
+    assert response.json()["detail"] == "Not authenticated"
+
+
+def test_list_my_projects_returns_payload_and_calls_service_with_defaults():
+    user_id = uuid4()
+    empty_project_list = ProjectListResponse(items=[], next_cursor=None)
+
+    app.dependency_overrides[get_db] = _override_get_db
+    app.dependency_overrides[get_current_user] = _override_current_user(user_id)
+    try:
+        with patch(
+            "app.api.v1.users.ProjectService.list_projects_for_owner",
+            new=AsyncMock(return_value=empty_project_list),
+        ) as mock_list_projects:
+            response = client.get("/api/v1/users/me/projects")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    assert response.json()["items"] == []
+    await_args = mock_list_projects.await_args
+    assert await_args is not None
+    assert await_args.kwargs["owner_id"] == user_id
+    assert await_args.kwargs["current_user_id"] == user_id
+    assert await_args.kwargs["visibility"] == "all"
+    assert await_args.kwargs["sort"] == "new"
+    assert await_args.kwargs["limit"] == 20
+    assert await_args.kwargs["cursor"] is None
+    assert await_args.kwargs["published_from"] is None
+    assert await_args.kwargs["published_to"] is None
+
+
+def test_list_my_projects_passes_explicit_filters_to_service():
+    user_id = uuid4()
+    empty_project_list = ProjectListResponse(items=[], next_cursor=None)
+
+    app.dependency_overrides[get_db] = _override_get_db
+    app.dependency_overrides[get_current_user] = _override_current_user(user_id)
+    try:
+        with patch(
+            "app.api.v1.users.ProjectService.list_projects_for_owner",
+            new=AsyncMock(return_value=empty_project_list),
+        ) as mock_list_projects:
+            response = client.get(
+                "/api/v1/users/me/projects"
+                "?limit=7&cursor=abc&visibility=draft&sort=top"
+                "&published_from=2025-01-01&published_to=2025-03-31"
+            )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    await_args = mock_list_projects.await_args
+    assert await_args is not None
+    assert await_args.kwargs["limit"] == 7
+    assert await_args.kwargs["cursor"] == "abc"
+    assert await_args.kwargs["visibility"] == "draft"
+    assert await_args.kwargs["sort"] == "top"
+    assert str(await_args.kwargs["published_from"]) == "2025-01-01"
+    assert str(await_args.kwargs["published_to"]) == "2025-03-31"
+
+
+def test_list_my_projects_invalid_cursor_returns_400():
+    user_id = uuid4()
+
+    app.dependency_overrides[get_db] = _override_get_db
+    app.dependency_overrides[get_current_user] = _override_current_user(user_id)
+    try:
+        with patch(
+            "app.api.v1.users.ProjectService.list_projects_for_owner",
+            new=AsyncMock(side_effect=CursorError("Invalid cursor")),
+        ):
+            response = client.get("/api/v1/users/me/projects?cursor=bad-cursor")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Invalid cursor"
+
+
 def test_list_my_voted_projects_returns_payload_and_calls_service():
     user_id = uuid4()
     empty_project_list = ProjectListResponse(items=[], next_cursor=None)
