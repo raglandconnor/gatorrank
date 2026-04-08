@@ -1,5 +1,9 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
-import { getProjectByIdForViewer } from '@/lib/api/projects';
+import { buildQueryString } from '@/lib/api/http';
+import {
+  getProjectByIdForViewer,
+  listProjectsPublic,
+} from '@/lib/api/projects';
 
 const { fetchWithAuthMock } = vi.hoisted(() => ({
   fetchWithAuthMock: vi.fn(),
@@ -36,6 +40,74 @@ const PROJECT_DETAIL_FIXTURE = {
   tech_stack: [],
   members: [],
 };
+
+const LIST_RESPONSE_FIXTURE = {
+  items: [],
+  next_cursor: null as string | null,
+};
+
+describe('listProjectsPublic', () => {
+  beforeEach(() => {
+    process.env.NEXT_PUBLIC_API_BASE_URL = 'http://localhost:8000';
+    vi.restoreAllMocks();
+    fetchWithAuthMock.mockReset();
+  });
+
+  afterEach(() => {
+    process.env.NEXT_PUBLIC_API_BASE_URL = originalEnv;
+  });
+
+  test('uses plain fetch with absolute apiUrl and never fetchWithAuth', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify(LIST_RESPONSE_FIXTURE), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+
+    const result = await listProjectsPublic();
+
+    expect(fetchWithAuthMock).not.toHaveBeenCalled();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://localhost:8000/api/v1/projects',
+      expect.objectContaining({ method: 'GET', cache: 'no-store' }),
+    );
+    expect(result.items).toEqual([]);
+    expect(result.next_cursor).toBeNull();
+  });
+
+  test('appends query string from the same shape as authenticated listProjects', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify(LIST_RESPONSE_FIXTURE), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+
+    const query = {
+      sort: 'top' as const,
+      limit: 5,
+      published_from: '2026-04-01',
+      published_to: '2026-04-30',
+    };
+    const qs = buildQueryString({
+      limit: query.limit,
+      cursor: undefined,
+      sort: query.sort,
+      published_from: query.published_from,
+      published_to: query.published_to,
+    });
+
+    await listProjectsPublic(query);
+
+    expect(fetchWithAuthMock).not.toHaveBeenCalled();
+    expect(fetchMock).toHaveBeenCalledWith(
+      `http://localhost:8000/api/v1/projects${qs}`,
+      expect.objectContaining({ method: 'GET', cache: 'no-store' }),
+    );
+  });
+});
 
 describe('getProjectByIdForViewer', () => {
   beforeEach(() => {
