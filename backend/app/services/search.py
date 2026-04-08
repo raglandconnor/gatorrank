@@ -73,7 +73,9 @@ class PostgresSearchService(SearchService):
         if request.sort == "top" and top_range is None:
             raise CursorError("Invalid date range")
 
-        search_signature = self._build_search_signature(request=request, top_range=top_range)
+        search_signature = self._build_search_signature(
+            request=request, top_range=top_range
+        )
         cursor_payload: dict[str, str | int] | None = None
         if request.cursor is not None:
             cursor_payload = self._decode_cursor(
@@ -143,8 +145,12 @@ class PostgresSearchService(SearchService):
         projects = rows[:limit]
         project_ids = [project.id for project in projects]
 
-        members_by_project = await self._project_service._get_members_for_projects(project_ids)
-        taxonomy_by_project = await self._project_service.get_project_taxonomy_by_project_ids(project_ids)
+        members_by_project = await self._project_service._get_members_for_projects(
+            project_ids
+        )
+        taxonomy_by_project = (
+            await self._project_service.get_project_taxonomy_by_project_ids(project_ids)
+        )
         voted_project_ids: set[UUID] = set()
         if current_user_id is not None:
             voted_project_ids = await self._project_service._get_voted_project_ids(
@@ -188,7 +194,9 @@ class PostgresSearchService(SearchService):
         return statement.where(
             sa.or_(
                 sa.func.lower(project_cols.title).like(pattern, escape="\\"),
-                sa.func.lower(project_cols.short_description).like(pattern, escape="\\"),
+                sa.func.lower(project_cols.short_description).like(
+                    pattern, escape="\\"
+                ),
             )
         )
 
@@ -198,7 +206,9 @@ class PostgresSearchService(SearchService):
         *,
         request: ProjectSearchRequest,
     ) -> Any:
-        category_terms = [normalize_taxonomy_name(value) for value in request.categories]
+        category_terms = [
+            normalize_taxonomy_name(value) for value in request.categories
+        ]
         tag_terms = [normalize_taxonomy_name(value) for value in request.tags]
         tech_stack_terms = [
             normalize_taxonomy_name(value) for value in request.tech_stack
@@ -260,7 +270,9 @@ class PostgresSearchService(SearchService):
         normalized_terms: list[str],
     ) -> list[UUID]:
         model_cols = getattr(model, "__table__").c
-        statement = select(model_cols.id).where(model_cols.normalized_name.in_(normalized_terms))
+        statement = select(model_cols.id).where(
+            model_cols.normalized_name.in_(normalized_terms)
+        )
         result = await self.db.exec(statement)
         return [row for row in result.all()]
 
@@ -359,7 +371,9 @@ class PostgresSearchService(SearchService):
     ) -> str:
         signature_payload: dict[str, Any] = {
             "q": request.q.lower() if request.q is not None else None,
-            "categories": sorted(normalize_taxonomy_name(v) for v in request.categories),
+            "categories": sorted(
+                normalize_taxonomy_name(v) for v in request.categories
+            ),
             "tags": sorted(normalize_taxonomy_name(v) for v in request.tags),
             "tech_stack": sorted(
                 normalize_taxonomy_name(v) for v in request.tech_stack

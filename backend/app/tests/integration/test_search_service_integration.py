@@ -89,7 +89,10 @@ async def test_search_projects_keyword_matches_title_and_short_description(db_se
         request=ProjectSearchRequest(q="  GATOR  ", sort="new")
     )
 
-    assert [item.id for item in response.items] == [title_match.id, description_match.id]
+    assert [item.id for item in response.items] == [
+        title_match.id,
+        description_match.id,
+    ]
 
 
 @pytest.mark.asyncio
