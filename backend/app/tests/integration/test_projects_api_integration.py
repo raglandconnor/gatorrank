@@ -2341,7 +2341,9 @@ async def test_search_projects_top_cursor_range_mismatch_returns_400(
         app.dependency_overrides.clear()
 
     assert mismatch_response.status_code == 400
-    assert mismatch_response.json()["detail"] == "Cursor does not match requested search"
+    assert (
+        mismatch_response.json()["detail"] == "Cursor does not match requested search"
+    )
 
 
 @pytest.mark.asyncio
@@ -2563,7 +2565,9 @@ async def test_search_projects_mixed_duplicate_plain_and_alias_params(
     api_client, db_session
 ):
     owner = await _seed_user(
-        db_session, "owner_api_search_duplicate_params@ufl.edu", "Owner Search Duplicate"
+        db_session,
+        "owner_api_search_duplicate_params@ufl.edu",
+        "Owner Search Duplicate",
     )
     matching = await _seed_project(
         db_session,
