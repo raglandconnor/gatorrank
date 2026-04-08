@@ -1,30 +1,33 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { searchProjects } from '@/lib/api/search';
 
+const { fetchWithAuthMock } = vi.hoisted(() => ({
+  fetchWithAuthMock: vi.fn(),
+}));
+
+vi.mock('@/lib/api/fetchWithAuth', () => ({
+  fetchWithAuth: fetchWithAuthMock,
+}));
+
 const originalEnv = process.env.NEXT_PUBLIC_API_BASE_URL;
 
 describe('searchProjects api client', () => {
   beforeEach(() => {
     process.env.NEXT_PUBLIC_API_BASE_URL = 'http://localhost:8000';
     vi.restoreAllMocks();
+    fetchWithAuthMock.mockReset();
   });
 
   afterEach(() => {
     process.env.NEXT_PUBLIC_API_BASE_URL = originalEnv;
   });
 
-  test('builds canonical query params and includes auth header', async () => {
-    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-      new Response(
-        JSON.stringify({
-          items: [],
-          next_cursor: null,
-        }),
-        {
-          status: 200,
-          headers: { 'Content-Type': 'application/json' },
-        },
-      ),
+  test('uses refresh-aware auth path with canonical query params', async () => {
+    fetchWithAuthMock.mockResolvedValue(
+      new Response(JSON.stringify({ items: [], next_cursor: null }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
     );
 
     await searchProjects(
@@ -40,12 +43,14 @@ describe('searchProjects api client', () => {
       'token-123',
     );
 
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchWithAuthMock).toHaveBeenCalledTimes(1);
 
-    const [url, options] = fetchMock.mock.calls[0] as [string, RequestInit];
-    const parsed = new URL(url);
+    const [path, options] = fetchWithAuthMock.mock.calls[0] as [
+      string,
+      RequestInit,
+    ];
 
-    expect(parsed.origin).toBe('http://localhost:8000');
+    const parsed = new URL(`http://example.local${path}`);
     expect(parsed.pathname).toBe('/api/v1/projects/search');
     expect(parsed.searchParams.get('q')).toBe('ai tools');
     expect(parsed.searchParams.get('sort')).toBe('new');
@@ -63,54 +68,7 @@ describe('searchProjects api client', () => {
     expect(options.headers).toEqual({ Authorization: 'Bearer token-123' });
   });
 
-  test('encodes special characters in query terms', async () => {
-    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-      new Response(JSON.stringify({ items: [], next_cursor: null }), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-      }),
-    );
-
-    await searchProjects({ q: 'c++ ai tools' });
-
-    const [url] = fetchMock.mock.calls[0] as [string, RequestInit];
-    const parsed = new URL(url);
-    expect(parsed.searchParams.get('q')).toBe('c++ ai tools');
-  });
-
-  test('maps 400/422/500 failures to user-facing messages', async () => {
-    const fetchMock = vi.spyOn(globalThis, 'fetch');
-
-    fetchMock.mockResolvedValueOnce(
-      new Response(JSON.stringify({ detail: 'Cursor invalid' }), {
-        status: 400,
-        headers: { 'Content-Type': 'application/json' },
-      }),
-    );
-    await expect(searchProjects({ q: 'ai' })).rejects.toThrow('Cursor invalid');
-
-    fetchMock.mockResolvedValueOnce(
-      new Response(JSON.stringify({}), {
-        status: 422,
-        headers: { 'Content-Type': 'application/json' },
-      }),
-    );
-    await expect(searchProjects({ q: 'ai' })).rejects.toThrow(
-      'Search parameters are invalid.',
-    );
-
-    fetchMock.mockResolvedValueOnce(
-      new Response(JSON.stringify({}), {
-        status: 500,
-        headers: { 'Content-Type': 'application/json' },
-      }),
-    );
-    await expect(searchProjects({ q: 'ai' })).rejects.toThrow(
-      'Search failed due to a server error.',
-    );
-  });
-
-  test('omits auth header when no token provided', async () => {
+  test('uses anonymous fetch path when token is absent', async () => {
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
       new Response(JSON.stringify({ items: [], next_cursor: null }), {
         status: 200,
@@ -120,7 +78,69 @@ describe('searchProjects api client', () => {
 
     await searchProjects({ q: 'project' });
 
-    const [, options] = fetchMock.mock.calls[0] as [string, RequestInit];
-    expect(options.headers).toEqual({});
+    expect(fetchWithAuthMock).not.toHaveBeenCalled();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url, options] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toContain('/api/v1/projects/search?q=project');
+    expect(options.method).toBe('GET');
+  });
+
+  test('encodes special characters in query terms', async () => {
+    fetchWithAuthMock.mockResolvedValue(
+      new Response(JSON.stringify({ items: [], next_cursor: null }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+
+    await searchProjects({ q: 'c++ ai tools' }, 'token-123');
+
+    const [path] = fetchWithAuthMock.mock.calls[0] as [string, RequestInit];
+    const parsed = new URL(`http://example.local${path}`);
+    expect(parsed.searchParams.get('q')).toBe('c++ ai tools');
+  });
+
+  test('surfaces backend error details/status for 400/422/500', async () => {
+    fetchWithAuthMock
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ detail: 'Cursor invalid' }), {
+          status: 400,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({}), {
+          status: 422,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({}), {
+          status: 500,
+          headers: { 'Content-Type': 'application/json' },
+          statusText: 'Internal Server Error',
+        }),
+      );
+
+    await expect(
+      searchProjects({ q: 'ai' }, 'token-123'),
+    ).rejects.toMatchObject({
+      message: 'Cursor invalid',
+      status: 400,
+    });
+
+    await expect(
+      searchProjects({ q: 'ai' }, 'token-123'),
+    ).rejects.toMatchObject({
+      message: 'Search parameters are invalid.',
+      status: 422,
+    });
+
+    await expect(
+      searchProjects({ q: 'ai' }, 'token-123'),
+    ).rejects.toMatchObject({
+      message: 'Internal Server Error',
+      status: 500,
+    });
   });
 });
