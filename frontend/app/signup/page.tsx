@@ -27,12 +27,15 @@ import {
   isValidPassword,
 } from '@/lib/validation';
 
+const USERNAME_PATTERN = /^[a-z0-9_-]+$/;
+
 export default function SignupPage() {
   const router = useRouter();
   const { signup, isReady } = useAuth();
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [fullName, setFullName] = useState('');
+  const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -40,6 +43,7 @@ export default function SignupPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState<{
     fullName?: string;
+    username?: string;
     email?: string;
     password?: string;
     confirmPassword?: string;
@@ -48,12 +52,22 @@ export default function SignupPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     const newErrors: typeof errors = {};
+    const normalizedUsername = username.trim().toLowerCase();
 
     if (!fullName.trim()) {
       newErrors.fullName = 'Full name is required';
     } else if (!isValidName(fullName)) {
       newErrors.fullName =
         'Name can only contain letters, spaces, hyphens, and apostrophes';
+    }
+
+    if (!normalizedUsername) {
+      newErrors.username = 'Username is required';
+    } else if (normalizedUsername.length < 3 || normalizedUsername.length > 32) {
+      newErrors.username = 'Username must be between 3 and 32 characters';
+    } else if (!USERNAME_PATTERN.test(normalizedUsername)) {
+      newErrors.username =
+        'Username may contain only lowercase letters, numbers, underscores, and hyphens';
     }
 
     if (!email.trim()) {
@@ -66,7 +80,7 @@ export default function SignupPage() {
       newErrors.password = 'Password is required';
     } else if (!isValidPassword(password)) {
       newErrors.password =
-        'Password must be 12–128 characters (not only spaces), matching server rules';
+        'Password must be 12-128 characters (not only spaces), matching server rules';
     }
 
     if (!confirmPassword) {
@@ -82,13 +96,14 @@ export default function SignupPage() {
     try {
       await signup({
         email: email.trim(),
+        username: normalizedUsername,
         password,
         fullName: fullName.trim(),
         rememberMe,
       });
       toast.success({
         title: 'Account created',
-        description: 'Welcome to GatorRank. Taking you to your profile…',
+        description: 'Welcome to GatorRank. Taking you to your profile...',
       });
       router.push('/profile');
     } catch (err) {
@@ -166,6 +181,37 @@ export default function SignupPage() {
                   textAlign="left"
                 >
                   {errors.fullName}
+                </Field.ErrorText>
+              )}
+            </Field.Root>
+
+            <Field.Root invalid={!!errors.username}>
+              <Field.Label fontWeight="500" color="gray.800" mb="2">
+                Username
+              </Field.Label>
+              <Input
+                type="text"
+                placeholder="your_handle"
+                size="md"
+                variant="outline"
+                color="gray.900"
+                borderColor="gray.200"
+                _placeholder={{ color: 'gray.400' }}
+                value={username}
+                onChange={(e) => {
+                  setUsername(e.target.value.toLowerCase());
+                  if (errors.username)
+                    setErrors((prev) => ({ ...prev, username: undefined }));
+                }}
+              />
+              {errors.username && (
+                <Field.ErrorText
+                  color="red.500"
+                  mt="1"
+                  fontSize="xs"
+                  textAlign="left"
+                >
+                  {errors.username}
                 </Field.ErrorText>
               )}
             </Field.Root>
@@ -361,7 +407,7 @@ export default function SignupPage() {
               mt={4}
               disabled={!isReady || isSubmitting}
             >
-              {isSubmitting ? 'Creating account…' : 'Sign Up'}
+              {isSubmitting ? 'Creating account...' : 'Sign Up'}
             </Button>
           </Stack>
         </Box>
