@@ -103,6 +103,22 @@ async def _seed_vote(
     return vote
 
 
+async def _seed_taxonomy_term(
+    db_session,
+    *,
+    model: type[Category] | type[Tag] | type[TechStack],
+    name: str,
+):
+    term = model(
+        name=name,
+        normalized_name=name.strip().lower(),
+        created_at=datetime.now(timezone.utc),
+    )
+    db_session.add(term)
+    await db_session.flush()
+    return term
+
+
 def _create_project_payload(**overrides):
     payload = {
         "title": "  API Create Project  ",
@@ -1948,6 +1964,684 @@ async def test_list_projects_cursor_sort_mismatch_returns_400(api_client, db_ses
 
     assert mismatch_response.status_code == 400
     assert mismatch_response.json()["detail"] == "Invalid cursor"
+
+
+@pytest.mark.asyncio
+async def test_search_projects_combines_keyword_and_taxonomy_filters(
+    api_client, db_session
+):
+    owner = await _seed_user(
+        db_session, "owner_api_search_combo@ufl.edu", "Owner Search"
+    )
+    now = datetime.now(timezone.utc)
+
+    matching = await _seed_project(
+        db_session,
+        created_by_id=owner.id,
+        title="Gator Search Match",
+        is_published=True,
+    )
+    matching.created_at = now
+    matching.updated_at = now
+    matching.published_at = now
+
+    keyword_only = await _seed_project(
+        db_session,
+        created_by_id=owner.id,
+        title="Gator Search Wrong Taxonomy",
+        is_published=True,
+    )
+    keyword_only.created_at = now - timedelta(minutes=1)
+    keyword_only.updated_at = keyword_only.created_at
+    keyword_only.published_at = keyword_only.created_at
+
+    taxonomy_only = await _seed_project(
+        db_session,
+        created_by_id=owner.id,
+        title="Unrelated Title",
+        is_published=True,
+    )
+    taxonomy_only.short_description = "No keyword overlap"
+    taxonomy_only.created_at = now - timedelta(minutes=2)
+    taxonomy_only.updated_at = taxonomy_only.created_at
+    taxonomy_only.published_at = taxonomy_only.created_at
+
+    ai = await _seed_taxonomy_term(db_session, model=Category, name="AI")
+    python = await _seed_taxonomy_term(db_session, model=Tag, name="Python")
+    javascript = await _seed_taxonomy_term(db_session, model=Tag, name="JavaScript")
+    join_now = datetime.now(timezone.utc)
+
+    db_session.add(
+        ProjectCategory(
+            project_id=matching.id,
+            category_id=ai.id,
+            position=0,
+            created_at=join_now,
+        )
+    )
+    db_session.add(
+        ProjectTag(
+            project_id=matching.id,
+            tag_id=python.id,
+            position=0,
+            created_at=join_now,
+        )
+    )
+    db_session.add(
+        ProjectCategory(
+            project_id=keyword_only.id,
+            category_id=ai.id,
+            position=0,
+            created_at=join_now,
+        )
+    )
+    db_session.add(
+        ProjectTag(
+            project_id=keyword_only.id,
+            tag_id=javascript.id,
+            position=0,
+            created_at=join_now,
+        )
+    )
+    db_session.add(
+        ProjectCategory(
+            project_id=taxonomy_only.id,
+            category_id=ai.id,
+            position=0,
+            created_at=join_now,
+        )
+    )
+    db_session.add(
+        ProjectTag(
+            project_id=taxonomy_only.id,
+            tag_id=python.id,
+            position=0,
+            created_at=join_now,
+        )
+    )
+    await db_session.flush()
+
+    async def override_get_db():
+        yield db_session
+
+    app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_current_user_optional] = lambda: None
+    try:
+        response = await api_client.get(
+            "/api/v1/projects/search?q=gator&categories=ai&tags=python&sort=new"
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert [item["id"] for item in payload["items"]] == [str(matching.id)]
+
+
+@pytest.mark.asyncio
+async def test_search_projects_rejects_cursor_reuse_across_different_query_context(
+    api_client, db_session
+):
+    owner = await _seed_user(
+        db_session, "owner_api_search_cursor@ufl.edu", "Owner Search Cursor"
+    )
+    await _seed_project(
+        db_session,
+        created_by_id=owner.id,
+        title="Cursor Context Alpha One",
+        is_published=True,
+    )
+    await _seed_project(
+        db_session,
+        created_by_id=owner.id,
+        title="Cursor Context Alpha Two",
+        is_published=True,
+    )
+
+    async def override_get_db():
+        yield db_session
+
+    app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_current_user_optional] = lambda: None
+    try:
+        page_one = await api_client.get(
+            "/api/v1/projects/search?q=alpha&sort=new&limit=1"
+        )
+        assert page_one.status_code == 200
+        next_cursor = page_one.json()["next_cursor"]
+        assert next_cursor is not None
+
+        mismatch = await api_client.get(
+            f"/api/v1/projects/search?q=different&sort=new&limit=1&cursor={quote(next_cursor)}"
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert mismatch.status_code == 400
+    assert mismatch.json()["detail"] == "Cursor does not match requested search"
+
+
+@pytest.mark.asyncio
+async def test_search_projects_accepts_bracketed_taxonomy_alias_params(
+    api_client, db_session
+):
+    owner = await _seed_user(
+        db_session, "owner_api_search_alias@ufl.edu", "Owner Search Alias"
+    )
+    matching = await _seed_project(
+        db_session,
+        created_by_id=owner.id,
+        title="Alias Filter Match",
+        is_published=True,
+    )
+    non_matching = await _seed_project(
+        db_session,
+        created_by_id=owner.id,
+        title="Alias Filter Non Match",
+        is_published=True,
+    )
+
+    ai = await _seed_taxonomy_term(db_session, model=Category, name="AI")
+    python = await _seed_taxonomy_term(db_session, model=Tag, name="Python")
+    rust = await _seed_taxonomy_term(db_session, model=Tag, name="Rust")
+    postgres = await _seed_taxonomy_term(db_session, model=TechStack, name="Postgres")
+    mysql = await _seed_taxonomy_term(db_session, model=TechStack, name="MySQL")
+    join_now = datetime.now(timezone.utc)
+
+    db_session.add(
+        ProjectCategory(
+            project_id=matching.id,
+            category_id=ai.id,
+            position=0,
+            created_at=join_now,
+        )
+    )
+    db_session.add(
+        ProjectTag(
+            project_id=matching.id,
+            tag_id=python.id,
+            position=0,
+            created_at=join_now,
+        )
+    )
+    db_session.add(
+        ProjectTechStack(
+            project_id=matching.id,
+            tech_stack_id=postgres.id,
+            position=0,
+            created_at=join_now,
+        )
+    )
+
+    db_session.add(
+        ProjectCategory(
+            project_id=non_matching.id,
+            category_id=ai.id,
+            position=0,
+            created_at=join_now,
+        )
+    )
+    db_session.add(
+        ProjectTag(
+            project_id=non_matching.id,
+            tag_id=rust.id,
+            position=0,
+            created_at=join_now,
+        )
+    )
+    db_session.add(
+        ProjectTechStack(
+            project_id=non_matching.id,
+            tech_stack_id=mysql.id,
+            position=0,
+            created_at=join_now,
+        )
+    )
+    await db_session.flush()
+
+    async def override_get_db():
+        yield db_session
+
+    app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_current_user_optional] = lambda: None
+    try:
+        response = await api_client.get(
+            "/api/v1/projects/search?categories[]=ai&tags[]=python&tech_stack[]=postgres"
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert [item["id"] for item in payload["items"]] == [str(matching.id)]
+
+
+@pytest.mark.asyncio
+async def test_search_projects_top_default_window_excludes_old_projects(
+    api_client, db_session
+):
+    owner = await _seed_user(
+        db_session, "owner_api_search_top_window@ufl.edu", "Owner Search Top Window"
+    )
+    now = datetime.now(timezone.utc)
+
+    recent = await _seed_project(
+        db_session,
+        created_by_id=owner.id,
+        title="Search Window Recent",
+        is_published=True,
+    )
+    recent.created_at = now - timedelta(days=7)
+    recent.updated_at = recent.created_at
+    recent.published_at = recent.created_at
+    recent.vote_count = 1
+
+    old = await _seed_project(
+        db_session,
+        created_by_id=owner.id,
+        title="Search Window Old",
+        is_published=True,
+    )
+    old.created_at = now - timedelta(days=140)
+    old.updated_at = old.created_at
+    old.published_at = old.created_at
+    old.vote_count = 500
+    await db_session.flush()
+
+    async def override_get_db():
+        yield db_session
+
+    app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_current_user_optional] = lambda: None
+    try:
+        response = await api_client.get("/api/v1/projects/search?sort=top")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert [item["id"] for item in payload["items"]] == [str(recent.id)]
+
+
+@pytest.mark.asyncio
+async def test_search_projects_cursor_sort_mismatch_returns_400(api_client, db_session):
+    owner = await _seed_user(
+        db_session, "owner_api_search_sort_mismatch@ufl.edu", "Owner Search Sort"
+    )
+    await _seed_project(
+        db_session,
+        created_by_id=owner.id,
+        title="Search Sort Mismatch A",
+        is_published=True,
+    )
+    await _seed_project(
+        db_session,
+        created_by_id=owner.id,
+        title="Search Sort Mismatch B",
+        is_published=True,
+    )
+
+    async def override_get_db():
+        yield db_session
+
+    app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_current_user_optional] = lambda: None
+    try:
+        top_page = await api_client.get("/api/v1/projects/search?sort=top&limit=1")
+        assert top_page.status_code == 200
+        next_cursor = top_page.json()["next_cursor"]
+        assert next_cursor is not None
+
+        mismatch_response = await api_client.get(
+            f"/api/v1/projects/search?sort=new&cursor={quote(next_cursor)}"
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert mismatch_response.status_code == 400
+    assert mismatch_response.json()["detail"] == "Invalid cursor"
+
+
+@pytest.mark.asyncio
+async def test_search_projects_top_cursor_range_mismatch_returns_400(
+    api_client, db_session
+):
+    owner = await _seed_user(
+        db_session, "owner_api_search_range_mismatch@ufl.edu", "Owner Search Range"
+    )
+    await _seed_project(
+        db_session,
+        created_by_id=owner.id,
+        title="Search Range Project A",
+        is_published=True,
+    )
+    await _seed_project(
+        db_session,
+        created_by_id=owner.id,
+        title="Search Range Project B",
+        is_published=True,
+    )
+
+    async def override_get_db():
+        yield db_session
+
+    app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_current_user_optional] = lambda: None
+    try:
+        page_one = await api_client.get("/api/v1/projects/search?sort=top&limit=1")
+        assert page_one.status_code == 200
+        next_cursor = page_one.json()["next_cursor"]
+        assert next_cursor is not None
+
+        mismatch_response = await api_client.get(
+            "/api/v1/projects/search?sort=top&limit=1"
+            f"&published_from=2020-01-01&published_to=2020-12-31&cursor={quote(next_cursor)}"
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert mismatch_response.status_code == 400
+    assert (
+        mismatch_response.json()["detail"] == "Cursor does not match requested search"
+    )
+
+
+@pytest.mark.asyncio
+async def test_search_projects_unknown_taxonomy_terms_behavior(api_client, db_session):
+    owner = await _seed_user(
+        db_session, "owner_api_search_unknown_terms@ufl.edu", "Owner Search Unknown"
+    )
+    matching = await _seed_project(
+        db_session,
+        created_by_id=owner.id,
+        title="Unknown Terms Match",
+        is_published=True,
+    )
+    non_matching = await _seed_project(
+        db_session,
+        created_by_id=owner.id,
+        title="Unknown Terms Non Match",
+        is_published=True,
+    )
+
+    python = await _seed_taxonomy_term(db_session, model=Tag, name="Python")
+    rust = await _seed_taxonomy_term(db_session, model=Tag, name="Rust")
+    join_now = datetime.now(timezone.utc)
+    db_session.add(
+        ProjectTag(
+            project_id=matching.id, tag_id=python.id, position=0, created_at=join_now
+        )
+    )
+    db_session.add(
+        ProjectTag(
+            project_id=non_matching.id, tag_id=rust.id, position=0, created_at=join_now
+        )
+    )
+    await db_session.flush()
+
+    async def override_get_db():
+        yield db_session
+
+    app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_current_user_optional] = lambda: None
+    try:
+        unknown_only = await api_client.get(
+            "/api/v1/projects/search?tags=definitely-not-real&sort=new"
+        )
+        mixed = await api_client.get(
+            "/api/v1/projects/search?tags=python&tags=definitely-not-real&sort=new"
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert unknown_only.status_code == 200
+    assert unknown_only.json()["items"] == []
+
+    assert mixed.status_code == 200
+    assert [item["id"] for item in mixed.json()["items"]] == [str(matching.id)]
+
+
+@pytest.mark.asyncio
+async def test_search_projects_excludes_soft_deleted_matches(api_client, db_session):
+    owner = await _seed_user(
+        db_session, "owner_api_search_soft_delete@ufl.edu", "Owner Search Soft Delete"
+    )
+    now = datetime.now(timezone.utc)
+    visible = await _seed_project(
+        db_session,
+        created_by_id=owner.id,
+        title="Soft Delete Search Visible",
+        is_published=True,
+    )
+    hidden = await _seed_project(
+        db_session,
+        created_by_id=owner.id,
+        title="Soft Delete Search Hidden",
+        is_published=True,
+    )
+    hidden.deleted_at = now
+    hidden.vote_count = 999
+    await db_session.flush()
+
+    async def override_get_db():
+        yield db_session
+
+    app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_current_user_optional] = lambda: None
+    try:
+        response = await api_client.get("/api/v1/projects/search?q=soft delete search")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert [item["id"] for item in payload["items"]] == [str(visible.id)]
+
+
+@pytest.mark.asyncio
+async def test_search_projects_whitespace_query_is_treated_as_omitted(
+    api_client, db_session
+):
+    owner = await _seed_user(
+        db_session, "owner_api_search_whitespace@ufl.edu", "Owner Search Whitespace"
+    )
+    now = datetime.now(timezone.utc)
+
+    first = await _seed_project(
+        db_session,
+        created_by_id=owner.id,
+        title="Whitespace Query First",
+        is_published=True,
+    )
+    first.created_at = now - timedelta(minutes=1)
+    first.updated_at = first.created_at
+    first.published_at = first.created_at
+
+    second = await _seed_project(
+        db_session,
+        created_by_id=owner.id,
+        title="Whitespace Query Second",
+        is_published=True,
+    )
+    second.created_at = now
+    second.updated_at = second.created_at
+    second.published_at = second.created_at
+    await db_session.flush()
+
+    async def override_get_db():
+        yield db_session
+
+    app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_current_user_optional] = lambda: None
+    try:
+        response = await api_client.get("/api/v1/projects/search?q=%20%20%20&sort=new")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert [item["id"] for item in payload["items"]] == [str(second.id), str(first.id)]
+
+
+@pytest.mark.asyncio
+async def test_search_projects_viewer_has_voted_anonymous_vs_authenticated(
+    api_client, db_session
+):
+    owner = await _seed_user(
+        db_session, "owner_api_search_viewer_vote@ufl.edu", "Owner Search Viewer Vote"
+    )
+    voter = await _seed_user(
+        db_session, "voter_api_search_viewer_vote@ufl.edu", "Voter Search Viewer Vote"
+    )
+    project = await _seed_project(
+        db_session,
+        created_by_id=owner.id,
+        title="Viewer Vote Search Project",
+        is_published=True,
+    )
+    await _seed_vote(db_session, project_id=project.id, user_id=voter.id)
+    await db_session.flush()
+
+    async def override_get_db():
+        yield db_session
+
+    app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_current_user_optional] = lambda: None
+    try:
+        anonymous = await api_client.get(
+            "/api/v1/projects/search?q=viewer vote search project&sort=new"
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_current_user_optional] = _override_authed_user(voter)
+    try:
+        authed = await api_client.get(
+            "/api/v1/projects/search?q=viewer vote search project&sort=new"
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert anonymous.status_code == 200
+    assert anonymous.json()["items"][0]["viewer_has_voted"] is False
+
+    assert authed.status_code == 200
+    assert authed.json()["items"][0]["viewer_has_voted"] is True
+
+
+@pytest.mark.asyncio
+async def test_search_projects_invalid_top_date_range_returns_400(
+    api_client, db_session
+):
+    owner = await _seed_user(
+        db_session, "owner_api_search_date_range@ufl.edu", "Owner Search Date Range"
+    )
+    await _seed_project(
+        db_session,
+        created_by_id=owner.id,
+        title="Search Date Range Project",
+        is_published=True,
+    )
+
+    async def override_get_db():
+        yield db_session
+
+    app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_current_user_optional] = lambda: None
+    try:
+        response = await api_client.get(
+            "/api/v1/projects/search?sort=top&published_from=2025-03-01&published_to=2025-01-01"
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Invalid date range"
+
+
+@pytest.mark.asyncio
+async def test_search_projects_mixed_duplicate_plain_and_alias_params(
+    api_client, db_session
+):
+    owner = await _seed_user(
+        db_session,
+        "owner_api_search_duplicate_params@ufl.edu",
+        "Owner Search Duplicate",
+    )
+    matching = await _seed_project(
+        db_session,
+        created_by_id=owner.id,
+        title="Duplicate Param Match",
+        is_published=True,
+    )
+    non_matching = await _seed_project(
+        db_session,
+        created_by_id=owner.id,
+        title="Duplicate Param Non Match",
+        is_published=True,
+    )
+
+    python = await _seed_taxonomy_term(db_session, model=Tag, name="Python")
+    rust = await _seed_taxonomy_term(db_session, model=Tag, name="Rust")
+    join_now = datetime.now(timezone.utc)
+    db_session.add(
+        ProjectTag(
+            project_id=matching.id, tag_id=python.id, position=0, created_at=join_now
+        )
+    )
+    db_session.add(
+        ProjectTag(
+            project_id=non_matching.id, tag_id=rust.id, position=0, created_at=join_now
+        )
+    )
+    await db_session.flush()
+
+    async def override_get_db():
+        yield db_session
+
+    app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_current_user_optional] = lambda: None
+    try:
+        response = await api_client.get(
+            "/api/v1/projects/search?tags=python&tags[]=PYTHON&sort=new"
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert [item["id"] for item in payload["items"]] == [str(matching.id)]
+
+
+@pytest.mark.asyncio
+async def test_search_projects_invalid_limit_returns_422(api_client, db_session):
+    owner = await _seed_user(
+        db_session, "owner_api_search_invalid_limit@ufl.edu", "Owner Search Limit"
+    )
+    await _seed_project(
+        db_session,
+        created_by_id=owner.id,
+        title="Search Invalid Limit Project",
+        is_published=True,
+    )
+
+    async def override_get_db():
+        yield db_session
+
+    app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_current_user_optional] = lambda: None
+    try:
+        response = await api_client.get("/api/v1/projects/search?limit=0")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 422
+    payload = response.json()
+    assert payload["detail"]
+    assert any(
+        "greater than or equal to 1" in item["msg"] for item in payload["detail"]
+    )
 
 
 @pytest.mark.asyncio
