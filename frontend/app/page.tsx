@@ -5,6 +5,7 @@ import { Navbar } from '@/components/Navbar';
 import { ProjectSection } from '@/components/ProjectSection';
 import type { Project } from '@/data/mock-projects';
 import { listProjectsPublic } from '@/lib/api/projects';
+import { getMonthRange } from '@/lib/projects/dateFilters';
 import { mapProjectListItemsToCardProjects } from '@/lib/projects/projectCardMapper';
 
 type HomeProjectsState = {
@@ -14,20 +15,6 @@ type HomeProjectsState = {
   trendingThisMonth: Project[];
   trendingLastMonth: Project[];
 };
-
-function toDateOnly(date: Date): string {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-}
-
-function getMonthRange(offsetMonths = 0): { from: string; to: string } {
-  const now = new Date();
-  const start = new Date(now.getFullYear(), now.getMonth() + offsetMonths, 1);
-  const end = new Date(now.getFullYear(), now.getMonth() + offsetMonths + 1, 0);
-  return { from: toDateOnly(start), to: toDateOnly(end) };
-}
 
 export default function Home() {
   const [state, setState] = useState<HomeProjectsState>({
