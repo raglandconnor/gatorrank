@@ -9,6 +9,7 @@ from app.models.project import Project
 from app.schemas.search import ProjectSearchRequest
 from app.services.project import CursorError
 from app.services.search import PostgresSearchService
+from app.utils.pagination import decode_cursor_payload, encode_cursor_payload
 
 
 class DummySession:
@@ -109,4 +110,56 @@ def test_resolve_top_date_range_rejects_invalid_range():
             sort="top",
             published_from=date(2026, 2, 1),
             published_to=date(2026, 1, 1),
+        )
+
+
+@pytest.mark.parametrize(
+    ("mutate_payload", "expected_error"),
+    [
+        (
+            lambda payload: {**payload, "search_sig": "tampered"},
+            "Cursor does not match requested search",
+        ),
+        (
+            lambda payload: {
+                key: value for key, value in payload.items() if key != "created_at"
+            },
+            "Invalid cursor",
+        ),
+        (
+            lambda payload: {**payload, "unexpected": "value"},
+            "Invalid cursor",
+        ),
+        (
+            lambda payload: {**payload, "id": "not-a-uuid"},
+            "Invalid cursor",
+        ),
+        (
+            lambda payload: {**payload, "created_at": "not-a-datetime"},
+            "Invalid cursor",
+        ),
+    ],
+)
+def test_decode_cursor_rejects_tampered_or_malformed_payloads(
+    mutate_payload, expected_error
+):
+    service = PostgresSearchService(cast(AsyncSession, DummySession()))
+    project = _make_project()
+    top_range = (project.created_at.date(), project.created_at.date())
+    cursor = service._encode_cursor(
+        project=project,
+        sort="top",
+        search_signature="sig-a",
+        top_range=top_range,
+    )
+    payload = decode_cursor_payload(cursor)
+    mutated_payload = mutate_payload(payload)
+    tampered_cursor = encode_cursor_payload(mutated_payload)
+
+    with pytest.raises(CursorError, match=expected_error):
+        service._decode_cursor(
+            cursor=tampered_cursor,
+            sort="top",
+            search_signature="sig-a",
+            top_range=top_range,
         )
