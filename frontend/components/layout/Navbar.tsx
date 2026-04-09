@@ -1,8 +1,8 @@
 'use client';
 
 import { FormEvent, useMemo } from 'react';
-import { GatorRankLogo } from '@/components/GatorRankLogo';
-import { useAuth } from '@/components/auth/AuthProvider';
+import { GatorRankLogo } from '@/components/layout/GatorRankLogo';
+import { useAuth } from '@/components/domain/AuthProvider';
 import {
   Box,
   HStack,

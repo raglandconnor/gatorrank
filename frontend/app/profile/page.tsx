@@ -3,8 +3,8 @@
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Box, Flex, Spinner } from '@chakra-ui/react';
-import { Navbar } from '@/components/Navbar';
-import { useAuth } from '@/components/auth/AuthProvider';
+import { Navbar } from '@/components/layout/Navbar';
+import { useAuth } from '@/components/domain/AuthProvider';
 
 /** Redirects `/profile` to the canonical `/profile/{userId}`. */
 export default function ProfileIndexPage() {

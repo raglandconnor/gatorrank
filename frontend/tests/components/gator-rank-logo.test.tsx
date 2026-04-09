@@ -1,6 +1,6 @@
 import { screen } from '@testing-library/react';
 import { describe, expect, test } from 'vitest';
-import { GatorRankLogo } from '@/components/GatorRankLogo';
+import { GatorRankLogo } from '@/components/layout/GatorRankLogo';
 import { renderWithChakra } from '@/tests/utils/render';
 
 describe('GatorRankLogo', () => {
