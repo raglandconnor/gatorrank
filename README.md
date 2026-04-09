@@ -39,55 +39,70 @@ Frontend:
 ### Backend
 
 1. Sync dependencies with [uv](https://docs.astral.sh/uv/getting-started/installation/):
-  ```bash
-   cd backend
-   uv sync
-  ```
+
+```bash
+ cd backend
+ uv sync
+```
+
 2. Select the Python interpreter in VS Code:
-  - Press `Cmd+Shift+P` or `Ctrl+Shift+P`
-  - Type "Python: Select Interpreter"
-  - Choose `./backend/.venv/bin/python3`
+
+- Press `Cmd+Shift+P` or `Ctrl+Shift+P`
+- Type "Python: Select Interpreter"
+- Choose `./backend/.venv/bin/python3`
+
 3. Run the FastAPI server:
-  ```bash
-   uv run uvicorn app.main:app --reload
-  ```
-   The backend server will be available at `http://localhost:8000`
-   API documentation (Swagger UI) is available at `http://localhost:8000/docs`
-4. To run backend tests:
-  ```bash
-   uv run pytest
-  ```
+
+```bash
+ uv run uvicorn app.main:app --reload
+```
+
+The backend server will be available at `http://localhost:8000`
+API documentation (Swagger UI) is available at `http://localhost:8000/docs` 4. To run backend tests:
+
+```bash
+ uv run pytest
+```
 
 ### Database Migrations (Alembic)
 
 Migrations are managed in `backend/alembic/` and use the backend `DATABASE_URL` from `backend/.env`.
 
 1. Apply all pending migrations:
-  ```bash
-   cd backend
-   uv run alembic upgrade head
-  ```
+
+```bash
+ cd backend
+ uv run alembic upgrade head
+```
+
 2. Create a new migration after changing SQLModel models:
-  ```bash
-   cd backend
-   uv run alembic revision --autogenerate -m "describe schema change"
-  ```
+
+```bash
+ cd backend
+ uv run alembic revision --autogenerate -m "describe schema change"
+```
+
 3. Apply one new migration (or all pending):
-  ```bash
-   cd backend
-   uv run alembic upgrade head
-  ```
+
+```bash
+ cd backend
+ uv run alembic upgrade head
+```
+
 4. Roll back the most recent migration:
-  ```bash
-   cd backend
-   uv run alembic downgrade -1
-  ```
+
+```bash
+ cd backend
+ uv run alembic downgrade -1
+```
+
 5. View migration history:
-  ```bash
-   cd backend
-   uv run alembic history
-   uv run alembic current
-  ```
+
+```bash
+ cd backend
+ uv run alembic history
+ uv run alembic current
+```
 
 Notes:
 
@@ -97,45 +112,104 @@ Notes:
 ### Frontend
 
 1. Install dependencies with [bun](https://bun.sh):
-  ```bash
-   cd frontend
-   bun install
-  ```
+
+```bash
+ cd frontend
+ bun install
+```
+
 2. Run the Next.js development server:
-  ```bash
-   bun dev
-  ```
-   The frontend will be available at `http://localhost:3000`
+
+```bash
+ bun dev
+```
+
+The frontend will be available at `http://localhost:3000`
 
 ### Docker
 
 Docker Compose lets you run both the backend and frontend with a single command instead of starting each server separately. Requires [Docker Desktop](https://www.docker.com/products/docker-desktop/).
 
 1. Copy the environment files and fill in your values:
-  ```bash
-  cp backend/.env.example backend/.env
-  cp frontend/.env.example frontend/.env
-  ```
-  Key values to set:
-  - `backend/.env`: `DATABASE_URL` (your Supabase connection string), `CORS_ORIGINS=http://localhost:3000`
-  - `frontend/.env`: `NEXT_PUBLIC_API_BASE_URL=http://localhost:8000`
 
-2. Build and start both services:
-  ```bash
-  docker compose up --build
-  ```
-  - Frontend: `http://localhost:3000`
-  - Backend: `http://localhost:8000`
-  - API docs (Swagger UI): `http://localhost:8000/docs`
+```bash
+cp backend/.env.example backend/.env
+cp frontend/.env.example frontend/.env
+```
 
-  **Live reload (editing on your machine):** The frontend service bind-mounts `./frontend` into the container and runs the dev server with `--hostname 0.0.0.0`, file-watcher polling (`WATCHPACK_POLLING`, `CHOKIDAR_USEPOLLING`), and Webpack mode (`dev:webpack`) so hot reload works reliably with Docker Desktop—especially on Windows. After changing dependencies, rebuild with `docker compose up --build`.
+Key values to set:
 
-3. Stop all services:
-  ```bash
-  docker compose down
-  ```
+- `backend/.env`: `DATABASE_URL` (your Supabase connection string), `CORS_ORIGINS=http://localhost:3000`
+- `frontend/.env`: `NEXT_PUBLIC_API_BASE_URL=http://localhost:8000`
 
-> **Note:** The `--build` flag rebuilds images when Dockerfile or dependency files change. You can omit it on subsequent runs if nothing has changed.
+2. Start the full stack (attached mode, recommended):
+
+```bash
+docker compose -p gatorrank up --build
+```
+
+This runs in your current terminal and streams logs live.
+Press `Ctrl+C` to stop the stack.
+
+3. Daily start (attached, no rebuild):
+
+```bash
+docker compose -p gatorrank up
+```
+
+> **Note:**
+>
+> - Run either service separately (attached):
+>   ```bash
+>   # backend only (attached)
+>   docker compose -p gatorrank up backend
+>   # frontend only (attached)
+>   docker compose -p gatorrank up frontend
+>   ```
+> - Use detached mode for the full stack:
+>   ```bash
+>   # full stack (detached)
+>   docker compose -p gatorrank up -d
+>   # stop detached services
+>   docker compose -p gatorrank down
+>   ```
+
+4. Open the app:
+
+- Frontend: `http://localhost:3000`
+- Backend: `http://localhost:8000`
+- API docs (Swagger UI): `http://localhost:8000/docs`
+
+5. View logs (useful in detached mode):
+
+```bash
+docker compose -p gatorrank logs -f backend
+docker compose -p gatorrank logs -f frontend
+```
+
+6. If you change `backend/.env` or `frontend/.env`, recreate so new env vars are loaded:
+
+```bash
+docker compose -p gatorrank up -d --force-recreate
+```
+
+7. Run multiple repo clones at once (different ports):
+
+```bash
+FRONTEND_PORT=3001 BACKEND_PORT=8001 docker compose -p gatorrank1 up
+FRONTEND_PORT=3002 BACKEND_PORT=8002 docker compose -p gatorrank2 up
+FRONTEND_PORT=3003 BACKEND_PORT=8003 docker compose -p gatorrank3 up
+```
+
+> **Notes:**
+>
+> - The `--build` flag rebuilds images when Dockerfile or dependency files change. You can omit it for normal restarts.
+> - Compose env vars from `env_file` are loaded at container creation time. If `.env` values change, use `--force-recreate` (or remove/recreate the service).
+> - Keep using the same project name (`-p gatorrank`) so all commands target the same containers.
+> - Polling is off by default for speed. If file changes are not detected on your machine, enable polling only when needed:
+>   `WATCHPACK_POLLING=true CHOKIDAR_USEPOLLING=true docker compose -p gatorrank up -d frontend`
+
+**Common issue: backend still uses old `DATABASE_URL` after you edit `backend/.env`**
 
 ### Pre-commit Hooks
 
@@ -181,7 +255,7 @@ GitHub Actions automatically runs `pre-commit run --all-files` on every pull req
 ### Branching Strategy
 
 - `main` - Production-ready code
-- `feature/`* - New features and changes
+- `feature/`\* - New features and changes
 - `fix/*` - Bug fixes
 - `refactor/*` - Code refactoring
 - `hotfix/*` - Urgent production fixes
