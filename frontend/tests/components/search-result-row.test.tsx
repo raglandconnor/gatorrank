@@ -1,6 +1,6 @@
 import { screen } from '@testing-library/react';
 import { describe, expect, test } from 'vitest';
-import { SearchResultRow } from '@/app/projects/search/_components/SearchResultRow';
+import { SearchResultRow } from '@/components/projects/SearchResultRow';
 import { renderWithChakra } from '@/tests/utils/render';
 
 describe('SearchResultRow', () => {

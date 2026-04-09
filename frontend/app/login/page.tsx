@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { GatorRankLogo } from '@/components/layout/GatorRankLogo';
 import { toast } from '@/lib/ui/toast';
 import { Flex, Heading, Stack, Text } from '@chakra-ui/react';
-import { LoginFormPanel } from './_components/LoginFormPanel';
+import { LoginFormPanel } from '@/components/auth/LoginFormPanel';
 
 export default function LoginPage() {
   const router = useRouter();

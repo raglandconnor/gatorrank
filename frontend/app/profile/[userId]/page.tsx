@@ -21,9 +21,9 @@ import {
   LuGlobe,
 } from 'react-icons/lu';
 import { Navbar } from '@/components/layout/Navbar';
-import { AcademicInfoCard } from '@/app/profile/[userId]/_components/AcademicInfoCard';
+import { AcademicInfoCard } from '@/components/profile/AcademicInfoCard';
 import { RoleBadge } from '@/components/ui/rolebadge';
-import { ProfileUserProjects } from '@/app/profile/[userId]/_components/ProfileUserProjects';
+import { ProfileUserProjects } from '@/components/profile/ProfileUserProjects';
 import { useAuth } from '@/components/domain/AuthProvider';
 import { getUserPublic } from '@/lib/api/users';
 import { isUuid } from '@/lib/profileSlug';

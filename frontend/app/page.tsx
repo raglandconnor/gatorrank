@@ -1,7 +1,7 @@
 'use client';
 import { Box, Container, VStack } from '@chakra-ui/react';
 import { Navbar } from '@/components/layout/Navbar';
-import { ProjectSection } from '@/app/_components/ProjectSection';
+import { ProjectSection } from '@/components/projects/ProjectSection';
 import {
   topOverallProjects,
   trendingThisMonthProjects,

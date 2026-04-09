@@ -22,7 +22,7 @@ import {
 } from 'react-icons/lu';
 import { Navbar } from '@/components/layout/Navbar';
 import { useAuth } from '@/components/domain/AuthProvider';
-import { UpvoteBox } from './_components/UpvoteBox';
+import { UpvoteBox } from '@/components/projects/UpvoteBox';
 import { useProjectDetail } from './_hooks/useProjectDetail';
 import { getYouTubeEmbedUrl } from './_utils/youtube';
 

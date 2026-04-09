@@ -2,7 +2,7 @@
 
 import { GatorRankLogo } from '@/components/layout/GatorRankLogo';
 import { Flex, Heading, Stack, Text } from '@chakra-ui/react';
-import { SignupFormPanel } from './_components/SignupFormPanel';
+import { SignupFormPanel } from '@/components/auth/SignupFormPanel';
 
 export default function SignupPage() {
   return (

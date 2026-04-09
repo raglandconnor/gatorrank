@@ -14,8 +14,8 @@ import {
   loadExtendedProfile,
   saveExtendedProfile,
 } from '../_utils/profileShared';
-import { ProfileEditHeader } from './_components/ProfileEditHeader';
-import { ProfileEditColumns } from './_components/ProfileEditColumns';
+import { ProfileEditHeader } from '@/components/profile/ProfileEditHeader';
+import { ProfileEditColumns } from '@/components/profile/ProfileEditColumns';
 
 const inputBase: Record<string, unknown> = {
   border: '1px solid',
