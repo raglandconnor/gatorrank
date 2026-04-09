@@ -23,8 +23,8 @@ import {
 import { Navbar } from '@/components/layout/Navbar';
 import { useAuth } from '@/components/domain/AuthProvider';
 import { UpvoteBox } from '@/components/projects/UpvoteBox';
-import { useProjectDetail } from './_hooks/useProjectDetail';
-import { getYouTubeEmbedUrl } from './_utils/youtube';
+import { useProjectDetail } from '@/hooks/useProjectDetail';
+import { getYouTubeEmbedUrl } from '@/lib/projects/youtube';
 
 export default function ProjectDetailPage() {
   const params = useParams();

@@ -13,7 +13,7 @@ import {
   getInitials,
   loadExtendedProfile,
   saveExtendedProfile,
-} from '../_utils/profileShared';
+} from '@/lib/profile/profileShared';
 import { ProfileEditHeader } from '@/components/profile/ProfileEditHeader';
 import { ProfileEditColumns } from '@/components/profile/ProfileEditColumns';
 
