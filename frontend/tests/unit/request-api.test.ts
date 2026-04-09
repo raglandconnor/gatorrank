@@ -128,6 +128,29 @@ describe('request api core', () => {
     ).resolves.toBeUndefined();
   });
 
+  test('requestVoid throws typed error with fallback resolver message', async () => {
+    fetchWithAuthMock.mockResolvedValue(
+      new Response(null, {
+        status: 409,
+        statusText: '',
+      }),
+    );
+
+    await expect(
+      requestVoid('/api/v1/projects/p1/members/u1', {
+        auth: 'required',
+        method: 'DELETE',
+        fallbackErrorMessage: (res) =>
+          res.status === 409
+            ? 'Conflict while removing member.'
+            : 'Request failed.',
+      }),
+    ).rejects.toMatchObject({
+      message: 'Conflict while removing member.',
+      status: 409,
+    });
+  });
+
   test('throws HttpError with parsed backend message and status', async () => {
     fetchWithAuthMock.mockResolvedValue(
       new Response(JSON.stringify({ detail: 'Invalid cursor' }), {
@@ -160,6 +183,28 @@ describe('request api core', () => {
     ).rejects.toMatchObject({
       message: 'Search request failed.',
       status: 500,
+    });
+  });
+
+  test('uses fallbackErrorMessage resolver when provided as a function', async () => {
+    fetchWithAuthMock.mockResolvedValue(
+      new Response(null, {
+        status: 422,
+        statusText: '',
+      }),
+    );
+
+    await expect(
+      requestJson('/api/v1/projects/search', {
+        auth: 'required',
+        fallbackErrorMessage: (res) =>
+          res.status === 422
+            ? 'Search parameters are invalid.'
+            : 'Search request failed.',
+      }),
+    ).rejects.toMatchObject({
+      message: 'Search parameters are invalid.',
+      status: 422,
     });
   });
 });
