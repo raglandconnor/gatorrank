@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { Box, SimpleGrid, Spinner, VStack, Text } from '@chakra-ui/react';
-import { Navbar } from '@/components/Navbar';
+import { Navbar } from '@/components/layout/Navbar';
 import { ProjectGridCard } from '@/components/projects/ProjectGridCard';
 import type { Project } from '@/types/project';
 import { listProjectsPublic } from '@/lib/api/projects';

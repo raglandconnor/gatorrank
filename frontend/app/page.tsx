@@ -1,8 +1,8 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { Box, Container, Spinner, Text, VStack } from '@chakra-ui/react';
-import { Navbar } from '@/components/Navbar';
-import { ProjectSection } from '@/components/ProjectSection';
+import { Navbar } from '@/components/layout/Navbar';
+import { ProjectSection } from '@/components/projects/ProjectSection';
 import type { Project } from '@/types/project';
 import { listProjectsPublic } from '@/lib/api/projects';
 import { getMonthRange } from '@/lib/projects/dateFilters';
