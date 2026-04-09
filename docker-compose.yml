@@ -3,7 +3,7 @@ services:
     build:
       context: ./backend
     ports:
-      - "8000:8000"
+      - "${BACKEND_PORT:-8000}:8000"
     env_file:
       - ./backend/.env
     volumes:
@@ -14,15 +14,19 @@ services:
     build:
       context: ./frontend
     ports:
-      - "3000:3000"
+      - "${FRONTEND_PORT:-3000}:3000"
     env_file:
       - ./frontend/.env
     environment:
-      WATCHPACK_POLLING: "true"
-      CHOKIDAR_USEPOLLING: "true"
-    command: ["bun", "run", "dev:webpack"]
+      WATCHPACK_POLLING: "${WATCHPACK_POLLING:-false}"
+      CHOKIDAR_USEPOLLING: "${CHOKIDAR_USEPOLLING:-false}"
+    command: ["bun", "run", "dev"]
     volumes:
       - ./frontend:/app
       - /app/node_modules
+      - frontend_next:/app/.next
     depends_on:
       - backend
+
+volumes:
+  frontend_next:
