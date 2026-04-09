@@ -47,7 +47,7 @@ export function buildHttpError(message: string, status: number): HttpError {
 }
 
 export function buildQueryString(
-  query: Record<string, string | number | undefined>,
+  query: Record<string, string | number | boolean | undefined>,
 ): string {
   const params = new URLSearchParams();
 
