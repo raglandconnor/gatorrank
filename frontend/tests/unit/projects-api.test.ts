@@ -1,15 +1,14 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { getProjectByIdForViewer } from '@/lib/api/projects';
 
-const { fetchWithAuthMock } = vi.hoisted(() => ({
-  fetchWithAuthMock: vi.fn(),
+const { requestJsonMock } = vi.hoisted(() => ({
+  requestJsonMock: vi.fn(),
 }));
 
-vi.mock('@/lib/api/fetchWithAuth', () => ({
-  fetchWithAuth: fetchWithAuthMock,
+vi.mock('@/lib/api/request', () => ({
+  requestJson: requestJsonMock,
+  requestVoid: vi.fn(),
 }));
-
-const originalEnv = process.env.NEXT_PUBLIC_API_BASE_URL;
 
 const PROJECT_DETAIL_FIXTURE = {
   id: 'p1',
@@ -36,47 +35,42 @@ const PROJECT_DETAIL_FIXTURE = {
   tech_stack: [],
   members: [],
 };
+const originalEnv = process.env.NEXT_PUBLIC_API_BASE_URL;
 
 describe('getProjectByIdForViewer', () => {
   beforeEach(() => {
     process.env.NEXT_PUBLIC_API_BASE_URL = 'http://localhost:8000';
     vi.restoreAllMocks();
-    fetchWithAuthMock.mockReset();
+    requestJsonMock.mockReset();
+    requestJsonMock.mockResolvedValue(PROJECT_DETAIL_FIXTURE);
   });
 
   afterEach(() => {
     process.env.NEXT_PUBLIC_API_BASE_URL = originalEnv;
   });
 
-  test('uses anonymous fetch when access token is missing', async () => {
-    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-      new Response(JSON.stringify(PROJECT_DETAIL_FIXTURE), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-      }),
-    );
-
+  test('uses anonymous request when access token is missing', async () => {
     const result = await getProjectByIdForViewer('p1', null);
 
-    expect(fetchWithAuthMock).not.toHaveBeenCalled();
-    expect(fetchMock).toHaveBeenCalledWith(
+    expect(requestJsonMock).toHaveBeenCalledWith(
       'http://localhost:8000/api/v1/projects/p1',
-      expect.objectContaining({ method: 'GET', cache: 'no-store' }),
+      {
+        auth: 'none',
+        method: 'GET',
+        cache: 'no-store',
+        fallbackErrorMessage: 'Failed to fetch project',
+      },
     );
     expect(result.id).toBe('p1');
   });
 
-  test('uses refresh-aware fetchWithAuth when access token exists', async () => {
-    fetchWithAuthMock.mockResolvedValue(
-      new Response(JSON.stringify(PROJECT_DETAIL_FIXTURE), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-      }),
-    );
-
+  test('uses refresh-aware request path when access token exists', async () => {
     const result = await getProjectByIdForViewer('p1', 'token-1');
 
-    expect(fetchWithAuthMock).toHaveBeenCalledWith('/api/v1/projects/p1');
+    expect(requestJsonMock).toHaveBeenCalledWith('/api/v1/projects/p1', {
+      auth: 'required',
+      fallbackErrorMessage: 'Failed to fetch project',
+    });
     expect(result.slug).toBe('demo-project');
   });
 });

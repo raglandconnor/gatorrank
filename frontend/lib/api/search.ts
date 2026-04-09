@@ -1,10 +1,6 @@
 import { apiUrl } from '@/lib/api/client';
-import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
-import {
-  buildHttpError,
-  buildQueryString,
-  parseApiErrorMessage,
-} from '@/lib/api/http';
+import { buildQueryString } from '@/lib/api/http';
+import { requestJson } from '@/lib/api/request';
 import type {
   ProjectSearchParams,
   ProjectSearchResponse,
@@ -62,23 +58,26 @@ export async function searchProjects(
   const query = buildSearchQuery(request);
 
   const path = `/api/v1/projects/search${query}`;
-  const res =
-    accessToken == null
-      ? await fetch(apiUrl(path), { method: 'GET', cache: 'no-store' })
-      : await fetchWithAuth(path, {
-          method: 'GET',
-          cache: 'no-store',
-          headers: { Authorization: `Bearer ${accessToken}` },
-        });
-
-  if (!res.ok) {
-    const fallback =
-      res.status === 422
-        ? 'Search parameters are invalid.'
-        : 'Search request failed.';
-    const message = await parseApiErrorMessage(res, fallback);
-    throw buildHttpError(message, res.status);
+  if (accessToken == null) {
+    return requestJson<ProjectSearchResponse>(apiUrl(path), {
+      auth: 'none',
+      method: 'GET',
+      cache: 'no-store',
+      fallbackErrorMessage: (res) =>
+        res.status === 422
+          ? 'Search parameters are invalid.'
+          : 'Search request failed.',
+    });
   }
 
-  return (await res.json()) as ProjectSearchResponse;
+  return requestJson<ProjectSearchResponse>(path, {
+    auth: 'required',
+    method: 'GET',
+    cache: 'no-store',
+    headers: { Authorization: `Bearer ${accessToken}` },
+    fallbackErrorMessage: (res) =>
+      res.status === 422
+        ? 'Search parameters are invalid.'
+        : 'Search request failed.',
+  });
 }
