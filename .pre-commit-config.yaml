@@ -33,7 +33,7 @@ repos:
         pass_filenames: false
       - id: prettier
         name: prettier
-        entry: sh -c 'cd frontend && bunx prettier --write "**/*.{ts,tsx,js,jsx,css,md,json,yml,yaml}"'
+        entry: sh -c 'cd frontend && bunx prettier --write "**/*.{ts,tsx,mts,js,jsx,css,md,json,yml,yaml}"'
         language: system
         pass_filenames: false
-        files: ^frontend/.*\.(ts|tsx|js|jsx|css|md|json|yml|yaml)$
+        files: ^frontend/.*\.(ts|tsx|mts|js|jsx|css|md|json|yml|yaml)$
