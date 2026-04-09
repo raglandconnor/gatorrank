@@ -56,6 +56,27 @@ describe('request api core', () => {
     expect(result.ok).toBe(true);
   });
 
+  test('keeps absolute URLs on auth=none and bypasses fetchWithAuth', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+
+    await requestJson<{ ok: boolean }>('https://api.example.com/projects', {
+      auth: 'none',
+      query: { cursor: 'c2' },
+      method: 'GET',
+    });
+
+    expect(fetchWithAuthMock).not.toHaveBeenCalled();
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://api.example.com/projects?cursor=c2',
+      expect.objectContaining({ method: 'GET' }),
+    );
+  });
+
   test('routes auth=required through fetchWithAuth and normalizes object body', async () => {
     fetchWithAuthMock.mockResolvedValue(
       new Response(JSON.stringify({ created: true }), {
