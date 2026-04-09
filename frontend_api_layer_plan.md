@@ -43,7 +43,7 @@ Build a scalable, side-effect-light API request layer for the frontend that matc
   - `auth?: 'none' | 'required' | 'optional'` (default `none`)
   - `signal?: AbortSignal`
   - `cache?: RequestCache`
-  - `fallbackErrorMessage?: string`
+  - `fallbackErrorMessage?: string | ((res: Response) => string)`
 - Body handling:
   - If `body` is a plain object, JSON-stringify and set `Content-Type: application/json` when absent.
   - If `body` is already `BodyInit` (`string`, `FormData`, etc.), pass through unchanged.
@@ -53,7 +53,7 @@ Build a scalable, side-effect-light API request layer for the frontend that matc
   - `optional`: use authenticated path only when an access token exists; otherwise anonymous fetch.
 - Error behavior:
   - Non-OK responses throw `HttpError` with `status` and parsed backend detail message.
-  - Keep backend detail precedence; use `fallbackErrorMessage` only when detail/statusText is unavailable.
+  - Keep backend detail precedence; use `fallbackErrorMessage` (static or status-aware) only when detail/statusText is unavailable.
 
 ## Stage 1: Build Shared Request Core
 ### Scope

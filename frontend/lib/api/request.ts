@@ -14,7 +14,7 @@ export interface RequestOptions extends Omit<RequestInit, 'body' | 'headers'> {
   headers?: HeadersInit;
   body?: BodyInit | object | null;
   query?: Record<string, string | number | boolean | undefined>;
-  fallbackErrorMessage?: string;
+  fallbackErrorMessage?: string | ((res: Response) => string);
 }
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
@@ -91,13 +91,18 @@ async function executeRequest(
 
 async function ensureOkResponse(
   res: Response,
-  fallbackErrorMessage?: string,
+  fallbackErrorMessage?: string | ((res: Response) => string),
 ): Promise<Response> {
   if (res.ok) return res;
 
+  const fallbackMessage =
+    typeof fallbackErrorMessage === 'function'
+      ? fallbackErrorMessage(res)
+      : fallbackErrorMessage;
+
   const message = await parseApiErrorMessage(
     res,
-    fallbackErrorMessage ?? 'Request failed',
+    fallbackMessage ?? 'Request failed',
   );
   throw buildHttpError(message, res.status);
 }

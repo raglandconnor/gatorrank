@@ -1,10 +1,6 @@
 import { apiUrl } from '@/lib/api/client';
-import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
-import {
-  buildHttpError,
-  buildQueryString,
-  parseApiErrorMessage,
-} from '@/lib/api/http';
+import { buildQueryString } from '@/lib/api/http';
+import { requestJson, requestVoid } from '@/lib/api/request';
 import type {
   AddProjectMemberInput,
   ProjectCreateInput,
@@ -16,18 +12,6 @@ import type {
   UpdateProjectMemberInput,
 } from '@/lib/api/types/project';
 
-async function parseProjectResponse<T>(
-  res: Response,
-  fallback: string,
-): Promise<T> {
-  if (!res.ok) {
-    const message = await parseApiErrorMessage(res, fallback);
-    throw buildHttpError(message, res.status);
-  }
-
-  return res.json() as Promise<T>;
-}
-
 export async function listProjects(
   query: ProjectListQuery = {},
 ): Promise<ProjectListResponse> {
@@ -38,16 +22,17 @@ export async function listProjects(
     published_from: query.published_from,
     published_to: query.published_to,
   });
-  const res = await fetchWithAuth(`/api/v1/projects${qs}`);
-  return parseProjectResponse<ProjectListResponse>(
-    res,
-    'Failed to fetch projects',
-  );
+  return requestJson<ProjectListResponse>(`/api/v1/projects${qs}`, {
+    auth: 'required',
+    fallbackErrorMessage: 'Failed to fetch projects',
+  });
 }
 
 export async function getProject(projectId: string): Promise<ProjectDetail> {
-  const res = await fetchWithAuth(`/api/v1/projects/${projectId}`);
-  return parseProjectResponse<ProjectDetail>(res, 'Failed to fetch project');
+  return requestJson<ProjectDetail>(`/api/v1/projects/${projectId}`, {
+    auth: 'required',
+    fallbackErrorMessage: 'Failed to fetch project',
+  });
 }
 
 export async function getProjectById(
@@ -67,82 +52,86 @@ export async function getProjectByIdForViewer(
   accessToken?: string | null,
 ): Promise<ProjectDetail> {
   if (!accessToken) {
-    const res = await fetch(apiUrl(`/api/v1/projects/${projectId}`), {
+    return requestJson<ProjectDetail>(apiUrl(`/api/v1/projects/${projectId}`), {
+      auth: 'none',
       method: 'GET',
       cache: 'no-store',
+      fallbackErrorMessage: 'Failed to fetch project',
     });
-    return parseProjectResponse<ProjectDetail>(res, 'Failed to fetch project');
   }
   return getProject(projectId);
 }
 
 export async function getProjectBySlug(slug: string): Promise<ProjectDetail> {
-  const res = await fetchWithAuth(
+  return requestJson<ProjectDetail>(
     `/api/v1/projects/slug/${encodeURIComponent(slug)}`,
+    {
+      auth: 'required',
+      fallbackErrorMessage: 'Failed to fetch project',
+    },
   );
-  return parseProjectResponse<ProjectDetail>(res, 'Failed to fetch project');
 }
 
 export async function createProject(
   payload: ProjectCreateInput,
 ): Promise<ProjectDetail> {
-  const res = await fetchWithAuth('/api/v1/projects', {
+  return requestJson<ProjectDetail>('/api/v1/projects', {
+    auth: 'required',
     method: 'POST',
-    body: JSON.stringify(payload),
+    body: payload,
+    fallbackErrorMessage: 'Failed to create project',
   });
-  return parseProjectResponse<ProjectDetail>(res, 'Failed to create project');
 }
 
 export async function updateProject(
   projectId: string,
   payload: ProjectUpdateInput,
 ): Promise<ProjectDetail> {
-  const res = await fetchWithAuth(`/api/v1/projects/${projectId}`, {
+  return requestJson<ProjectDetail>(`/api/v1/projects/${projectId}`, {
+    auth: 'required',
     method: 'PATCH',
-    body: JSON.stringify(payload),
+    body: payload,
+    fallbackErrorMessage: 'Failed to update project',
   });
-  return parseProjectResponse<ProjectDetail>(res, 'Failed to update project');
 }
 
 export async function deleteProject(projectId: string): Promise<void> {
-  const res = await fetchWithAuth(`/api/v1/projects/${projectId}`, {
+  await requestVoid(`/api/v1/projects/${projectId}`, {
+    auth: 'required',
     method: 'DELETE',
+    fallbackErrorMessage: 'Failed to delete project',
   });
-
-  if (!res.ok && res.status !== 204) {
-    const message = await parseApiErrorMessage(res, 'Failed to delete project');
-    throw buildHttpError(message, res.status);
-  }
 }
 
 export async function publishProject(
   projectId: string,
 ): Promise<ProjectDetail> {
-  const res = await fetchWithAuth(`/api/v1/projects/${projectId}/publish`, {
+  return requestJson<ProjectDetail>(`/api/v1/projects/${projectId}/publish`, {
+    auth: 'required',
     method: 'POST',
+    fallbackErrorMessage: 'Failed to publish project',
   });
-  return parseProjectResponse<ProjectDetail>(res, 'Failed to publish project');
 }
 
 export async function unpublishProject(
   projectId: string,
 ): Promise<ProjectDetail> {
-  const res = await fetchWithAuth(`/api/v1/projects/${projectId}/unpublish`, {
+  return requestJson<ProjectDetail>(`/api/v1/projects/${projectId}/unpublish`, {
+    auth: 'required',
     method: 'POST',
+    fallbackErrorMessage: 'Failed to unpublish project',
   });
-  return parseProjectResponse<ProjectDetail>(
-    res,
-    'Failed to unpublish project',
-  );
 }
 
 export async function listProjectMembers(
   projectId: string,
 ): Promise<ProjectMemberInfo[]> {
-  const res = await fetchWithAuth(`/api/v1/projects/${projectId}/members`);
-  return parseProjectResponse<ProjectMemberInfo[]>(
-    res,
-    'Failed to fetch project members',
+  return requestJson<ProjectMemberInfo[]>(
+    `/api/v1/projects/${projectId}/members`,
+    {
+      auth: 'required',
+      fallbackErrorMessage: 'Failed to fetch project members',
+    },
   );
 }
 
@@ -150,13 +139,14 @@ export async function addProjectMember(
   projectId: string,
   payload: AddProjectMemberInput,
 ): Promise<ProjectMemberInfo> {
-  const res = await fetchWithAuth(`/api/v1/projects/${projectId}/members`, {
-    method: 'POST',
-    body: JSON.stringify(payload),
-  });
-  return parseProjectResponse<ProjectMemberInfo>(
-    res,
-    'Failed to add project member',
+  return requestJson<ProjectMemberInfo>(
+    `/api/v1/projects/${projectId}/members`,
+    {
+      auth: 'required',
+      method: 'POST',
+      body: payload,
+      fallbackErrorMessage: 'Failed to add project member',
+    },
   );
 }
 
@@ -165,16 +155,14 @@ export async function updateProjectMember(
   userId: string,
   payload: UpdateProjectMemberInput,
 ): Promise<ProjectMemberInfo> {
-  const res = await fetchWithAuth(
+  return requestJson<ProjectMemberInfo>(
     `/api/v1/projects/${projectId}/members/${userId}`,
     {
+      auth: 'required',
       method: 'PATCH',
-      body: JSON.stringify(payload),
+      body: payload,
+      fallbackErrorMessage: 'Failed to update project member',
     },
-  );
-  return parseProjectResponse<ProjectMemberInfo>(
-    res,
-    'Failed to update project member',
   );
 }
 
@@ -182,56 +170,35 @@ export async function removeProjectMember(
   projectId: string,
   userId: string,
 ): Promise<void> {
-  const res = await fetchWithAuth(
-    `/api/v1/projects/${projectId}/members/${userId}`,
-    {
-      method: 'DELETE',
-    },
-  );
-
-  if (!res.ok && res.status !== 204) {
-    const message = await parseApiErrorMessage(
-      res,
-      'Failed to remove project member',
-    );
-    throw buildHttpError(message, res.status);
-  }
+  await requestVoid(`/api/v1/projects/${projectId}/members/${userId}`, {
+    auth: 'required',
+    method: 'DELETE',
+    fallbackErrorMessage: 'Failed to remove project member',
+  });
 }
 
 export async function leaveProject(projectId: string): Promise<void> {
-  const res = await fetchWithAuth(`/api/v1/projects/${projectId}/leave`, {
+  await requestVoid(`/api/v1/projects/${projectId}/leave`, {
+    auth: 'required',
     method: 'POST',
+    fallbackErrorMessage: 'Failed to leave project',
   });
-
-  if (!res.ok && res.status !== 204) {
-    const message = await parseApiErrorMessage(res, 'Failed to leave project');
-    throw buildHttpError(message, res.status);
-  }
 }
 
 export async function addProjectVote(projectId: string): Promise<void> {
-  const res = await fetchWithAuth(`/api/v1/projects/${projectId}/vote`, {
+  await requestVoid(`/api/v1/projects/${projectId}/vote`, {
+    auth: 'required',
     method: 'POST',
+    fallbackErrorMessage: 'Failed to vote for project',
   });
-
-  if (!res.ok && res.status !== 204) {
-    const message = await parseApiErrorMessage(
-      res,
-      'Failed to vote for project',
-    );
-    throw buildHttpError(message, res.status);
-  }
 }
 
 export async function removeProjectVote(projectId: string): Promise<void> {
-  const res = await fetchWithAuth(`/api/v1/projects/${projectId}/vote`, {
+  await requestVoid(`/api/v1/projects/${projectId}/vote`, {
+    auth: 'required',
     method: 'DELETE',
+    fallbackErrorMessage: 'Failed to remove vote',
   });
-
-  if (!res.ok && res.status !== 204) {
-    const message = await parseApiErrorMessage(res, 'Failed to remove vote');
-    throw buildHttpError(message, res.status);
-  }
 }
 
 export { apiUrl };
