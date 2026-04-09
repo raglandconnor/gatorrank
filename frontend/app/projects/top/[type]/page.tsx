@@ -17,16 +17,34 @@ type TopProjectsType =
   | 'trending-this-month'
   | 'trending-last-month';
 
+const TOP_PROJECTS_PAGE_SIZE = 50;
+const TOP_PROJECTS_MAX_PAGES = 20;
+
 async function listAllProjects(query: ProjectListQuery): Promise<Project[]> {
   const items: Project[] = [];
   let cursor: string | undefined;
+  let hasMore = false;
 
   // Guard to avoid runaway pagination in case of malformed cursors.
-  for (let i = 0; i < 20; i += 1) {
-    const res = await listProjectsPublic({ ...query, limit: 50, cursor });
+  for (let i = 0; i < TOP_PROJECTS_MAX_PAGES; i += 1) {
+    const res = await listProjectsPublic({
+      ...query,
+      limit: TOP_PROJECTS_PAGE_SIZE,
+      cursor,
+    });
     items.push(...mapProjectListItemsToCardProjects(res.items));
-    if (!res.next_cursor) break;
+    if (!res.next_cursor) {
+      hasMore = false;
+      break;
+    }
+    hasMore = true;
     cursor = res.next_cursor;
+  }
+
+  if (hasMore) {
+    throw new Error(
+      `Too many projects to load at once (>${TOP_PROJECTS_MAX_PAGES * TOP_PROJECTS_PAGE_SIZE}). Please narrow the filter or use pagination.`,
+    );
   }
 
   return items;
