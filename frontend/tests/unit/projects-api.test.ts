@@ -91,6 +91,17 @@ describe('listProjectsPublic', () => {
       fallbackErrorMessage: 'Failed to fetch projects',
     });
   });
+
+  test('propagates typed errors from requestJson', async () => {
+    requestJsonMock.mockRejectedValue(
+      Object.assign(new Error('Projects unavailable'), { status: 503 }),
+    );
+
+    await expect(listProjectsPublic()).rejects.toMatchObject({
+      message: 'Projects unavailable',
+      status: 503,
+    });
+  });
 });
 
 describe('getProjectByIdForViewer', () => {
