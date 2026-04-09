@@ -172,8 +172,8 @@ export default function TopProjectsPage() {
                   key={project.id}
                   initial={{ opacity: 0, y: 16 }}
                   whileInView={{ opacity: 1, y: 0 }}
-                  viewport={{ once: true }}
-                  transition={{ duration: 0.35, delay: idx * 0.07 }}
+                  viewport={{ once: true, margin: '0px 0px -12% 0px' }}
+                  transition={{ duration: 0.26, delay: (idx % 6) * 0.03 }}
                   style={{ width: '100%', height: '100%' }}
                 >
                   <ProjectGridCard project={project} rank={idx + 1} />
