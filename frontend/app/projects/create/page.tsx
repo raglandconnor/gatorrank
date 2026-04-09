@@ -9,7 +9,7 @@ import {
   ProjectForm,
   ProjectFormValues,
   ProjectPayload,
-} from '@/app/projects/_components/ProjectForm';
+} from '@/components/projects/ProjectForm';
 import { toast } from '@/lib/ui/toast';
 
 export default function CreateProjectPage() {

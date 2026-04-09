@@ -13,7 +13,7 @@ import {
   VStack,
 } from '@chakra-ui/react';
 import { Navbar } from '@/components/layout/Navbar';
-import { SearchResultRow } from '@/app/projects/search/_components/SearchResultRow';
+import { SearchResultRow } from '@/components/projects/SearchResultRow';
 import { useAuth } from '@/components/domain/AuthProvider';
 import { searchProjects } from '@/lib/api/search';
 import type { SearchProjectListItem, SearchSort } from '@/lib/api/types/search';

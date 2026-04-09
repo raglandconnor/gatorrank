@@ -5,7 +5,7 @@ import { useParams } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { Box, SimpleGrid, VStack, Text } from '@chakra-ui/react';
 import { Navbar } from '@/components/layout/Navbar';
-import { ProjectGridCard } from '@/app/projects/top/[type]/_components/ProjectGridCard';
+import { ProjectGridCard } from '@/components/projects/ProjectGridCard';
 import {
   topOverallProjects,
   trendingThisMonthProjects,
