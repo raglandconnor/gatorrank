@@ -30,7 +30,7 @@ async function refreshAccessToken(): Promise<string> {
 /**
  * GET/POST/etc. to `/api/v1/...` with Bearer access token.
  * On 401, tries one refresh via stored refresh_token, then retries once.
- * If still unauthorized, clears session and redirects to /login.
+ * If still unauthorized, clears session and returns the 401 response.
  */
 export async function fetchWithAuth(
   path: string,
@@ -61,9 +61,6 @@ export async function fetchWithAuth(
   const refresh = getStoredRefreshToken();
   if (!refresh) {
     clearAuthSession();
-    if (typeof window !== 'undefined') {
-      window.location.href = '/login';
-    }
     return res;
   }
 
@@ -77,15 +74,9 @@ export async function fetchWithAuth(
     res = await doFetch(access);
     if (res.status === 401) {
       clearAuthSession();
-      if (typeof window !== 'undefined') {
-        window.location.href = '/login';
-      }
     }
   } catch {
     clearAuthSession();
-    if (typeof window !== 'undefined') {
-      window.location.href = '/login';
-    }
   }
 
   return res;
