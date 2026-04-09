@@ -92,6 +92,21 @@ describe('listProjectsPublic', () => {
     });
   });
 
+  test('forwards cursor for paginated public listing', async () => {
+    await listProjectsPublic({
+      sort: 'top',
+      limit: 50,
+      cursor: 'cursor-2',
+    });
+
+    expect(requestJsonMock).toHaveBeenCalledWith(
+      expect.stringContaining('cursor=cursor-2'),
+      expect.objectContaining({
+        auth: 'none',
+      }),
+    );
+  });
+
   test('propagates typed errors from requestJson', async () => {
     requestJsonMock.mockRejectedValue(
       Object.assign(new Error('Projects unavailable'), { status: 503 }),
@@ -136,6 +151,10 @@ describe('getProjectByIdForViewer', () => {
       auth: 'required',
       fallbackErrorMessage: 'Failed to fetch project',
     });
+    expect(requestJsonMock).not.toHaveBeenCalledWith(
+      '/api/v1/projects/p1',
+      expect.objectContaining({ method: 'GET', cache: 'no-store' }),
+    );
     expect(result.slug).toBe('demo-project');
   });
 
