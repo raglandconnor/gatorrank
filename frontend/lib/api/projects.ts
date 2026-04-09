@@ -28,6 +28,28 @@ export async function listProjects(
   });
 }
 
+/**
+ * Public-safe project listing for unauthenticated pages (e.g. Home/Top Projects).
+ * Does not trigger auth refresh/redirect behavior.
+ */
+export async function listProjectsPublic(
+  query: ProjectListQuery = {},
+): Promise<ProjectListResponse> {
+  const qs = buildQueryString({
+    limit: query.limit,
+    cursor: query.cursor,
+    sort: query.sort,
+    published_from: query.published_from,
+    published_to: query.published_to,
+  });
+  return requestJson<ProjectListResponse>(`/api/v1/projects${qs}`, {
+    auth: 'none',
+    method: 'GET',
+    cache: 'no-store',
+    fallbackErrorMessage: 'Failed to fetch projects',
+  });
+}
+
 export async function getProject(projectId: string): Promise<ProjectDetail> {
   return requestJson<ProjectDetail>(`/api/v1/projects/${projectId}`, {
     auth: 'required',
@@ -52,7 +74,7 @@ export async function getProjectByIdForViewer(
   accessToken?: string | null,
 ): Promise<ProjectDetail> {
   if (!accessToken) {
-    return requestJson<ProjectDetail>(apiUrl(`/api/v1/projects/${projectId}`), {
+    return requestJson<ProjectDetail>(`/api/v1/projects/${projectId}`, {
       auth: 'none',
       method: 'GET',
       cache: 'no-store',
