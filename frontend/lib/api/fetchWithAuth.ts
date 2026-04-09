@@ -31,6 +31,9 @@ async function refreshAccessToken(): Promise<string> {
  * GET/POST/etc. to `/api/v1/...` with Bearer access token.
  * On 401, tries one refresh via stored refresh_token, then retries once.
  * If still unauthorized, clears session and returns the 401 response.
+ *
+ * This helper is transport-only and intentionally does not perform navigation.
+ * Route redirects/login UX are handled by higher-level auth/UI layers.
  */
 export async function fetchWithAuth(
   path: string,

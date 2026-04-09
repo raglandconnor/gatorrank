@@ -7,13 +7,27 @@ import {
   parseApiErrorMessage,
 } from '@/lib/api/http';
 
+/**
+ * Shared frontend API request layer.
+ *
+ * Responsibilities:
+ * - normalize URL, query, and request-init handling
+ * - route requests by auth mode (none/required/optional)
+ * - normalize backend errors into typed HttpError values
+ *
+ * Non-responsibilities:
+ * - no UI-side effects such as navigation or toasts
+ */
 export type RequestAuthMode = 'none' | 'required' | 'optional';
 
 export interface RequestOptions extends Omit<RequestInit, 'body' | 'headers'> {
+  /** `none`: anonymous fetch, `required`: refresh-aware auth, `optional`: auth only when token exists. */
   auth?: RequestAuthMode;
   headers?: HeadersInit;
+  /** Plain objects are JSON-stringified; other BodyInit values are passed through. */
   body?: BodyInit | object | null;
   query?: Record<string, string | number | boolean | undefined>;
+  /** Fallback when backend error payload lacks a usable `detail` message. */
   fallbackErrorMessage?: string | ((res: Response) => string);
 }
 
@@ -121,6 +135,7 @@ export async function requestJson<T>(
   return res.json() as Promise<T>;
 }
 
+/** Use for endpoints that are expected to return no response body (for example 204 routes). */
 export async function requestVoid(
   path: string,
   options: RequestOptions = {},
