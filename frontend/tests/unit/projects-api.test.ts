@@ -1,5 +1,10 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
-import { deleteProject, getProjectByIdForViewer } from '@/lib/api/projects';
+import { buildQueryString } from '@/lib/api/http';
+import {
+  deleteProject,
+  getProjectByIdForViewer,
+  listProjectsPublic,
+} from '@/lib/api/projects';
 
 const { requestJsonMock, requestVoidMock } = vi.hoisted(() => ({
   requestJsonMock: vi.fn(),
@@ -36,11 +41,60 @@ const PROJECT_DETAIL_FIXTURE = {
   tech_stack: [],
   members: [],
 };
-const originalEnv = process.env.NEXT_PUBLIC_API_BASE_URL;
+
+const LIST_RESPONSE_FIXTURE = {
+  items: [],
+  next_cursor: null as string | null,
+};
+
+describe('listProjectsPublic', () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    requestJsonMock.mockReset();
+    requestVoidMock.mockReset();
+    requestJsonMock.mockResolvedValue(LIST_RESPONSE_FIXTURE);
+  });
+
+  test('uses anonymous request layer path with no auth refresh behavior', async () => {
+    const result = await listProjectsPublic();
+
+    expect(requestJsonMock).toHaveBeenCalledWith('/api/v1/projects', {
+      auth: 'none',
+      method: 'GET',
+      cache: 'no-store',
+      fallbackErrorMessage: 'Failed to fetch projects',
+    });
+    expect(result).toEqual(LIST_RESPONSE_FIXTURE);
+  });
+
+  test('appends query string from the same shape as authenticated listProjects', async () => {
+    const query = {
+      sort: 'top' as const,
+      limit: 5,
+      published_from: '2026-04-01',
+      published_to: '2026-04-30',
+    };
+    const qs = buildQueryString({
+      limit: query.limit,
+      cursor: undefined,
+      sort: query.sort,
+      published_from: query.published_from,
+      published_to: query.published_to,
+    });
+
+    await listProjectsPublic(query);
+
+    expect(requestJsonMock).toHaveBeenCalledWith(`/api/v1/projects${qs}`, {
+      auth: 'none',
+      method: 'GET',
+      cache: 'no-store',
+      fallbackErrorMessage: 'Failed to fetch projects',
+    });
+  });
+});
 
 describe('getProjectByIdForViewer', () => {
   beforeEach(() => {
-    process.env.NEXT_PUBLIC_API_BASE_URL = 'http://localhost:8000';
     vi.restoreAllMocks();
     requestJsonMock.mockReset();
     requestVoidMock.mockReset();
@@ -49,25 +103,22 @@ describe('getProjectByIdForViewer', () => {
   });
 
   afterEach(() => {
-    process.env.NEXT_PUBLIC_API_BASE_URL = originalEnv;
+    vi.clearAllMocks();
   });
 
   test('uses anonymous request when access token is missing', async () => {
     const result = await getProjectByIdForViewer('p1', null);
 
-    expect(requestJsonMock).toHaveBeenCalledWith(
-      'http://localhost:8000/api/v1/projects/p1',
-      {
-        auth: 'none',
-        method: 'GET',
-        cache: 'no-store',
-        fallbackErrorMessage: 'Failed to fetch project',
-      },
-    );
+    expect(requestJsonMock).toHaveBeenCalledWith('/api/v1/projects/p1', {
+      auth: 'none',
+      method: 'GET',
+      cache: 'no-store',
+      fallbackErrorMessage: 'Failed to fetch project',
+    });
     expect(result.id).toBe('p1');
   });
 
-  test('uses refresh-aware request path when access token exists', async () => {
+  test('uses required-auth request path when access token exists', async () => {
     const result = await getProjectByIdForViewer('p1', 'token-1');
 
     expect(requestJsonMock).toHaveBeenCalledWith('/api/v1/projects/p1', {
