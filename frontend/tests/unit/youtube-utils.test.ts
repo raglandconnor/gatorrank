@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { getYouTubeEmbedUrl } from '@/app/projects/[projectId]/_utils/youtube';
+import { getYouTubeEmbedUrl } from '@/lib/projects/youtube';
 
 describe('getYouTubeEmbedUrl', () => {
   test('parses youtu.be links', () => {

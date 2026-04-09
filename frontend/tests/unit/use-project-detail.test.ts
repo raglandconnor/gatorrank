@@ -1,6 +1,6 @@
 import { describe, expect, test, vi, beforeEach } from 'vitest';
 import { renderHook, waitFor } from '@testing-library/react';
-import { useProjectDetail } from '@/app/projects/[projectId]/_hooks/useProjectDetail';
+import { useProjectDetail } from '@/hooks/useProjectDetail';
 
 const { getProjectByIdForViewerMock } = vi.hoisted(() => ({
   getProjectByIdForViewerMock: vi.fn(),

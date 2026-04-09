@@ -33,7 +33,7 @@ import {
   getInitials,
   loadExtendedProfile,
   type ExtendedProfile,
-} from './_utils/profileShared';
+} from '@/lib/profile/profileShared';
 
 function SocialLink({
   href,
