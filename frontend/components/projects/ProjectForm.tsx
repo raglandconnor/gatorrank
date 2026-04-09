@@ -317,7 +317,8 @@ export function ProjectForm({
       nextErrors.demoVideoUrl;
     if (firstError) {
       toast.error({
-        title: 'Validation error',
+        title:
+          mode === 'create' ? 'Validation error' : 'Update validation error',
         description: firstError,
       });
       return;
