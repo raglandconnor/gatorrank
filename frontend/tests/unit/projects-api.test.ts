@@ -1,19 +1,20 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { buildQueryString } from '@/lib/api/http';
 import {
+  deleteProject,
   getProjectByIdForViewer,
   listProjectsPublic,
 } from '@/lib/api/projects';
 
-const { fetchWithAuthMock } = vi.hoisted(() => ({
-  fetchWithAuthMock: vi.fn(),
+const { requestJsonMock, requestVoidMock } = vi.hoisted(() => ({
+  requestJsonMock: vi.fn(),
+  requestVoidMock: vi.fn(),
 }));
 
-vi.mock('@/lib/api/fetchWithAuth', () => ({
-  fetchWithAuth: fetchWithAuthMock,
+vi.mock('@/lib/api/request', () => ({
+  requestJson: requestJsonMock,
+  requestVoid: requestVoidMock,
 }));
-
-const originalEnv = process.env.NEXT_PUBLIC_API_BASE_URL;
 
 const PROJECT_DETAIL_FIXTURE = {
   id: 'p1',
@@ -48,43 +49,25 @@ const LIST_RESPONSE_FIXTURE = {
 
 describe('listProjectsPublic', () => {
   beforeEach(() => {
-    process.env.NEXT_PUBLIC_API_BASE_URL = 'http://localhost:8000';
     vi.restoreAllMocks();
-    fetchWithAuthMock.mockReset();
+    requestJsonMock.mockReset();
+    requestVoidMock.mockReset();
+    requestJsonMock.mockResolvedValue(LIST_RESPONSE_FIXTURE);
   });
 
-  afterEach(() => {
-    process.env.NEXT_PUBLIC_API_BASE_URL = originalEnv;
-  });
-
-  test('uses plain fetch with absolute apiUrl and never fetchWithAuth', async () => {
-    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-      new Response(JSON.stringify(LIST_RESPONSE_FIXTURE), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-      }),
-    );
-
+  test('uses anonymous request layer path with no auth refresh behavior', async () => {
     const result = await listProjectsPublic();
 
-    expect(fetchWithAuthMock).not.toHaveBeenCalled();
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(fetchMock).toHaveBeenCalledWith(
-      'http://localhost:8000/api/v1/projects',
-      expect.objectContaining({ method: 'GET', cache: 'no-store' }),
-    );
-    expect(result.items).toEqual([]);
-    expect(result.next_cursor).toBeNull();
+    expect(requestJsonMock).toHaveBeenCalledWith('/api/v1/projects', {
+      auth: 'none',
+      method: 'GET',
+      cache: 'no-store',
+      fallbackErrorMessage: 'Failed to fetch projects',
+    });
+    expect(result).toEqual(LIST_RESPONSE_FIXTURE);
   });
 
   test('appends query string from the same shape as authenticated listProjects', async () => {
-    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-      new Response(JSON.stringify(LIST_RESPONSE_FIXTURE), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-      }),
-    );
-
     const query = {
       sort: 'top' as const,
       limit: 5,
@@ -101,54 +84,98 @@ describe('listProjectsPublic', () => {
 
     await listProjectsPublic(query);
 
-    expect(fetchWithAuthMock).not.toHaveBeenCalled();
-    expect(fetchMock).toHaveBeenCalledWith(
-      `http://localhost:8000/api/v1/projects${qs}`,
-      expect.objectContaining({ method: 'GET', cache: 'no-store' }),
+    expect(requestJsonMock).toHaveBeenCalledWith(`/api/v1/projects${qs}`, {
+      auth: 'none',
+      method: 'GET',
+      cache: 'no-store',
+      fallbackErrorMessage: 'Failed to fetch projects',
+    });
+  });
+
+  test('forwards cursor for paginated public listing', async () => {
+    await listProjectsPublic({
+      sort: 'top',
+      limit: 50,
+      cursor: 'cursor-2',
+    });
+
+    expect(requestJsonMock).toHaveBeenCalledWith(
+      expect.stringContaining('cursor=cursor-2'),
+      expect.objectContaining({
+        auth: 'none',
+      }),
     );
+  });
+
+  test('propagates typed errors from requestJson', async () => {
+    requestJsonMock.mockRejectedValue(
+      Object.assign(new Error('Projects unavailable'), { status: 503 }),
+    );
+
+    await expect(listProjectsPublic()).rejects.toMatchObject({
+      message: 'Projects unavailable',
+      status: 503,
+    });
   });
 });
 
 describe('getProjectByIdForViewer', () => {
   beforeEach(() => {
-    process.env.NEXT_PUBLIC_API_BASE_URL = 'http://localhost:8000';
     vi.restoreAllMocks();
-    fetchWithAuthMock.mockReset();
+    requestJsonMock.mockReset();
+    requestVoidMock.mockReset();
+    requestJsonMock.mockResolvedValue(PROJECT_DETAIL_FIXTURE);
+    requestVoidMock.mockResolvedValue(undefined);
   });
 
   afterEach(() => {
-    process.env.NEXT_PUBLIC_API_BASE_URL = originalEnv;
+    vi.clearAllMocks();
   });
 
-  test('uses anonymous fetch when access token is missing', async () => {
-    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-      new Response(JSON.stringify(PROJECT_DETAIL_FIXTURE), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-      }),
-    );
-
+  test('uses anonymous request when access token is missing', async () => {
     const result = await getProjectByIdForViewer('p1', null);
 
-    expect(fetchWithAuthMock).not.toHaveBeenCalled();
-    expect(fetchMock).toHaveBeenCalledWith(
-      'http://localhost:8000/api/v1/projects/p1',
-      expect.objectContaining({ method: 'GET', cache: 'no-store' }),
-    );
+    expect(requestJsonMock).toHaveBeenCalledWith('/api/v1/projects/p1', {
+      auth: 'none',
+      method: 'GET',
+      cache: 'no-store',
+      fallbackErrorMessage: 'Failed to fetch project',
+    });
     expect(result.id).toBe('p1');
   });
 
-  test('uses refresh-aware fetchWithAuth when access token exists', async () => {
-    fetchWithAuthMock.mockResolvedValue(
-      new Response(JSON.stringify(PROJECT_DETAIL_FIXTURE), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-      }),
-    );
-
+  test('uses required-auth request path when access token exists', async () => {
     const result = await getProjectByIdForViewer('p1', 'token-1');
 
-    expect(fetchWithAuthMock).toHaveBeenCalledWith('/api/v1/projects/p1');
+    expect(requestJsonMock).toHaveBeenCalledWith('/api/v1/projects/p1', {
+      auth: 'required',
+      fallbackErrorMessage: 'Failed to fetch project',
+    });
+    expect(requestJsonMock).not.toHaveBeenCalledWith(
+      '/api/v1/projects/p1',
+      expect.objectContaining({ method: 'GET', cache: 'no-store' }),
+    );
     expect(result.slug).toBe('demo-project');
+  });
+
+  test('deleteProject delegates to requestVoid with required auth', async () => {
+    await deleteProject('p1');
+
+    expect(requestVoidMock).toHaveBeenCalledWith('/api/v1/projects/p1', {
+      auth: 'required',
+      method: 'DELETE',
+      fallbackErrorMessage: 'Failed to delete project',
+    });
+  });
+
+  test('deleteProject propagates typed errors from requestVoid', async () => {
+    requestVoidMock.mockRejectedValue(
+      Object.assign(new Error('Project access forbidden'), { status: 403 }),
+    );
+
+    await expect(deleteProject('p1')).rejects.toMatchObject({
+      message: 'Project access forbidden',
+      status: 403,
+    });
   });
 });

@@ -1,4 +1,4 @@
-import { authRefresh } from '@/lib/api/auth';
+import { refreshAuthTokenRaw } from '@/lib/api/authRefresh';
 import { apiUrl } from '@/lib/api/client';
 import {
   clearAuthSession,
@@ -22,7 +22,7 @@ async function refreshAccessToken(): Promise<string> {
   if (!refresh) {
     throw new Error('Missing refresh token');
   }
-  const tokens = await authRefresh({ refresh_token: refresh });
+  const tokens = await refreshAuthTokenRaw({ refresh_token: refresh });
   updateTokens(tokens.access_token, tokens.refresh_token);
   return tokens.access_token;
 }
@@ -30,7 +30,10 @@ async function refreshAccessToken(): Promise<string> {
 /**
  * GET/POST/etc. to `/api/v1/...` with Bearer access token.
  * On 401, tries one refresh via stored refresh_token, then retries once.
- * If still unauthorized, clears session and redirects to /login.
+ * If still unauthorized, clears session and returns the 401 response.
+ *
+ * This helper is transport-only and intentionally does not perform navigation.
+ * Route redirects/login UX are handled by higher-level auth/UI layers.
  */
 export async function fetchWithAuth(
   path: string,
@@ -61,9 +64,6 @@ export async function fetchWithAuth(
   const refresh = getStoredRefreshToken();
   if (!refresh) {
     clearAuthSession();
-    if (typeof window !== 'undefined') {
-      window.location.href = '/login';
-    }
     return res;
   }
 
@@ -77,15 +77,9 @@ export async function fetchWithAuth(
     res = await doFetch(access);
     if (res.status === 401) {
       clearAuthSession();
-      if (typeof window !== 'undefined') {
-        window.location.href = '/login';
-      }
     }
   } catch {
     clearAuthSession();
-    if (typeof window !== 'undefined') {
-      window.location.href = '/login';
-    }
   }
 
   return res;
