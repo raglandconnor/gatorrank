@@ -9,7 +9,7 @@ import { ProjectGridCard } from '@/components/projects/ProjectGridCard';
 import type { Project } from '@/types/project';
 import { listProjectsPublic } from '@/lib/api/projects';
 import type { ProjectListQuery } from '@/lib/api/types/project';
-import { getMonthRange } from '@/lib/projects/dateFilters';
+import { getAllTimeTopRange, getMonthRange } from '@/lib/projects/dateFilters';
 import { mapProjectListItemsToCardProjects } from '@/lib/projects/projectCardMapper';
 
 type TopProjectsType =
@@ -38,6 +38,7 @@ export default function TopProjectsPage() {
 
   const { title, query } = useMemo(() => {
     const t = type as TopProjectsType;
+    const topOverall = getAllTimeTopRange();
     const currentMonth = getMonthRange(0);
     const lastMonth = getMonthRange(-1);
 
@@ -45,7 +46,11 @@ export default function TopProjectsPage() {
       case 'top-overall':
         return {
           title: 'Top Overall UF Projects',
-          query: { sort: 'top' as const },
+          query: {
+            sort: 'top' as const,
+            published_from: topOverall.from,
+            published_to: topOverall.to,
+          },
         };
       case 'trending-this-month':
         return {

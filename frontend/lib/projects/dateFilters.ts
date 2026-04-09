@@ -7,6 +7,9 @@ export function toDateOnly(date: Date): string {
 }
 
 export type MonthRange = { from: string; to: string };
+export type DateRange = { from: string; to: string };
+
+const ALL_TIME_TOP_START = '1970-01-01';
 
 /** Calendar month `[from, to]` relative to today (`published_from` / `published_to`). */
 export function getMonthRange(offsetMonths = 0): MonthRange {
@@ -14,4 +17,9 @@ export function getMonthRange(offsetMonths = 0): MonthRange {
   const start = new Date(now.getFullYear(), now.getMonth() + offsetMonths, 1);
   const end = new Date(now.getFullYear(), now.getMonth() + offsetMonths + 1, 0);
   return { from: toDateOnly(start), to: toDateOnly(end) };
+}
+
+/** Explicit all-time range for `sort=top` to avoid backend 90-day default window. */
+export function getAllTimeTopRange(): DateRange {
+  return { from: ALL_TIME_TOP_START, to: toDateOnly(new Date()) };
 }

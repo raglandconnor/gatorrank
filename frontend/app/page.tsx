@@ -5,7 +5,7 @@ import { Navbar } from '@/components/layout/Navbar';
 import { ProjectSection } from '@/components/projects/ProjectSection';
 import type { Project } from '@/types/project';
 import { listProjectsPublic } from '@/lib/api/projects';
-import { getMonthRange } from '@/lib/projects/dateFilters';
+import { getAllTimeTopRange, getMonthRange } from '@/lib/projects/dateFilters';
 import { mapProjectListItemsToCardProjects } from '@/lib/projects/projectCardMapper';
 
 type HomeProjectsState = {
@@ -30,11 +30,17 @@ export default function Home() {
 
     async function load() {
       try {
+        const topOverall = getAllTimeTopRange();
         const currentMonth = getMonthRange(0);
         const lastMonth = getMonthRange(-1);
 
         const [overallRes, thisMonthRes, lastMonthRes] = await Promise.all([
-          listProjectsPublic({ sort: 'top', limit: 5 }),
+          listProjectsPublic({
+            sort: 'top',
+            limit: 5,
+            published_from: topOverall.from,
+            published_to: topOverall.to,
+          }),
           listProjectsPublic({
             sort: 'top',
             limit: 5,
