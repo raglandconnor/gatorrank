@@ -1,4 +1,4 @@
-import { authRefresh } from '@/lib/api/auth';
+import { refreshAuthTokenRaw } from '@/lib/api/authRefresh';
 import { apiUrl } from '@/lib/api/client';
 import {
   clearAuthSession,
@@ -22,7 +22,7 @@ async function refreshAccessToken(): Promise<string> {
   if (!refresh) {
     throw new Error('Missing refresh token');
   }
-  const tokens = await authRefresh({ refresh_token: refresh });
+  const tokens = await refreshAuthTokenRaw({ refresh_token: refresh });
   updateTokens(tokens.access_token, tokens.refresh_token);
   return tokens.access_token;
 }

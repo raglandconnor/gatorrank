@@ -1,4 +1,4 @@
-import { apiUrl } from '@/lib/api/client';
+import { requestJson, requestVoid } from '@/lib/api/request';
 import type {
   AuthLoginBody,
   AuthLogoutBody,
@@ -8,83 +8,50 @@ import type {
   AuthTokenResponse,
 } from '@/lib/api/types/auth';
 
-async function parseErrorMessage(res: Response): Promise<string> {
-  try {
-    const data = (await res.json()) as { detail?: unknown };
-    const d = data.detail;
-    if (typeof d === 'string') return d;
-    if (Array.isArray(d)) {
-      const first = d[0] as { msg?: string } | undefined;
-      if (first?.msg) return first.msg;
-    }
-    return res.statusText || 'Request failed';
-  } catch {
-    return res.statusText || 'Request failed';
-  }
-}
-
 export async function authSignup(
   body: AuthSignupBody,
 ): Promise<AuthTokenResponse> {
-  const res = await fetch(apiUrl('/api/v1/auth/signup'), {
+  return requestJson<AuthTokenResponse>('/api/v1/auth/signup', {
+    auth: 'none',
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
+    body,
   });
-  if (!res.ok) {
-    throw new Error(await parseErrorMessage(res));
-  }
-  return res.json() as Promise<AuthTokenResponse>;
 }
 
 export async function authLogin(
   body: AuthLoginBody,
 ): Promise<AuthTokenResponse> {
-  const res = await fetch(apiUrl('/api/v1/auth/login'), {
+  return requestJson<AuthTokenResponse>('/api/v1/auth/login', {
+    auth: 'none',
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
+    body,
   });
-  if (!res.ok) {
-    throw new Error(await parseErrorMessage(res));
-  }
-  return res.json() as Promise<AuthTokenResponse>;
 }
 
 export async function authMe(accessToken: string): Promise<AuthMeResponse> {
-  const res = await fetch(apiUrl('/api/v1/auth/me'), {
+  return requestJson<AuthMeResponse>('/api/v1/auth/me', {
+    auth: 'none',
     method: 'GET',
     headers: {
       Authorization: `Bearer ${accessToken}`,
     },
   });
-  if (!res.ok) {
-    throw new Error(await parseErrorMessage(res));
-  }
-  return res.json() as Promise<AuthMeResponse>;
 }
 
 export async function authRefresh(
   body: AuthRefreshBody,
 ): Promise<AuthTokenResponse> {
-  const res = await fetch(apiUrl('/api/v1/auth/refresh'), {
+  return requestJson<AuthTokenResponse>('/api/v1/auth/refresh', {
+    auth: 'none',
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
+    body,
   });
-  if (!res.ok) {
-    throw new Error(await parseErrorMessage(res));
-  }
-  return res.json() as Promise<AuthTokenResponse>;
 }
 
 export async function authLogout(body: AuthLogoutBody): Promise<void> {
-  const res = await fetch(apiUrl('/api/v1/auth/logout'), {
+  await requestVoid('/api/v1/auth/logout', {
+    auth: 'none',
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
+    body,
   });
-  if (!res.ok && res.status !== 204) {
-    throw new Error(await parseErrorMessage(res));
-  }
 }
