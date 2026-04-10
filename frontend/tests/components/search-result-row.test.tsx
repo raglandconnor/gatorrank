@@ -1,7 +1,11 @@
 import { screen } from '@testing-library/react';
-import { describe, expect, test } from 'vitest';
+import { describe, expect, test, vi } from 'vitest';
 import { SearchResultRow } from '@/components/projects/SearchResultRow';
 import { renderWithChakra } from '@/tests/utils/render';
+
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ push: vi.fn() }),
+}));
 
 describe('SearchResultRow', () => {
   test('renders fallback taxonomy/date and project link', () => {

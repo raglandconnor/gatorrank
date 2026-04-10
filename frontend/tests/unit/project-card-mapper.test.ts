@@ -79,6 +79,7 @@ describe('projectCardMapper', () => {
       description: 'Campus maps.',
       tags: ['Maps'],
       votes: 9,
+      viewerHasVoted: false,
       comments: 0,
     });
   });

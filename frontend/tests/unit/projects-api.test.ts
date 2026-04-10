@@ -59,7 +59,7 @@ describe('listProjectsPublic', () => {
     const result = await listProjectsPublic();
 
     expect(requestJsonMock).toHaveBeenCalledWith('/api/v1/projects', {
-      auth: 'none',
+      auth: 'optional',
       method: 'GET',
       cache: 'no-store',
       fallbackErrorMessage: 'Failed to fetch projects',
@@ -85,7 +85,7 @@ describe('listProjectsPublic', () => {
     await listProjectsPublic(query);
 
     expect(requestJsonMock).toHaveBeenCalledWith(`/api/v1/projects${qs}`, {
-      auth: 'none',
+      auth: 'optional',
       method: 'GET',
       cache: 'no-store',
       fallbackErrorMessage: 'Failed to fetch projects',
@@ -102,7 +102,7 @@ describe('listProjectsPublic', () => {
     expect(requestJsonMock).toHaveBeenCalledWith(
       expect.stringContaining('cursor=cursor-2'),
       expect.objectContaining({
-        auth: 'none',
+        auth: 'optional',
       }),
     );
   });
