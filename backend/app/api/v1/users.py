@@ -47,7 +47,7 @@ MyProjectsVisibility = Annotated[
     Query(
         ...,
         description=(
-            "Visibility scope for associated projects: `all` includes drafts and "
+            "Visibility scope for my associated projects (creator or member): `all` includes drafts and "
             "published projects, `published` includes only published projects, and "
             "`draft` includes only drafts."
         ),
@@ -160,7 +160,7 @@ async def list_my_voted_projects(
     "/users/me/projects",
     summary="List my projects",
     description=(
-        "Return the authenticated user's associated, non-deleted projects with cursor "
+        "Return the authenticated user's associated (creator or member), non-deleted projects with cursor "
         "pagination, computed `team_size`, and taxonomy fields (`categories`, "
         "`tags`, `tech_stack`). Drafts are included by default. "
         "`sort=new` returns one newest-first stream across the selected visibility. "
@@ -185,7 +185,7 @@ async def list_my_projects(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> ProjectListResponse:
-    """Return associated project cards, including drafts, with taxonomy parity."""
+    """Return creator/member-associated project cards, including drafts, with taxonomy parity."""
     service = ProjectService(db)
     try:
         return await service.list_projects_for_owner(
