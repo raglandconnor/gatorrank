@@ -202,7 +202,6 @@ export function ProjectGridCard({ project, rank }: ProjectGridCardProps) {
             borderRadius="10px"
             h="36px"
             px="10px"
-            cursor="pointer"
             userSelect="none"
             _hover={{ bg: isVoted ? 'orange.100' : 'orange.50' }}
             _focusVisible={{
@@ -216,7 +215,9 @@ export function ProjectGridCard({ project, rank }: ProjectGridCardProps) {
             }}
             aria-label={`Upvote ${project.name}`}
             aria-pressed={isVoted}
-            disabled={isPending}
+            aria-disabled={isPending}
+            aria-busy={isPending}
+            cursor={isPending ? 'wait' : 'pointer'}
           >
             <Box color={isVoted ? 'orange.500' : 'gray.700'}>
               <LuChevronUp size={14} />

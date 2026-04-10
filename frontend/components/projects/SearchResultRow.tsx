@@ -107,9 +107,11 @@ export function SearchResultRow({ project }: SearchResultRowProps) {
             borderColor={isVoted ? 'orange.400' : 'orange.200'}
             bg={isVoted ? 'orange.50' : 'white'}
             _hover={{ bg: isVoted ? 'orange.100' : 'orange.50' }}
-            disabled={isPending}
             aria-label={`Upvote ${project.title}`}
             aria-pressed={isVoted}
+            aria-disabled={isPending}
+            aria-busy={isPending}
+            cursor={isPending ? 'wait' : 'pointer'}
             onClick={(event) => {
               event.preventDefault();
               event.stopPropagation();

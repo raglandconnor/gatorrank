@@ -42,7 +42,6 @@ export function UpvoteBox({
         border="2px solid"
         borderColor={isVoted ? 'orange.400' : 'orange.200'}
         borderRadius="12px"
-        cursor="pointer"
         userSelect="none"
         _hover={{ bg: isVoted ? 'orange.100' : 'orange.50' }}
         _focusVisible={{
@@ -53,7 +52,9 @@ export function UpvoteBox({
         onClick={() => void toggleVote()}
         aria-label="Upvote"
         aria-pressed={isVoted}
-        disabled={isPending}
+        aria-disabled={isPending}
+        aria-busy={isPending}
+        cursor={isPending ? 'wait' : 'pointer'}
       >
         <Box color={isVoted ? 'orange.500' : 'gray.800'}>
           <LuChevronUp size={24} />

@@ -175,16 +175,17 @@ function UserProjectCard({
                 borderRadius="10px"
                 px="10px"
                 h="36px"
-                cursor="pointer"
                 _hover={{ bg: isVoted ? 'orange.100' : 'orange.50' }}
                 transition="background 0.15s, border-color 0.15s"
                 onClick={(e) => {
                   e.stopPropagation();
                   void toggleVote();
                 }}
-                disabled={isPending}
                 aria-label={`Upvote ${project.title}`}
                 aria-pressed={isVoted}
+                aria-disabled={isPending}
+                aria-busy={isPending}
+                cursor={isPending ? 'wait' : 'pointer'}
               >
                 <Box color={isVoted ? 'orange.500' : 'gray.700'}>
                   <LuChevronUp size={14} />
