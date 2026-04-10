@@ -18,6 +18,10 @@ from app.models.project_roles import (
     cast_project_member_role,
 )
 from app.models.user import User
+from app.policy.roles import (
+    PolicyPrincipal,
+    require_taxonomy_create_on_miss,
+)
 from app.models.taxonomy import (
     Category,
     ProjectCategory,
@@ -109,6 +113,7 @@ class ProjectService:
         created_by_id: UUID,
         payload: ProjectCreateRequest,
     ) -> ProjectDetailResponse:
+        taxonomy_principal = await self.get_user_by_id(created_by_id)
         for _ in range(self._MAX_SLUG_RETRY_ATTEMPTS):
             slug = await self._generate_unique_slug(payload.title)
             project = Project(  # pyright: ignore[reportCallIssue]
@@ -145,6 +150,7 @@ class ProjectService:
                     categories=create_categories,
                     tags=create_tags,
                     tech_stack=create_tech_stack,
+                    taxonomy_principal=taxonomy_principal,
                 )
                 await self.db.commit()
             except IntegrityError as exc:
@@ -276,6 +282,8 @@ class ProjectService:
         if "tech_stack" in payload.model_fields_set:
             tech_stack = payload.tech_stack
 
+        taxonomy_principal = await self.get_user_by_id(current_user_id)
+
         try:
             self.db.add(project)
             await self.db.flush()
@@ -284,6 +292,7 @@ class ProjectService:
                 categories=categories,
                 tags=tags,
                 tech_stack=tech_stack,
+                taxonomy_principal=taxonomy_principal,
             )
             await self.db.commit()
         except Exception:
@@ -867,9 +876,14 @@ class ProjectService:
         categories: list[str] | None,
         tags: list[str] | None,
         tech_stack: list[str] | None,
+        taxonomy_principal: PolicyPrincipal | None = None,
     ) -> None:
         if categories is not None:
-            category_terms = await self._resolve_or_create_terms(Category, categories)
+            category_terms = await self._resolve_or_create_terms(
+                Category,
+                categories,
+                taxonomy_principal=taxonomy_principal,
+            )
             await self._replace_join_assignments(
                 join_model=ProjectCategory,
                 term_fk_field="category_id",
@@ -877,7 +891,11 @@ class ProjectService:
                 terms=category_terms,
             )
         if tags is not None:
-            tag_terms = await self._resolve_or_create_terms(Tag, tags)
+            tag_terms = await self._resolve_or_create_terms(
+                Tag,
+                tags,
+                taxonomy_principal=taxonomy_principal,
+            )
             await self._replace_join_assignments(
                 join_model=ProjectTag,
                 term_fk_field="tag_id",
@@ -886,7 +904,9 @@ class ProjectService:
             )
         if tech_stack is not None:
             tech_stack_terms = await self._resolve_or_create_terms(
-                TechStack, tech_stack
+                TechStack,
+                tech_stack,
+                taxonomy_principal=taxonomy_principal,
             )
             await self._replace_join_assignments(
                 join_model=ProjectTechStack,
@@ -899,6 +919,7 @@ class ProjectService:
         self,
         model: type[Category] | type[Tag] | type[TechStack],
         values: list[str],
+        taxonomy_principal: PolicyPrincipal | None = None,
     ) -> list[TaxonomyTermResponse]:
         terms: list[TaxonomyTermResponse] = []
         for value in values:
@@ -912,6 +933,8 @@ class ProjectService:
             if existing is not None:
                 terms.append(TaxonomyTermResponse.model_validate(existing))
                 continue
+
+            require_taxonomy_create_on_miss(taxonomy_principal)
 
             insert_statement = (
                 pg_insert(getattr(model, "__table__"))
