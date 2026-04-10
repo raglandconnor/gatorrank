@@ -9,7 +9,7 @@ from datetime import UTC, datetime, timedelta
 from app.main import app
 from app.db.database import get_db
 from app.models.user import User
-from app.models.project import Project, Vote
+from app.models.project import Project, ProjectMember, Vote
 from app.services.project import ProjectService
 from app.core.config import get_settings
 from app.services.vote import VoteService
@@ -82,6 +82,18 @@ async def _seed_owned_project(
     db_session.add(project)
     await db_session.commit()
     return project
+
+
+async def _seed_project_member(
+    db_session, *, project_id, user_id, role: str = "contributor"
+) -> None:
+    membership = ProjectMember(  # pyright: ignore[reportCallIssue]
+        project_id=project_id,
+        user_id=user_id,
+        role=role,
+    )
+    db_session.add(membership)
+    await db_session.commit()
 
 
 @pytest.mark.asyncio
@@ -451,6 +463,118 @@ async def test_list_user_projects(api_client, db_session):
 
 
 @pytest.mark.asyncio
+async def test_list_user_projects_includes_published_member_projects_only(
+    api_client, db_session
+):
+    target_user_id = uuid4()
+    target_email = f"user-{uuid4().hex[:8]}@ufl.edu"
+    owner_id = uuid4()
+    owner_email = f"user-{uuid4().hex[:8]}@ufl.edu"
+
+    await seed_auth_user(
+        db_session, user_id=target_user_id, email=target_email, username="assoc_user"
+    )
+    await seed_auth_user(
+        db_session, user_id=owner_id, email=owner_email, username="assoc_owner"
+    )
+
+    now = datetime.now(UTC)
+    authored_published = await _seed_owned_project(
+        db_session,
+        created_by_id=target_user_id,
+        title="Authored Published",
+        slug=f"authored-published-{uuid4().hex[:8]}",
+        is_published=True,
+        created_at=now - timedelta(minutes=3),
+    )
+    member_published = await _seed_owned_project(
+        db_session,
+        created_by_id=owner_id,
+        title="Member Published",
+        slug=f"member-published-{uuid4().hex[:8]}",
+        is_published=True,
+        created_at=now - timedelta(minutes=2),
+    )
+    member_draft = await _seed_owned_project(
+        db_session,
+        created_by_id=owner_id,
+        title="Member Draft",
+        slug=f"member-draft-{uuid4().hex[:8]}",
+        is_published=False,
+        created_at=now - timedelta(minutes=1),
+    )
+
+    await _seed_project_member(
+        db_session, project_id=member_published.id, user_id=target_user_id
+    )
+    await _seed_project_member(
+        db_session, project_id=member_draft.id, user_id=target_user_id
+    )
+
+    async def override_get_db():
+        yield db_session
+
+    app.dependency_overrides[get_db] = override_get_db
+    try:
+        response = await api_client.get(f"/api/v1/users/{target_user_id}/projects")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    item_ids = {item["id"] for item in response.json()["items"]}
+    assert str(authored_published.id) in item_ids
+    assert str(member_published.id) in item_ids
+    assert str(member_draft.id) not in item_ids
+
+
+@pytest.mark.asyncio
+async def test_list_user_projects_dedupes_when_user_is_creator_and_member(
+    api_client, db_session, monkeypatch
+):
+    jwt_secret = "integration-test-jwt-secret-at-least-32b"
+    monkeypatch.setattr(settings, "DATABASE_JWT_SECRET", jwt_secret)
+
+    user_id = uuid4()
+    email = f"dedupe-{uuid4().hex[:8]}@ufl.edu"
+    await seed_auth_user(
+        db_session, user_id=user_id, email=email, username="dedupe_user"
+    )
+    token = generate_token(user_id, email, jwt_secret)
+
+    now = datetime.now(UTC)
+    project = await _seed_owned_project(
+        db_session,
+        created_by_id=user_id,
+        title="Creator And Member",
+        slug=f"creator-member-{uuid4().hex[:8]}",
+        is_published=True,
+        created_at=now,
+    )
+    await _seed_project_member(db_session, project_id=project.id, user_id=user_id)
+
+    async def override_get_db():
+        yield db_session
+
+    app.dependency_overrides[get_db] = override_get_db
+    try:
+        public_response = await api_client.get(f"/api/v1/users/{user_id}/projects")
+        my_response = await api_client.get(
+            "/api/v1/users/me/projects?visibility=published",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert public_response.status_code == 200
+    public_ids = [item["id"] for item in public_response.json()["items"]]
+    assert public_ids.count(str(project.id)) == 1
+
+    assert my_response.status_code == 200
+    my_ids = [item["id"] for item in my_response.json()["items"]]
+    assert my_ids.count(str(project.id)) == 1
+
+
+@pytest.mark.asyncio
 async def test_list_user_projects_by_username(api_client, db_session):
     user_id = uuid4()
     email = f"user-{uuid4().hex[:8]}@ufl.edu"
@@ -502,6 +626,320 @@ async def test_list_user_projects_by_username(api_client, db_session):
         assert data["items"][0]["id"] == str(p1.id)
     finally:
         app.dependency_overrides.clear()
+
+
+@pytest.mark.asyncio
+async def test_list_user_projects_by_username_includes_published_member_projects_only(
+    api_client, db_session
+):
+    target_user_id = uuid4()
+    target_email = f"user-{uuid4().hex[:8]}@ufl.edu"
+    target_username = "member_lookup_user"
+    owner_id = uuid4()
+    owner_email = f"user-{uuid4().hex[:8]}@ufl.edu"
+
+    await seed_auth_user(
+        db_session,
+        user_id=target_user_id,
+        email=target_email,
+        username=target_username,
+    )
+    await seed_auth_user(
+        db_session, user_id=owner_id, email=owner_email, username="member_lookup_owner"
+    )
+
+    now = datetime.now(UTC)
+    authored_published = await _seed_owned_project(
+        db_session,
+        created_by_id=target_user_id,
+        title="Lookup Authored Published",
+        slug=f"lookup-authored-published-{uuid4().hex[:8]}",
+        is_published=True,
+        created_at=now - timedelta(minutes=3),
+    )
+    member_published = await _seed_owned_project(
+        db_session,
+        created_by_id=owner_id,
+        title="Lookup Member Published",
+        slug=f"lookup-member-published-{uuid4().hex[:8]}",
+        is_published=True,
+        created_at=now - timedelta(minutes=2),
+    )
+    member_draft = await _seed_owned_project(
+        db_session,
+        created_by_id=owner_id,
+        title="Lookup Member Draft",
+        slug=f"lookup-member-draft-{uuid4().hex[:8]}",
+        is_published=False,
+        created_at=now - timedelta(minutes=1),
+    )
+    await _seed_project_member(
+        db_session, project_id=member_published.id, user_id=target_user_id
+    )
+    await _seed_project_member(
+        db_session, project_id=member_draft.id, user_id=target_user_id
+    )
+
+    async def override_get_db():
+        yield db_session
+
+    app.dependency_overrides[get_db] = override_get_db
+    try:
+        response = await api_client.get(
+            f"/api/v1/users/by-username/{target_username.upper()}/projects"
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    item_ids = {item["id"] for item in response.json()["items"]}
+    assert str(authored_published.id) in item_ids
+    assert str(member_published.id) in item_ids
+    assert str(member_draft.id) not in item_ids
+
+
+@pytest.mark.asyncio
+async def test_list_my_projects_includes_associated_member_drafts(
+    api_client, db_session, monkeypatch
+):
+    jwt_secret = "integration-test-jwt-secret-at-least-32b"
+    monkeypatch.setattr(settings, "DATABASE_JWT_SECRET", jwt_secret)
+
+    member_user_id = uuid4()
+    member_email = f"my-projects-member-{uuid4().hex[:8]}@ufl.edu"
+    owner_id = uuid4()
+    owner_email = f"my-projects-owner-{uuid4().hex[:8]}@ufl.edu"
+
+    await seed_auth_user(
+        db_session,
+        user_id=member_user_id,
+        email=member_email,
+        username="my_projects_member",
+    )
+    await seed_auth_user(
+        db_session,
+        user_id=owner_id,
+        email=owner_email,
+        username="my_projects_owner_assoc",
+    )
+    token = generate_token(member_user_id, member_email, jwt_secret)
+
+    now = datetime.now(UTC)
+    member_draft = await _seed_owned_project(
+        db_session,
+        created_by_id=owner_id,
+        title="Member Draft Visible",
+        slug=f"member-draft-visible-{uuid4().hex[:8]}",
+        is_published=False,
+        created_at=now,
+    )
+    member_published = await _seed_owned_project(
+        db_session,
+        created_by_id=owner_id,
+        title="Member Published Visible",
+        slug=f"member-published-visible-{uuid4().hex[:8]}",
+        is_published=True,
+        created_at=now - timedelta(minutes=1),
+    )
+    unrelated_draft = await _seed_owned_project(
+        db_session,
+        created_by_id=owner_id,
+        title="Unrelated Draft",
+        slug=f"unrelated-draft-{uuid4().hex[:8]}",
+        is_published=False,
+        created_at=now - timedelta(minutes=2),
+    )
+
+    await _seed_project_member(
+        db_session, project_id=member_draft.id, user_id=member_user_id
+    )
+    await _seed_project_member(
+        db_session, project_id=member_published.id, user_id=member_user_id
+    )
+
+    async def override_get_db():
+        yield db_session
+
+    app.dependency_overrides[get_db] = override_get_db
+    try:
+        response = await api_client.get(
+            "/api/v1/users/me/projects?visibility=all&sort=new",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    item_ids = {item["id"] for item in response.json()["items"]}
+    assert str(member_draft.id) in item_ids
+    assert str(member_published.id) in item_ids
+    assert str(unrelated_draft.id) not in item_ids
+
+
+@pytest.mark.asyncio
+async def test_list_my_projects_member_visibility_filters_split_draft_and_published(
+    api_client, db_session, monkeypatch
+):
+    jwt_secret = "integration-test-jwt-secret-at-least-32b"
+    monkeypatch.setattr(settings, "DATABASE_JWT_SECRET", jwt_secret)
+
+    member_id = uuid4()
+    member_email = f"member-visibility-{uuid4().hex[:8]}@ufl.edu"
+    owner_id = uuid4()
+    owner_email = f"member-visibility-owner-{uuid4().hex[:8]}@ufl.edu"
+    await seed_auth_user(
+        db_session, user_id=member_id, email=member_email, username="visibility_member"
+    )
+    await seed_auth_user(
+        db_session, user_id=owner_id, email=owner_email, username="visibility_owner"
+    )
+    token = generate_token(member_id, member_email, jwt_secret)
+
+    now = datetime.now(UTC)
+    member_draft = await _seed_owned_project(
+        db_session,
+        created_by_id=owner_id,
+        title="Visibility Draft",
+        slug=f"visibility-draft-{uuid4().hex[:8]}",
+        is_published=False,
+        created_at=now,
+    )
+    member_published = await _seed_owned_project(
+        db_session,
+        created_by_id=owner_id,
+        title="Visibility Published",
+        slug=f"visibility-published-{uuid4().hex[:8]}",
+        is_published=True,
+        created_at=now - timedelta(minutes=1),
+    )
+    await _seed_project_member(
+        db_session, project_id=member_draft.id, user_id=member_id
+    )
+    await _seed_project_member(
+        db_session, project_id=member_published.id, user_id=member_id
+    )
+
+    async def override_get_db():
+        yield db_session
+
+    app.dependency_overrides[get_db] = override_get_db
+    try:
+        draft_response = await api_client.get(
+            "/api/v1/users/me/projects?visibility=draft",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        published_response = await api_client.get(
+            "/api/v1/users/me/projects?visibility=published",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert draft_response.status_code == 200
+    draft_ids = {item["id"] for item in draft_response.json()["items"]}
+    assert str(member_draft.id) in draft_ids
+    assert str(member_published.id) not in draft_ids
+
+    assert published_response.status_code == 200
+    published_ids = {item["id"] for item in published_response.json()["items"]}
+    assert str(member_published.id) in published_ids
+    assert str(member_draft.id) not in published_ids
+
+
+@pytest.mark.asyncio
+async def test_associated_projects_removed_after_membership_removal(
+    api_client, db_session, monkeypatch
+):
+    jwt_secret = "integration-test-jwt-secret-at-least-32b"
+    monkeypatch.setattr(settings, "DATABASE_JWT_SECRET", jwt_secret)
+
+    member_id = uuid4()
+    member_email = f"member-removal-{uuid4().hex[:8]}@ufl.edu"
+    owner_id = uuid4()
+    owner_email = f"member-removal-owner-{uuid4().hex[:8]}@ufl.edu"
+    await seed_auth_user(
+        db_session, user_id=member_id, email=member_email, username="removal_member"
+    )
+    await seed_auth_user(
+        db_session, user_id=owner_id, email=owner_email, username="removal_owner"
+    )
+    token = generate_token(member_id, member_email, jwt_secret)
+
+    now = datetime.now(UTC)
+    member_published = await _seed_owned_project(
+        db_session,
+        created_by_id=owner_id,
+        title="Removal Published",
+        slug=f"removal-published-{uuid4().hex[:8]}",
+        is_published=True,
+        created_at=now - timedelta(minutes=1),
+    )
+    member_draft = await _seed_owned_project(
+        db_session,
+        created_by_id=owner_id,
+        title="Removal Draft",
+        slug=f"removal-draft-{uuid4().hex[:8]}",
+        is_published=False,
+        created_at=now,
+    )
+    await _seed_project_member(
+        db_session, project_id=member_published.id, user_id=member_id
+    )
+    await _seed_project_member(
+        db_session, project_id=member_draft.id, user_id=member_id
+    )
+
+    async def override_get_db():
+        yield db_session
+
+    app.dependency_overrides[get_db] = override_get_db
+    try:
+        before_my = await api_client.get(
+            "/api/v1/users/me/projects?visibility=all",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        before_public = await api_client.get(f"/api/v1/users/{member_id}/projects")
+
+        project_member_cols = getattr(ProjectMember, "__table__").c
+        await db_session.exec(
+            sa.delete(ProjectMember).where(
+                project_member_cols.project_id == member_draft.id,
+                project_member_cols.user_id == member_id,
+            )
+        )
+        await db_session.exec(
+            sa.delete(ProjectMember).where(
+                project_member_cols.project_id == member_published.id,
+                project_member_cols.user_id == member_id,
+            )
+        )
+        await db_session.commit()
+
+        after_my = await api_client.get(
+            "/api/v1/users/me/projects?visibility=all",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        after_public = await api_client.get(f"/api/v1/users/{member_id}/projects")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert before_my.status_code == 200
+    before_my_ids = {item["id"] for item in before_my.json()["items"]}
+    assert str(member_draft.id) in before_my_ids
+    assert str(member_published.id) in before_my_ids
+
+    assert before_public.status_code == 200
+    before_public_ids = {item["id"] for item in before_public.json()["items"]}
+    assert str(member_published.id) in before_public_ids
+
+    assert after_my.status_code == 200
+    after_my_ids = {item["id"] for item in after_my.json()["items"]}
+    assert str(member_draft.id) not in after_my_ids
+    assert str(member_published.id) not in after_my_ids
+
+    assert after_public.status_code == 200
+    after_public_ids = {item["id"] for item in after_public.json()["items"]}
+    assert str(member_published.id) not in after_public_ids
 
 
 @pytest.mark.asyncio
@@ -717,6 +1155,96 @@ async def test_list_my_projects_sort_new_paginates_mixed_results(
 
 
 @pytest.mark.asyncio
+async def test_list_my_projects_sort_new_paginates_stably_for_associated_projects(
+    api_client, db_session, monkeypatch
+):
+    jwt_secret = "integration-test-jwt-secret-at-least-32b"
+    monkeypatch.setattr(settings, "DATABASE_JWT_SECRET", jwt_secret)
+
+    user_id = uuid4()
+    email = f"my-projects-associated-new-{uuid4().hex[:8]}@ufl.edu"
+    owner_id = uuid4()
+    owner_email = f"my-projects-associated-owner-{uuid4().hex[:8]}@ufl.edu"
+    await seed_auth_user(
+        db_session, user_id=user_id, email=email, username="assoc_new_user"
+    )
+    await seed_auth_user(
+        db_session, user_id=owner_id, email=owner_email, username="assoc_new_owner"
+    )
+    token = generate_token(user_id, email, jwt_secret)
+
+    now = datetime.now(UTC)
+    newest_member = await _seed_owned_project(
+        db_session,
+        created_by_id=owner_id,
+        title="Newest Member Project",
+        slug=f"newest-member-project-{uuid4().hex[:8]}",
+        is_published=False,
+        created_at=now,
+    )
+    second_authored = await _seed_owned_project(
+        db_session,
+        created_by_id=user_id,
+        title="Second Authored Project",
+        slug=f"second-authored-project-{uuid4().hex[:8]}",
+        is_published=True,
+        created_at=now - timedelta(minutes=1),
+    )
+    third_member = await _seed_owned_project(
+        db_session,
+        created_by_id=owner_id,
+        title="Third Member Project",
+        slug=f"third-member-project-{uuid4().hex[:8]}",
+        is_published=True,
+        created_at=now - timedelta(minutes=2),
+    )
+    oldest_authored = await _seed_owned_project(
+        db_session,
+        created_by_id=user_id,
+        title="Oldest Authored Project",
+        slug=f"oldest-authored-project-{uuid4().hex[:8]}",
+        is_published=False,
+        created_at=now - timedelta(minutes=3),
+    )
+    await _seed_project_member(db_session, project_id=newest_member.id, user_id=user_id)
+    await _seed_project_member(db_session, project_id=third_member.id, user_id=user_id)
+
+    expected_order = [
+        str(newest_member.id),
+        str(second_authored.id),
+        str(third_member.id),
+        str(oldest_authored.id),
+    ]
+
+    async def override_get_db():
+        yield db_session
+
+    app.dependency_overrides[get_db] = override_get_db
+    try:
+        first_page = await api_client.get(
+            "/api/v1/users/me/projects?sort=new&visibility=all&limit=2",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert first_page.status_code == 200
+        first_payload = first_page.json()
+        assert first_payload["next_cursor"] is not None
+
+        second_page = await api_client.get(
+            f"/api/v1/users/me/projects?sort=new&visibility=all&limit=2&cursor={first_payload['next_cursor']}",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert second_page.status_code == 200
+    finally:
+        app.dependency_overrides.clear()
+
+    seen_ids = [item["id"] for item in first_payload["items"]] + [
+        item["id"] for item in second_page.json()["items"]
+    ]
+    assert seen_ids == expected_order
+    assert len(seen_ids) == len(set(seen_ids))
+
+
+@pytest.mark.asyncio
 async def test_list_my_projects_sort_top_published_matches_top_window(
     api_client, db_session, monkeypatch
 ):
@@ -774,6 +1302,90 @@ async def test_list_my_projects_sort_top_published_matches_top_window(
     assert response.status_code == 200
     payload = response.json()
     assert [item["id"] for item in payload["items"]] == [str(high.id), str(low.id)]
+
+
+@pytest.mark.asyncio
+async def test_list_my_projects_sort_top_paginates_stably_for_associated_published(
+    api_client, db_session, monkeypatch
+):
+    jwt_secret = "integration-test-jwt-secret-at-least-32b"
+    monkeypatch.setattr(settings, "DATABASE_JWT_SECRET", jwt_secret)
+
+    user_id = uuid4()
+    email = f"my-projects-associated-top-{uuid4().hex[:8]}@ufl.edu"
+    owner_id = uuid4()
+    owner_email = f"my-projects-associated-top-owner-{uuid4().hex[:8]}@ufl.edu"
+    await seed_auth_user(
+        db_session, user_id=user_id, email=email, username="assoc_top_user"
+    )
+    await seed_auth_user(
+        db_session, user_id=owner_id, email=owner_email, username="assoc_top_owner"
+    )
+    token = generate_token(user_id, email, jwt_secret)
+
+    now = datetime.now(UTC)
+    top_member = await _seed_owned_project(
+        db_session,
+        created_by_id=owner_id,
+        title="Top Member Project",
+        slug=f"top-member-project-{uuid4().hex[:8]}",
+        is_published=True,
+        created_at=now - timedelta(days=1),
+        vote_count=80,
+    )
+    second_authored = await _seed_owned_project(
+        db_session,
+        created_by_id=user_id,
+        title="Second Authored Project",
+        slug=f"top-second-authored-project-{uuid4().hex[:8]}",
+        is_published=True,
+        created_at=now - timedelta(days=2),
+        vote_count=40,
+    )
+    third_member = await _seed_owned_project(
+        db_session,
+        created_by_id=owner_id,
+        title="Third Member Project",
+        slug=f"top-third-member-project-{uuid4().hex[:8]}",
+        is_published=True,
+        created_at=now - timedelta(days=3),
+        vote_count=20,
+    )
+    await _seed_project_member(db_session, project_id=top_member.id, user_id=user_id)
+    await _seed_project_member(db_session, project_id=third_member.id, user_id=user_id)
+
+    expected_order = [
+        str(top_member.id),
+        str(second_authored.id),
+        str(third_member.id),
+    ]
+
+    async def override_get_db():
+        yield db_session
+
+    app.dependency_overrides[get_db] = override_get_db
+    try:
+        first_page = await api_client.get(
+            "/api/v1/users/me/projects?sort=top&visibility=published&limit=2",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert first_page.status_code == 200
+        first_payload = first_page.json()
+        assert first_payload["next_cursor"] is not None
+
+        second_page = await api_client.get(
+            f"/api/v1/users/me/projects?sort=top&visibility=published&limit=2&cursor={first_payload['next_cursor']}",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert second_page.status_code == 200
+    finally:
+        app.dependency_overrides.clear()
+
+    seen_ids = [item["id"] for item in first_payload["items"]] + [
+        item["id"] for item in second_page.json()["items"]
+    ]
+    assert seen_ids == expected_order
+    assert len(seen_ids) == len(set(seen_ids))
 
 
 @pytest.mark.asyncio

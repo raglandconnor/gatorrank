@@ -361,7 +361,7 @@ def test_list_user_projects():
 
     await_args = mock_list_projects.await_args
     assert await_args is not None
-    assert await_args.kwargs["created_by_id"] == target_user_id
+    assert await_args.kwargs["associated_user_id"] == target_user_id
     assert await_args.kwargs["limit"] == 10
     assert await_args.kwargs["current_user_id"] is None
 
@@ -458,7 +458,7 @@ def test_list_user_projects_by_username():
 
     await_args = mock_list_projects.await_args
     assert await_args is not None
-    assert await_args.kwargs["created_by_id"] == target_user_id
+    assert await_args.kwargs["associated_user_id"] == target_user_id
     assert await_args.kwargs["limit"] == 10
     assert await_args.kwargs["current_user_id"] is None
 

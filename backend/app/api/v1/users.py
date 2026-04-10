@@ -47,7 +47,7 @@ MyProjectsVisibility = Annotated[
     Query(
         ...,
         description=(
-            "Visibility scope for authored projects: `all` includes drafts and "
+            "Visibility scope for associated projects: `all` includes drafts and "
             "published projects, `published` includes only published projects, and "
             "`draft` includes only drafts."
         ),
@@ -160,7 +160,7 @@ async def list_my_voted_projects(
     "/users/me/projects",
     summary="List my projects",
     description=(
-        "Return the authenticated user's authored, non-deleted projects with cursor "
+        "Return the authenticated user's associated, non-deleted projects with cursor "
         "pagination, computed `team_size`, and taxonomy fields (`categories`, "
         "`tags`, `tech_stack`). Drafts are included by default. "
         "`sort=new` returns one newest-first stream across the selected visibility. "
@@ -185,7 +185,7 @@ async def list_my_projects(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> ProjectListResponse:
-    """Return authored project cards, including drafts, with taxonomy parity."""
+    """Return associated project cards, including drafts, with taxonomy parity."""
     service = ProjectService(db)
     try:
         return await service.list_projects_for_owner(
@@ -266,7 +266,7 @@ async def _get_user_or_404_by_username(db: AsyncSession, *, username: str) -> Us
 async def _list_published_projects_for_creator(
     *,
     db: AsyncSession,
-    created_by_id: UUID,
+    associated_user_id: UUID,
     current_user_id: UUID | None,
     limit: int,
     cursor: str | None,
@@ -274,7 +274,7 @@ async def _list_published_projects_for_creator(
     published_from: date | None,
     published_to: date | None,
 ) -> ProjectListResponse:
-    """List published project cards for a creator with shared team/taxonomy parity."""
+    """List published project cards for a user association with team/taxonomy parity."""
     project_service = ProjectService(db)
     try:
         return await project_service.list_projects(
@@ -283,7 +283,7 @@ async def _list_published_projects_for_creator(
             cursor=cursor,
             published_from=published_from,
             published_to=published_to,
-            created_by_id=created_by_id,
+            associated_user_id=associated_user_id,
             current_user_id=current_user_id,
         )
     except CursorError as exc:
@@ -294,7 +294,7 @@ async def _list_published_projects_for_creator(
     "/users/{user_id}/projects",
     summary="List published projects for a user",
     description=(
-        "Return published projects authored by the given user, with cursor pagination "
+        "Return published projects associated with the given user, with cursor pagination "
         "and computed `team_size`, plus taxonomy fields (`categories`, `tags`, "
         "`tech_stack`)."
     ),
@@ -315,11 +315,11 @@ async def list_user_projects(
     db: AsyncSession = Depends(get_db),
     current_user: User | None = Depends(get_current_user_optional),
 ) -> ProjectListResponse:
-    """Return a user's published project cards with team and taxonomy parity."""
+    """Return a user's published associated project cards with team/taxonomy parity."""
     user = await _get_user_or_404_by_id(db, user_id=user_id)
     return await _list_published_projects_for_creator(
         db=db,
-        created_by_id=user.id,
+        associated_user_id=user.id,
         current_user_id=current_user.id if current_user else None,
         limit=limit,
         cursor=cursor,
@@ -333,7 +333,7 @@ async def list_user_projects(
     "/users/by-username/{username}/projects",
     summary="List published projects for a user by username",
     description=(
-        "Return published projects authored by the given username, with cursor "
+        "Return published projects associated with the given username, with cursor "
         "pagination and computed `team_size`, plus taxonomy fields (`categories`, "
         "`tags`, `tech_stack`). Username lookup is case-insensitive and resolves "
         "against canonical lowercase storage."
@@ -355,11 +355,11 @@ async def list_user_projects_by_username(
     db: AsyncSession = Depends(get_db),
     current_user: User | None = Depends(get_current_user_optional),
 ) -> ProjectListResponse:
-    """Return username-authored project cards with team and taxonomy parity."""
+    """Return username-associated project cards with team/taxonomy parity."""
     user = await _get_user_or_404_by_username(db, username=username)
     return await _list_published_projects_for_creator(
         db=db,
-        created_by_id=user.id,
+        associated_user_id=user.id,
         current_user_id=current_user.id if current_user else None,
         limit=limit,
         cursor=cursor,
