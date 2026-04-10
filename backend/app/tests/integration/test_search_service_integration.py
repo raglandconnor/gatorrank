@@ -131,18 +131,21 @@ async def test_search_projects_taxonomy_or_within_and_across_families(db_session
         categories=["AI"],
         tags=["Python"],
         tech_stack=[],
+        taxonomy_principal=owner,
     )
     await project_service._replace_project_taxonomy_assignments(
         project_id=_ai_only.id,
         categories=["AI"],
         tags=["TypeScript"],
         tech_stack=[],
+        taxonomy_principal=owner,
     )
     await project_service._replace_project_taxonomy_assignments(
         project_id=_python_only.id,
         categories=["Web"],
         tags=["Python"],
         tech_stack=[],
+        taxonomy_principal=owner,
     )
     await db_session.flush()
 
@@ -351,13 +354,25 @@ async def test_search_projects_filter_truth_table_or_within_and_across_families(
     )
     project_service = ProjectService(db_session)
     await project_service._replace_project_taxonomy_assignments(
-        project_id=p1.id, categories=["AI"], tags=["Python"], tech_stack=[]
+        project_id=p1.id,
+        categories=["AI"],
+        tags=["Python"],
+        tech_stack=[],
+        taxonomy_principal=owner,
     )
     await project_service._replace_project_taxonomy_assignments(
-        project_id=p2.id, categories=["Web"], tags=["Python"], tech_stack=[]
+        project_id=p2.id,
+        categories=["Web"],
+        tags=["Python"],
+        tech_stack=[],
+        taxonomy_principal=owner,
     )
     await project_service._replace_project_taxonomy_assignments(
-        project_id=_p3.id, categories=["AI"], tags=["Rust"], tech_stack=[]
+        project_id=_p3.id,
+        categories=["AI"],
+        tags=["Rust"],
+        tech_stack=[],
+        taxonomy_principal=owner,
     )
     await db_session.flush()
 
@@ -393,6 +408,7 @@ async def test_search_projects_unknown_term_mixed_filter_behavior(db_session):
         categories=["AI"],
         tags=["Python"],
         tech_stack=[],
+        taxonomy_principal=owner,
     )
     await db_session.flush()
 
