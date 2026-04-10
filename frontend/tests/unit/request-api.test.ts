@@ -167,6 +167,9 @@ describe('request api core', () => {
 
     expect(fetchWithAuthMock).toHaveBeenCalledTimes(1);
     expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [, fallbackInit] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const fallbackHeaders = new Headers(fallbackInit.headers);
+    expect(fallbackHeaders.get('Authorization')).toBeNull();
     expect(fetchMock).toHaveBeenCalledWith(
       'http://localhost:8000/api/v1/projects',
       expect.objectContaining({
@@ -205,6 +208,36 @@ describe('request api core', () => {
 
     expect(fetchWithAuthMock).toHaveBeenCalledTimes(1);
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  test('requestVoid retries auth=optional anonymously on 401', async () => {
+    getStoredAccessTokenMock.mockReturnValueOnce('stale-token');
+    fetchWithAuthMock.mockResolvedValueOnce(
+      new Response(JSON.stringify({ detail: 'Invalid token' }), {
+        status: 401,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(new Response(null, { status: 204 }));
+
+    await expect(
+      requestVoid('/api/v1/projects/p1/vote', {
+        auth: 'optional',
+        method: 'DELETE',
+      }),
+    ).resolves.toBeUndefined();
+
+    expect(fetchWithAuthMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://localhost:8000/api/v1/projects/p1/vote',
+      expect.objectContaining({
+        method: 'DELETE',
+      }),
+    );
   });
 
   test('requestVoid accepts 204 responses', async () => {
