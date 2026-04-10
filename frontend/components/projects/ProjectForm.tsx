@@ -19,12 +19,12 @@ import {
   LuGlobe,
   LuGithub,
   LuPlay,
-  LuImage,
   LuTag,
 } from 'react-icons/lu';
 import { listTags } from '@/lib/api/taxonomy';
 import type { ProjectMemberInfo, TaxonomyTerm } from '@/lib/api/types/project';
 import { toast } from '@/lib/ui/toast';
+import { ProjectLogoPlaceholder } from '@/components/projects/ProjectLogoPlaceholder';
 
 const PROJECT_NAME_MAX = 50;
 const SHORT_DESCRIPTION_MAX = 280;
@@ -289,6 +289,7 @@ export function ProjectForm({
     setShortDescription(initialValues.shortDescription);
     setFullDescription(initialValues.fullDescription);
     setTags(initialValues.tags);
+    setTagInput('');
     setWebsiteUrl(initialValues.websiteUrl);
     setGithubUrl(initialValues.githubUrl);
     setDemoVideoUrl(initialValues.demoVideoUrl);
@@ -603,30 +604,17 @@ export function ProjectForm({
                 <Box
                   w="100%"
                   h="144px"
-                  bg="white"
                   borderRadius="10px"
                   border="1px dashed"
                   borderColor="gray.300"
-                  display="flex"
-                  alignItems="center"
-                  justifyContent="center"
                   overflow="hidden"
                   opacity={0.75}
                 >
-                  <VStack gap="4px">
-                    <Box color="gray.500">
-                      <LuImage size={22} />
-                    </Box>
-                    <Text
-                      fontSize="sm"
-                      color="gray.600"
-                      lineHeight="20px"
-                      textAlign="center"
-                    >
-                      Project logos are not available yet
-                    </Text>
-                  </VStack>
+                  <ProjectLogoPlaceholder compact />
                 </Box>
+                <Text fontSize="sm" color="gray.600" lineHeight="20px">
+                  Project logos are not available yet.
+                </Text>
               </VStack>
 
               <VStack align="start" gap="4px" w="100%">
@@ -819,7 +807,7 @@ export function ProjectForm({
                 <Text fontSize="sm" color="orange.600">
                   {tagsError} You can still add your own tags manually.
                 </Text>
-              ) : filteredTags.length > 0 ? (
+              ) : normalizedTagInput && filteredTags.length > 0 ? (
                 <Wrap gap="8px">
                   {filteredTags.map((term) => (
                     <Button

@@ -32,6 +32,8 @@ import {
 import type { ProjectDetail } from '@/lib/api/types/project';
 import { isUuid } from '@/lib/profileSlug';
 import { profilePath, projectEditPath, projectPath } from '@/lib/routes';
+import { ProjectLogoPlaceholder } from '@/components/projects/ProjectLogoPlaceholder';
+import { FeatureLoadingState } from '@/components/ui/FeatureLoadingState';
 
 function getYouTubeEmbedUrl(url: string): string | null {
   const trimmed = url.trim();
@@ -143,82 +145,69 @@ function UpvoteBox({ votes }: { votes: number }) {
   );
 }
 
-function ProjectLoadingState() {
+function MemberMetaBlock({
+  username,
+  fullName,
+  profilePictureUrl,
+  description,
+  onClick,
+}: {
+  username: string;
+  fullName: string | null;
+  profilePictureUrl: string | null;
+  description: string;
+  onClick: () => void;
+}) {
   return (
-    <Box minH="100vh" bg="gray.50">
-      <Navbar />
-      <Box
-        px={{ base: '20px', md: '32px' }}
-        pt="32px"
-        pb="64px"
-        maxW="1200px"
-        mx="auto"
-      >
-        <Flex minH="68vh" align="center" justify="center">
-          <VStack
-            gap="18px"
-            px={{ base: '28px', md: '40px' }}
-            py={{ base: '30px', md: '38px' }}
-            bg="white"
-            borderRadius="24px"
-            border="1px solid"
-            borderColor="orange.100"
-            boxShadow="0 18px 50px rgba(15,23,42,0.08)"
-            textAlign="center"
-          >
-            <Box position="relative" w="82px" h="82px">
-              <motion.div
-                animate={{ rotate: 360 }}
-                transition={{ duration: 1.4, repeat: Infinity, ease: 'linear' }}
-                style={{
-                  position: 'absolute',
-                  inset: 0,
-                  borderRadius: '9999px',
-                  border: '3px solid rgba(251,191,36,0.22)',
-                  borderTopColor: '#f59e0b',
-                }}
-              />
-              <motion.div
-                animate={{ scale: [0.94, 1.04, 0.94] }}
-                transition={{
-                  duration: 1.8,
-                  repeat: Infinity,
-                  ease: 'easeInOut',
-                }}
-                style={{
-                  position: 'absolute',
-                  inset: '12px',
-                  borderRadius: '9999px',
-                  background:
-                    'linear-gradient(135deg, rgba(251,191,36,0.18), rgba(249,115,22,0.28))',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
-              >
-                <Box color="orange.500">
-                  <LuVideo size={24} />
-                </Box>
-              </motion.div>
-            </Box>
-
-            <VStack gap="6px">
-              <Text fontSize="lg" fontWeight="bold" color="gray.900">
-                Loading project
-              </Text>
-              <Text
-                fontSize="sm"
-                color="gray.600"
-                maxW="300px"
-                lineHeight="22px"
-              >
-                Pulling in the latest project details, links, and tags.
-              </Text>
-            </VStack>
-          </VStack>
-        </Flex>
-      </Box>
-    </Box>
+    <HStack
+      gap="12px"
+      cursor="pointer"
+      transition="background 0.15s, border-color 0.15s, box-shadow 0.15s, transform 0.15s"
+      _hover={{
+        bg: 'white',
+        borderColor: 'orange.200',
+        boxShadow: '0 10px 24px rgba(251,146,60,0.12)',
+        transform: 'translateY(-1px)',
+      }}
+      _focusWithin={{
+        bg: 'white',
+        borderColor: 'orange.200',
+        boxShadow: '0 0 0 3px rgba(251,146,60,0.16)',
+      }}
+      onClick={onClick}
+      minW="fit-content"
+      border="1px solid"
+      borderColor="transparent"
+      borderRadius="14px"
+      px="10px"
+      py="8px"
+      bg="transparent"
+    >
+      <Avatar.Root w="52px" h="52px" borderRadius="full" overflow="hidden">
+        <Avatar.Fallback
+          name={fullName ?? username}
+          bg="gray.300"
+          color="gray.700"
+          fontSize="md"
+          fontWeight="bold"
+        />
+        {profilePictureUrl && <Avatar.Image src={profilePictureUrl} />}
+      </Avatar.Root>
+      <VStack align="start" gap="2px" minW={0}>
+        <Text
+          fontSize="md"
+          fontWeight="bold"
+          color="gray.900"
+          lineHeight="22px"
+          lineClamp={1}
+        >
+          {fullName ?? username}
+        </Text>
+        <Text fontSize="sm" color="gray.600" lineHeight="18px" lineClamp={1}>
+          {description}
+        </Text>
+      </VStack>
+    </HStack>
   );
 }
 
@@ -293,16 +282,38 @@ export default function ProjectDetailPage() {
 
   const project = projectDetail;
   const isOwner = user?.id === project?.created_by_id;
-  const projectCreator = useMemo(() => {
-    if (!projectDetail?.members.length) return null;
-    return (
-      projectDetail.members.find((member) => member.role === 'owner') ??
-      projectDetail.members[0]
-    );
+  const projectMembers = useMemo(() => {
+    if (!projectDetail?.members.length) return [];
+    return [...projectDetail.members].sort((left, right) => {
+      if (left.role === 'owner' && right.role !== 'owner') return -1;
+      if (left.role !== 'owner' && right.role === 'owner') return 1;
+      return (left.full_name ?? left.username).localeCompare(
+        right.full_name ?? right.username,
+      );
+    });
   }, [projectDetail]);
+  const projectCreator = projectMembers[0] ?? null;
+  const nonOwnerMembers = projectMembers.slice(1);
 
   if (!isReady || loading) {
-    return <ProjectLoadingState />;
+    return (
+      <Box minH="100vh" bg="gray.50">
+        <Navbar />
+        <Box
+          px={{ base: '20px', md: '32px' }}
+          pt="32px"
+          pb="64px"
+          maxW="1200px"
+          mx="auto"
+        >
+          <FeatureLoadingState
+            title="Loading project"
+            description="Pulling in the latest project details, links, and tags."
+            icon={<LuVideo size={24} />}
+          />
+        </Box>
+      </Box>
+    );
   }
 
   if (notFound || forbidden) {
@@ -408,15 +419,9 @@ export default function ProjectDetailPage() {
                   h={{ base: '104px', md: '128px' }}
                   borderRadius="12px"
                   overflow="hidden"
-                  bg="gray.200"
                   flexShrink={0}
-                  display="flex"
-                  alignItems="center"
-                  justifyContent="center"
                 >
-                  <Box color="gray.400">
-                    <LuVideo size={28} />
-                  </Box>
+                  <ProjectLogoPlaceholder />
                 </Box>
 
                 <VStack align="start" gap="12px" flex="1" minW={0}>
@@ -536,14 +541,14 @@ export default function ProjectDetailPage() {
                         type="button"
                         variant="outline"
                         border="1px solid"
-                        borderColor="gray.300"
+                        borderColor="orange.400"
                         bg="white"
                         borderRadius="12px"
                         h="44px"
                         px="18px"
                         fontSize="md"
                         color="gray.800"
-                        _hover={{ bg: 'gray.50' }}
+                        _hover={{ bg: 'orange.50' }}
                         onClick={() =>
                           router.push(projectEditPath(project.slug))
                         }
@@ -565,81 +570,53 @@ export default function ProjectDetailPage() {
 
             <Box h="1px" bg="gray.200" my="22px" />
 
-            <HStack justify="space-between" flexWrap="wrap" gap="16px">
-              <HStack
-                gap="14px"
-                cursor={projectCreator ? 'pointer' : 'default'}
-                onClick={() => {
-                  if (projectCreator) {
-                    router.push(profilePath(projectCreator.username));
-                  }
-                }}
-              >
-                <Avatar.Root
-                  w="52px"
-                  h="52px"
-                  borderRadius="full"
-                  overflow="hidden"
-                >
-                  <Avatar.Fallback
-                    name={
-                      projectCreator?.full_name ??
-                      projectCreator?.username ??
-                      'U'
-                    }
-                    bg="gray.300"
-                    color="gray.700"
-                    fontSize="md"
-                    fontWeight="bold"
+            <VStack align="stretch" gap="16px">
+              <Box overflowX="auto" overflowY="hidden" pb="2px">
+                <HStack gap="20px" align="stretch" minW="max-content">
+                {projectCreator && (
+                  <MemberMetaBlock
+                    username={projectCreator.username}
+                    fullName={projectCreator.full_name}
+                    profilePictureUrl={projectCreator.profile_picture_url}
+                    description="Project Creator"
+                    onClick={() => router.push(profilePath(projectCreator.username))}
                   />
-                  {projectCreator?.profile_picture_url && (
-                    <Avatar.Image src={projectCreator.profile_picture_url} />
-                  )}
-                </Avatar.Root>
-
-                <VStack align="start" gap="2px">
-                  <HStack gap="8px" flexWrap="wrap">
-                    <Text
-                      fontSize="md"
-                      fontWeight="bold"
-                      color="gray.900"
-                      lineHeight="22px"
-                    >
-                      {projectCreator?.full_name ??
-                        projectCreator?.username ??
-                        'Project Owner'}
-                    </Text>
-                  </HStack>
-                  <Text fontSize="sm" color="gray.600" lineHeight="18px">
-                    Project Creator
-                  </Text>
-                </VStack>
-              </HStack>
+                )}
+                {nonOwnerMembers.map((member) => (
+                  <MemberMetaBlock
+                    key={member.user_id}
+                    username={member.username}
+                    fullName={member.full_name}
+                    profilePictureUrl={member.profile_picture_url}
+                    description="Team Member"
+                    onClick={() => router.push(profilePath(member.username))}
+                  />
+                ))}
+                </HStack>
+              </Box>
 
               {project.github_url?.trim() ? (
                 <HStack gap="16px" flexWrap="wrap">
-                  {project.github_url?.trim() ? (
-                    <ChakraLink
-                      href={project.github_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      display="inline-flex"
-                      alignItems="center"
-                      gap="6px"
-                      fontSize="md"
-                      color="gray.700"
-                      _hover={{
-                        color: 'gray.900',
-                        textDecoration: 'underline',
-                      }}
-                    >
-                      <LuGithub size={16} />
-                      GitHub
-                    </ChakraLink>
-                  ) : null}
+                  <ChakraLink
+                    href={project.github_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    display="inline-flex"
+                    alignItems="center"
+                    gap="6px"
+                    fontSize="md"
+                    color="gray.700"
+                    _hover={{
+                      color: 'gray.900',
+                      textDecoration: 'underline',
+                    }}
+                  >
+                    <LuGithub size={16} />
+                    GitHub
+                  </ChakraLink>
                 </HStack>
               ) : null}
-            </HStack>
+            </VStack>
           </Box>
         </Box>
 

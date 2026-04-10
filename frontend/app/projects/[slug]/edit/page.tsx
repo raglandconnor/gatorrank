@@ -286,6 +286,7 @@ export default function EditProjectPage() {
         </Flex>
 
         <ProjectForm
+          key={`${state.project.id}:${state.project.updated_at}`}
           mode="edit"
           initialValues={initialValues}
           onSubmit={handleSubmit}

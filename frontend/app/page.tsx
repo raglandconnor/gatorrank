@@ -1,8 +1,10 @@
 'use client';
 import { useEffect, useState } from 'react';
-import { Box, Container, Spinner, Text, VStack } from '@chakra-ui/react';
+import { Box, Container, Text, VStack } from '@chakra-ui/react';
+import { LuTrophy } from 'react-icons/lu';
 import { Navbar } from '@/components/layout/Navbar';
 import { ProjectSection } from '@/components/projects/ProjectSection';
+import { FeatureLoadingState } from '@/components/ui/FeatureLoadingState';
 import type { Project } from '@/types/project';
 import { listProjectsPublic } from '@/lib/api/projects';
 import { getAllTimeTopRange, getMonthRange } from '@/lib/projects/dateFilters';
@@ -86,18 +88,11 @@ export default function Home() {
       <Navbar />
       <Container maxW="1280px" px="212px" py="50px">
         {state.loading ? (
-          <VStack
-            minH="40vh"
-            justify="center"
-            align="center"
-            w="100%"
-            gap="12px"
-          >
-            <Spinner size="lg" color="orange.400" />
-            <Text fontSize="sm" color="gray.600">
-              Loading projects...
-            </Text>
-          </VStack>
+          <FeatureLoadingState
+            title="Loading projects"
+            description="Pulling in the latest top and trending projects from the GatorRank community."
+            icon={<LuTrophy size={24} />}
+          />
         ) : state.error ? (
           <VStack
             minH="40vh"
