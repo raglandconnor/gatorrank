@@ -282,7 +282,9 @@ export function ProfileUserProjects({
               key={project.id}
               project={project}
               onEdit={
-                isOwn ? (id) => router.push(`/projects/${id}/edit`) : undefined
+                isOwn && project.created_by_id === userId
+                  ? (id) => router.push(`/projects/${id}/edit`)
+                  : undefined
               }
             />
           ))}
