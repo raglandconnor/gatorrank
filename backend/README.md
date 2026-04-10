@@ -52,6 +52,7 @@ Flags:
 - `--with-taxonomy` / `--no-with-taxonomy`: include taxonomy term vocab + project term assignments.
 - `--with-edge-cases` / `--no-with-edge-cases`: include soft-delete and lifecycle/date-window edge-case shaping.
 - `--with-auth-sessions` / `--no-with-auth-sessions`: include deterministic refresh-session fixtures (active/revoked/expired).
+- `--reset-mock` is required when using `--no-with-taxonomy` or `--no-with-edge-cases` to avoid stale prior mock state.
 
 ### Cleanup mock data (dev-only)
 

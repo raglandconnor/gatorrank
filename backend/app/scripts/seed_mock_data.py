@@ -203,6 +203,10 @@ def parse_args() -> SeedConfig:
         raise SystemExit("--group-projects must be within [0, total-projects]")
     if args.total_votes < 0:
         raise SystemExit("--total-votes must be >= 0")
+    if (not args.with_taxonomy or not args.with_edge_cases) and not args.reset_mock:
+        raise SystemExit(
+            "--reset-mock is required when using --no-with-taxonomy or --no-with-edge-cases"
+        )
 
     return SeedConfig(
         email_domain=args.email_domain,
