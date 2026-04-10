@@ -183,9 +183,6 @@ function UserProjectCard({
                 }}
                 aria-label={`Upvote ${project.title}`}
                 aria-pressed={isVoted}
-                aria-disabled={isPending}
-                aria-busy={isPending}
-                cursor={isPending ? 'wait' : 'pointer'}
               >
                 <Box color={isVoted ? 'orange.500' : 'gray.700'}>
                   <LuChevronUp size={14} />

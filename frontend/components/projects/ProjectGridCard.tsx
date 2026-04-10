@@ -215,9 +215,6 @@ export function ProjectGridCard({ project, rank }: ProjectGridCardProps) {
             }}
             aria-label={`Upvote ${project.name}`}
             aria-pressed={isVoted}
-            aria-disabled={isPending}
-            aria-busy={isPending}
-            cursor={isPending ? 'wait' : 'pointer'}
           >
             <Box color={isVoted ? 'orange.500' : 'gray.700'}>
               <LuChevronUp size={14} />

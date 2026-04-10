@@ -52,9 +52,6 @@ export function UpvoteBox({
         onClick={() => void toggleVote()}
         aria-label="Upvote"
         aria-pressed={isVoted}
-        aria-disabled={isPending}
-        aria-busy={isPending}
-        cursor={isPending ? 'wait' : 'pointer'}
       >
         <Box color={isVoted ? 'orange.500' : 'gray.800'}>
           <LuChevronUp size={24} />

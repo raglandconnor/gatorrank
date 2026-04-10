@@ -161,9 +161,6 @@ export function ProjectCard({ project, rank }: ProjectCardProps) {
             onClick={() => void toggleVote()}
             aria-label={`Upvote ${project.name}`}
             aria-pressed={isVoted}
-            aria-disabled={isPending}
-            aria-busy={isPending}
-            cursor={isPending ? 'wait' : 'pointer'}
           >
             <Box color={isVoted ? 'orange.500' : 'gray.800'}>
               <LuChevronUp size={18} />
