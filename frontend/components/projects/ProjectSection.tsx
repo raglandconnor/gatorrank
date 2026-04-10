@@ -1,8 +1,8 @@
 'use client';
 import { motion } from 'framer-motion';
 import { VStack, Text, Button, Link as ChakraLink } from '@chakra-ui/react';
-import { ProjectCard } from '@/components/ProjectCard';
-import type { Project } from '@/data/mock-projects';
+import { ProjectCard } from '@/components/projects/ProjectCard';
+import type { Project } from '@/types/project';
 import NextLink from 'next/link';
 
 interface ProjectSectionProps {

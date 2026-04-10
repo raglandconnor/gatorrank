@@ -20,11 +20,11 @@ import {
   LuLinkedin,
   LuGlobe,
 } from 'react-icons/lu';
-import { Navbar } from '@/components/Navbar';
+import { Navbar } from '@/components/layout/Navbar';
 import { AcademicInfoCard } from '@/components/AcademicInfoCard';
 import { RoleBadge } from '@/components/ui/rolebadge';
 import { ProfileUserProjects } from '@/components/ProfileUserProjects';
-import { useAuth } from '@/components/auth/AuthProvider';
+import { useAuth } from '@/components/domain/AuthProvider';
 import { getUserPublic, getUserPublicByUsername } from '@/lib/api/users';
 import { isUuid } from '@/lib/profileSlug';
 import { profileEditPath, profilePath } from '@/lib/routes';

@@ -23,8 +23,8 @@ import {
   LuPencil,
   LuChevronUp,
 } from 'react-icons/lu';
-import { Navbar } from '@/components/Navbar';
-import { useAuth } from '@/components/auth/AuthProvider';
+import { Navbar } from '@/components/layout/Navbar';
+import { useAuth } from '@/components/domain/AuthProvider';
 import {
   getProjectByIdForViewer,
   getProjectBySlugForViewer,

@@ -28,13 +28,13 @@ import {
   LuCamera,
   LuShieldCheck,
 } from 'react-icons/lu';
-import { Navbar } from '@/components/Navbar';
+import { Navbar } from '@/components/layout/Navbar';
 import { toast } from '@/lib/ui/toast';
 import { RoleBadge } from '@/components/ui/rolebadge';
 import { getMe, patchMe } from '@/lib/api/users';
 import type { AuthUser } from '@/lib/api/types/auth';
 import type { UserPrivate } from '@/lib/api/types/user';
-import { useAuth } from '@/components/auth/AuthProvider';
+import { useAuth } from '@/components/domain/AuthProvider';
 import { isUuid } from '@/lib/profileSlug';
 import { profilePath, profileEditPath } from '@/lib/routes';
 

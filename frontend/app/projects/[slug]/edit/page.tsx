@@ -12,7 +12,7 @@ import {
   Spinner,
 } from '@chakra-ui/react';
 import { LuSave, LuX } from 'react-icons/lu';
-import { Navbar } from '@/components/Navbar';
+import { Navbar } from '@/components/layout/Navbar';
 import {
   ProjectForm,
   ProjectFormValues,

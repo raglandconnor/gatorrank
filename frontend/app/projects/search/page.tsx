@@ -12,9 +12,9 @@ import {
   Text,
   VStack,
 } from '@chakra-ui/react';
-import { Navbar } from '@/components/Navbar';
+import { Navbar } from '@/components/layout/Navbar';
 import { SearchResultRow } from '@/components/projects/SearchResultRow';
-import { useAuth } from '@/components/auth/AuthProvider';
+import { useAuth } from '@/components/domain/AuthProvider';
 import { searchProjects } from '@/lib/api/search';
 import type { SearchProjectListItem, SearchSort } from '@/lib/api/types/search';
 

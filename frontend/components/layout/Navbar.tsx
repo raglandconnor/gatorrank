@@ -1,8 +1,8 @@
 'use client';
 
 import { FormEvent, useMemo } from 'react';
-import { GatorRankLogo } from '@/components/GatorRankLogo';
-import { useAuth } from '@/components/auth/AuthProvider';
+import { GatorRankLogo } from '@/components/layout/GatorRankLogo';
+import { useAuth } from '@/components/domain/AuthProvider';
 import {
   Box,
   HStack,
@@ -42,6 +42,7 @@ export function Navbar() {
   const showSearch = useMemo(() => {
     if (!pathname) return true;
     if (pathname === '/projects/create') return false;
+    if (pathname === '/projects/edit') return false;
     if (pathname === '/profile/edit') return false;
     if (/^\/projects\/[^/]+\/edit$/.test(pathname)) return false;
     if (/^\/profile\/[^/]+\/edit$/.test(pathname)) return false;

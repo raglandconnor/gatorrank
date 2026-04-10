@@ -1,28 +1,11 @@
-import { apiUrl } from '@/lib/api/client';
-import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
-import {
-  buildHttpError,
-  buildQueryString,
-  parseApiErrorMessage,
-} from '@/lib/api/http';
+import { buildQueryString } from '@/lib/api/http';
+import { requestJson } from '@/lib/api/request';
 import type {
   MyProjectsQuery,
   ProjectListQuery,
   ProjectListResponse,
 } from '@/lib/api/types/project';
 import type { UserPrivate, UserPublic, UserUpdate } from '@/lib/api/types/user';
-
-async function parseUserResponse<T>(
-  res: Response,
-  fallback: string,
-): Promise<T> {
-  if (!res.ok) {
-    const message = await parseApiErrorMessage(res, fallback);
-    throw buildHttpError(message, res.status);
-  }
-
-  return res.json() as Promise<T>;
-}
 
 function buildProjectsQuery(query: ProjectListQuery = {}): string {
   return buildQueryString({
@@ -35,42 +18,50 @@ function buildProjectsQuery(query: ProjectListQuery = {}): string {
 }
 
 export async function getMe(): Promise<UserPrivate> {
-  const res = await fetchWithAuth('/api/v1/users/me');
-  return parseUserResponse<UserPrivate>(res, 'Failed to fetch profile');
+  return requestJson<UserPrivate>('/api/v1/users/me', {
+    auth: 'required',
+    fallbackErrorMessage: 'Failed to fetch profile',
+  });
 }
 
 export async function patchMe(payload: UserUpdate): Promise<UserPrivate> {
-  const res = await fetchWithAuth('/api/v1/users/me', {
+  return requestJson<UserPrivate>('/api/v1/users/me', {
+    auth: 'required',
     method: 'PATCH',
-    body: JSON.stringify(payload),
+    body: payload,
+    fallbackErrorMessage: 'Failed to update profile',
   });
-  return parseUserResponse<UserPrivate>(res, 'Failed to update profile');
 }
 
 export async function getUserPublic(userId: string): Promise<UserPublic> {
-  const res = await fetch(apiUrl(`/api/v1/users/${userId}`));
-  return parseUserResponse<UserPublic>(res, 'Failed to fetch user profile');
+  return requestJson<UserPublic>(`/api/v1/users/${userId}`, {
+    auth: 'none',
+    fallbackErrorMessage: 'Failed to fetch user profile',
+  });
 }
 
 export async function getUserPublicByUsername(
   username: string,
 ): Promise<UserPublic> {
-  const res = await fetch(
-    apiUrl(`/api/v1/users/by-username/${encodeURIComponent(username)}`),
+  return requestJson<UserPublic>(
+    `/api/v1/users/by-username/${encodeURIComponent(username)}`,
+    {
+      auth: 'none',
+      fallbackErrorMessage: 'Failed to fetch user profile',
+    },
   );
-  return parseUserResponse<UserPublic>(res, 'Failed to fetch user profile');
 }
 
 export async function getUserProjects(
   userId: string,
   query: ProjectListQuery = { limit: 20, sort: 'new' },
 ): Promise<ProjectListResponse> {
-  const res = await fetchWithAuth(
+  return requestJson<ProjectListResponse>(
     `/api/v1/users/${userId}/projects${buildProjectsQuery(query)}`,
-  );
-  return parseUserResponse<ProjectListResponse>(
-    res,
-    'Failed to fetch projects',
+    {
+      auth: 'required',
+      fallbackErrorMessage: 'Failed to fetch projects',
+    },
   );
 }
 
@@ -78,12 +69,12 @@ export async function getUserProjectsByUsername(
   username: string,
   query: ProjectListQuery = { limit: 20, sort: 'new' },
 ): Promise<ProjectListResponse> {
-  const res = await fetchWithAuth(
+  return requestJson<ProjectListResponse>(
     `/api/v1/users/by-username/${encodeURIComponent(username)}/projects${buildProjectsQuery(query)}`,
-  );
-  return parseUserResponse<ProjectListResponse>(
-    res,
-    'Failed to fetch projects',
+    {
+      auth: 'required',
+      fallbackErrorMessage: 'Failed to fetch projects',
+    },
   );
 }
 
@@ -98,9 +89,8 @@ export async function getMyProjects(
     published_from: query.published_from,
     published_to: query.published_to,
   });
-  const res = await fetchWithAuth(`/api/v1/users/me/projects${qs}`);
-  return parseUserResponse<ProjectListResponse>(
-    res,
-    'Failed to fetch your projects',
-  );
+  return requestJson<ProjectListResponse>(`/api/v1/users/me/projects${qs}`, {
+    auth: 'required',
+    fallbackErrorMessage: 'Failed to fetch your projects',
+  });
 }

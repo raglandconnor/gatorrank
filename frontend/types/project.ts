@@ -1,0 +1,9 @@
+/** Project row shape for home/grid/profile-style cards (API-mapped or mock). */
+export interface Project {
+  id: string | number;
+  name: string;
+  description: string;
+  tags: string[];
+  votes: number;
+  comments: number;
+}
