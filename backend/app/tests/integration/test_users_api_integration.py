@@ -1038,11 +1038,14 @@ async def test_list_my_projects_visibility_filters_and_taxonomy_order(
     )
 
     service = ProjectService(db_session)
+    owner = await db_session.get(User, owner_id)
+    assert owner is not None
     await service._replace_project_taxonomy_assignments(  # type: ignore[attr-defined]
         project_id=draft.id,
         categories=["Backend", "AI"],
         tags=["FastAPI", "Python"],
         tech_stack=["SQLModel", "Supabase"],
+        taxonomy_principal=owner,
     )
     await db_session.commit()
 

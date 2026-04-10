@@ -5,7 +5,9 @@ from uuid import uuid4
 
 import pytest
 from app.models.project import Project
-from app.models.taxonomy import ProjectCategory
+from app.models.taxonomy import Category, ProjectCategory
+from app.models.user_roles import USER_ROLE_STUDENT
+from app.policy.roles import PolicyDeniedError
 from app.schemas.project import ProjectCreateRequest, ProjectListResponse
 from app.schemas.taxonomy import TaxonomyTermResponse
 from app.services.project import (
@@ -257,6 +259,9 @@ async def test_create_project_skips_taxonomy_assignment_when_create_lists_empty(
     detail_stub = type("Detail", (), {"id": project_id})()
 
     service.get_project_detail = AsyncMock(return_value=detail_stub)  # type: ignore[method-assign]
+    service.get_user_by_id = AsyncMock(  # type: ignore[method-assign]
+        return_value=type("Principal", (), {"role": USER_ROLE_STUDENT})()
+    )
     service._generate_unique_slug = AsyncMock(
         return_value="project-create-empty-taxonomy"
     )  # type: ignore[method-assign]
@@ -297,6 +302,9 @@ async def test_create_project_retries_on_slug_unique_conflict():
 
     db.flush = AsyncMock(side_effect=[slug_conflict, None])
     service.get_project_detail = AsyncMock(return_value=detail_stub)  # type: ignore[method-assign]
+    service.get_user_by_id = AsyncMock(  # type: ignore[method-assign]
+        return_value=type("Principal", (), {"role": USER_ROLE_STUDENT})()
+    )
     service._replace_project_taxonomy_assignments = AsyncMock(return_value=None)  # type: ignore[method-assign]
     service._generate_unique_slug = AsyncMock(
         side_effect=["retry-slug", "retry-slug-2"]
@@ -307,6 +315,23 @@ async def test_create_project_retries_on_slug_unique_conflict():
     assert created is detail_stub
     assert service._generate_unique_slug.await_count == 2  # type: ignore[attr-defined]
     assert db.rollback.await_count == 1
+
+
+@pytest.mark.asyncio
+async def test_resolve_or_create_terms_rejects_create_on_miss_without_principal():
+    db = AsyncMock()
+    service = ProjectService(cast(AsyncSession, db))
+    empty_result = Mock(first=Mock(return_value=None))
+    db.exec = AsyncMock(return_value=empty_result)
+
+    with pytest.raises(
+        PolicyDeniedError, match="Taxonomy create-on-miss requires authentication"
+    ):
+        await service._resolve_or_create_terms(
+            model=Category,
+            values=["New Term"],
+            taxonomy_principal=None,
+        )
 
 
 @pytest.mark.asyncio
