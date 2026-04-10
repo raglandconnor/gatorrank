@@ -19,7 +19,7 @@ interface ProjectGridCardProps {
 
 export function ProjectGridCard({ project, rank }: ProjectGridCardProps) {
   const [isHovered, setIsHovered] = useState(false);
-  const { isVoted, voteCount, isPending, toggleVote } = useProjectVote({
+  const { isVoted, voteCount, toggleVote } = useProjectVote({
     projectId: String(project.id),
     initialVoteCount: project.votes,
     initialViewerHasVoted: project.viewerHasVoted ?? false,

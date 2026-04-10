@@ -97,7 +97,12 @@ async function executeRequest(
   }
 
   if (auth === 'optional' && getStoredAccessToken()) {
-    return fetchWithAuth(requestPath, init);
+    const authedRes = await fetchWithAuth(requestPath, init);
+    if (authedRes.status !== 401) {
+      return authedRes;
+    }
+    // Public/optional reads should stay resilient if local auth state is stale.
+    return fetch(toFetchUrl(requestPath), init);
   }
 
   return fetch(toFetchUrl(requestPath), init);

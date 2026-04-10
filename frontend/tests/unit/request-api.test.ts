@@ -138,6 +138,75 @@ describe('request api core', () => {
     expect(url).toBe('http://localhost:8000/api/v1/no-token');
   });
 
+  test('retries auth=optional anonymously when authenticated attempt returns 401', async () => {
+    getStoredAccessTokenMock.mockReturnValueOnce('stale-token');
+    fetchWithAuthMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          detail: 'Invalid token',
+        }),
+        {
+          status: 401,
+          headers: { 'Content-Type': 'application/json' },
+        },
+      ),
+    );
+
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+      new Response(JSON.stringify({ items: [] }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+
+    const result = await requestJson<{ items: unknown[] }>('/api/v1/projects', {
+      auth: 'optional',
+      method: 'GET',
+      cache: 'no-store',
+    });
+
+    expect(fetchWithAuthMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://localhost:8000/api/v1/projects',
+      expect.objectContaining({
+        method: 'GET',
+        cache: 'no-store',
+      }),
+    );
+    expect(result.items).toEqual([]);
+  });
+
+  test('does not retry auth=optional anonymously for non-401 failures', async () => {
+    getStoredAccessTokenMock.mockReturnValueOnce('token-123');
+    fetchWithAuthMock.mockResolvedValueOnce(
+      new Response(JSON.stringify({ detail: 'Rate limited' }), {
+        status: 429,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ ok: false }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+
+    await expect(
+      requestJson('/api/v1/projects', {
+        auth: 'optional',
+        method: 'GET',
+      }),
+    ).rejects.toMatchObject({
+      message: 'Rate limited',
+      status: 429,
+    });
+
+    expect(fetchWithAuthMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   test('requestVoid accepts 204 responses', async () => {
     fetchWithAuthMock.mockResolvedValue(new Response(null, { status: 204 }));
 

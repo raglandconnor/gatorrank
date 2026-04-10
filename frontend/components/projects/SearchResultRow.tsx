@@ -30,7 +30,7 @@ function formatPublishedDate(value: string | null): string {
 }
 
 export function SearchResultRow({ project }: SearchResultRowProps) {
-  const { isVoted, voteCount, isPending, toggleVote } = useProjectVote({
+  const { isVoted, voteCount, toggleVote } = useProjectVote({
     projectId: project.id,
     initialVoteCount: project.vote_count,
     initialViewerHasVoted: project.viewer_has_voted,

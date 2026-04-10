@@ -14,7 +14,7 @@ export function UpvoteBox({
   votes: number;
   viewerHasVoted?: boolean;
 }) {
-  const { isVoted, voteCount, isPending, toggleVote } = useProjectVote({
+  const { isVoted, voteCount, toggleVote } = useProjectVote({
     projectId,
     initialVoteCount: votes,
     initialViewerHasVoted: viewerHasVoted,

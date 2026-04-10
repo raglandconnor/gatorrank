@@ -32,7 +32,7 @@ function UserProjectCard({
   onEdit?: (id: string) => void;
 }) {
   const [isHovered, setIsHovered] = useState(false);
-  const { isVoted, voteCount, isPending, toggleVote } = useProjectVote({
+  const { isVoted, voteCount, toggleVote } = useProjectVote({
     projectId: project.id,
     initialVoteCount: project.vote_count,
     initialViewerHasVoted: project.viewer_has_voted,
