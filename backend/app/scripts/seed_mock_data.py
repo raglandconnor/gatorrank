@@ -14,13 +14,28 @@ from uuid import UUID
 
 import sqlalchemy as sa
 from sqlalchemy import delete
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.db.database import AsyncSessionLocal
 from app.models.auth import RefreshSession
+from app.models.project_roles import (
+    PROJECT_ROLE_CONTRIBUTOR,
+    PROJECT_ROLE_MAINTAINER,
+    PROJECT_ROLE_OWNER,
+)
 from app.models.project import Project, ProjectMember, Vote
+from app.models.taxonomy import (
+    Category,
+    ProjectCategory,
+    ProjectTag,
+    ProjectTechStack,
+    Tag,
+    TechStack,
+)
 from app.models.user import User
+from app.models.user_roles import USER_ROLE_ADMIN, USER_ROLE_FACULTY, USER_ROLE_STUDENT
 from app.services.auth import AuthService
 
 
@@ -35,6 +50,106 @@ class SeedConfig:
     total_votes: int
     random_seed: int
     reset_mock: bool
+    with_taxonomy: bool
+    with_edge_cases: bool
+    with_auth_sessions: bool
+
+
+MOCK_CATEGORIES = [
+    "Artificial Intelligence",
+    "Productivity",
+    "Education",
+    "Healthcare",
+    "FinTech",
+    "Civic Tech",
+    "Sustainability",
+    "Developer Tools",
+    "Social Impact",
+    "Campus Life",
+    "Gaming",
+    "Accessibility",
+]
+
+MOCK_TAGS = [
+    "automation",
+    "analytics",
+    "collaboration",
+    "recommendation",
+    "scheduling",
+    "notifications",
+    "workflow",
+    "search",
+    "nlp",
+    "computer vision",
+    "data visualization",
+    "machine learning",
+    "community",
+    "mentorship",
+    "feedback",
+    "event management",
+    "mapping",
+    "budgeting",
+    "security",
+    "privacy",
+    "real-time",
+    "mobile-first",
+    "onboarding",
+    "accessibility",
+    "goal tracking",
+    "resource discovery",
+    "matching",
+    "gamification",
+    "planning",
+    "reporting",
+    "campus safety",
+    "career development",
+    "attendance",
+    "peer support",
+    "study groups",
+    "health monitoring",
+    "fundraising",
+    "volunteering",
+    "carbon tracking",
+    "open source",
+]
+
+MOCK_TECH_STACK = [
+    "Python",
+    "TypeScript",
+    "FastAPI",
+    "Next.js",
+    "React",
+    "PostgreSQL",
+    "Supabase",
+    "Redis",
+    "Docker",
+    "Kubernetes",
+    "AWS",
+    "GCP",
+    "Azure",
+    "GraphQL",
+    "REST",
+    "Node.js",
+    "Bun",
+    "Tailwind CSS",
+    "Chakra UI",
+    "SQLModel",
+    "Alembic",
+    "Pytest",
+    "Playwright",
+    "Pydantic",
+    "OpenAPI",
+    "GitHub Actions",
+    "Terraform",
+    "Cloudflare",
+    "Sentry",
+    "Prometheus",
+    "OpenTelemetry",
+    "Elasticsearch",
+    "Kafka",
+    "Celery",
+    "LangChain",
+]
 
 
 def log(message: str) -> None:
@@ -57,6 +172,24 @@ def parse_args() -> SeedConfig:
         "--reset-mock",
         action="store_true",
         help="Delete existing mock-scoped rows first, then reseed.",
+    )
+    parser.add_argument(
+        "--with-taxonomy",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Seed taxonomy vocab + project assignments (default: on).",
+    )
+    parser.add_argument(
+        "--with-edge-cases",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Seed soft-delete/date-window/member-size edge cases (default: on).",
+    )
+    parser.add_argument(
+        "--with-auth-sessions",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Seed deterministic refresh session fixtures (default: off).",
     )
     args = parser.parse_args()
 
@@ -81,6 +214,9 @@ def parse_args() -> SeedConfig:
         total_votes=args.total_votes,
         random_seed=args.random_seed,
         reset_mock=args.reset_mock,
+        with_taxonomy=args.with_taxonomy,
+        with_edge_cases=args.with_edge_cases,
+        with_auth_sessions=args.with_auth_sessions,
     )
 
 
@@ -274,12 +410,294 @@ def project_timeline(index: int, now_date: date) -> tuple[date | None, date | No
     return start, None
 
 
+def normalize_taxonomy_name(value: str) -> str:
+    return value.strip().lower()
+
+
+def role_for_user_index(index: int) -> str:
+    if index == 1:
+        return USER_ROLE_ADMIN
+    if index in {2, 3}:
+        return USER_ROLE_FACULTY
+    return USER_ROLE_STUDENT
+
+
+def _sample_terms(
+    pool: list[str],
+    *,
+    rng: random.Random,
+    minimum: int,
+    maximum: int,
+) -> list[str]:
+    target = rng.randint(minimum, maximum)
+    target = max(0, min(target, len(pool)))
+    if target == 0:
+        return []
+    return rng.sample(pool, target)
+
+
+def project_taxonomy(
+    index: int,
+    *,
+    random_seed: int,
+) -> tuple[list[str], list[str], list[str]]:
+    local_rng = random.Random((random_seed * 7919) + (index * 1543))
+    categories = _sample_terms(MOCK_CATEGORIES, rng=local_rng, minimum=0, maximum=3)
+    tags = _sample_terms(MOCK_TAGS, rng=local_rng, minimum=0, maximum=8)
+    tech_stack = _sample_terms(MOCK_TECH_STACK, rng=local_rng, minimum=1, maximum=10)
+    return categories, tags, tech_stack
+
+
+def _soft_deleted_project_indexes(
+    *,
+    total_projects: int,
+    published_projects: int,
+    random_seed: int,
+) -> set[int]:
+    if total_projects <= 0:
+        return set()
+    target = max(1, total_projects // 12)
+    seed_rng = random.Random((random_seed * 3253) + 17)
+    eligible = list(range(1, total_projects + 1))
+    preferred = [i for i in eligible if i > published_projects]
+    picked: set[int] = set()
+    while len(picked) < target and (preferred or eligible):
+        pool = preferred if preferred else eligible
+        value = pool[seed_rng.randrange(len(pool))]
+        picked.add(value)
+        if value in preferred:
+            preferred.remove(value)
+        if value in eligible:
+            eligible.remove(value)
+    return picked
+
+
+async def _resolve_or_create_terms(
+    session: AsyncSession,
+    model: type[Category] | type[Tag] | type[TechStack],
+    values: list[str],
+) -> list[tuple[UUID, str]]:
+    terms: list[tuple[UUID, str]] = []
+    model_cols = getattr(model, "__table__").c
+    for value in values:
+        normalized_name = normalize_taxonomy_name(value)
+        existing_result = await session.exec(
+            select(model).where(model_cols.normalized_name == normalized_name)
+        )
+        existing = existing_result.first()
+        if existing is not None:
+            terms.append((existing.id, existing.name))
+            continue
+
+        insert_statement = (
+            pg_insert(getattr(model, "__table__"))
+            .values(name=value.strip(), normalized_name=normalized_name)
+            .on_conflict_do_nothing(index_elements=["normalized_name"])
+            .returning(model_cols.id, model_cols.name)
+        )
+        insert_result = await session.exec(insert_statement)
+        inserted = insert_result.first()
+        if inserted is not None:
+            terms.append((inserted.id, inserted.name))
+            continue
+
+        raced_result = await session.exec(
+            select(model).where(model_cols.normalized_name == normalized_name)
+        )
+        raced_existing = raced_result.first()
+        if raced_existing is None:
+            raise RuntimeError("Taxonomy term could not be resolved")
+        terms.append((raced_existing.id, raced_existing.name))
+    return terms
+
+
+async def _seed_taxonomy_vocab(session: AsyncSession) -> None:
+    await _resolve_or_create_terms(session, Category, MOCK_CATEGORIES)
+    await _resolve_or_create_terms(session, Tag, MOCK_TAGS)
+    await _resolve_or_create_terms(session, TechStack, MOCK_TECH_STACK)
+
+
+async def _replace_project_taxonomy(
+    session: AsyncSession,
+    *,
+    project_id: UUID,
+    categories: list[str],
+    tags: list[str],
+    tech_stack: list[str],
+) -> None:
+    project_category_cols = getattr(ProjectCategory, "__table__").c
+    project_tag_cols = getattr(ProjectTag, "__table__").c
+    project_tech_stack_cols = getattr(ProjectTechStack, "__table__").c
+
+    await session.exec(
+        delete(ProjectCategory).where(project_category_cols.project_id == project_id)
+    )
+    await session.exec(
+        delete(ProjectTag).where(project_tag_cols.project_id == project_id)
+    )
+    await session.exec(
+        delete(ProjectTechStack).where(project_tech_stack_cols.project_id == project_id)
+    )
+
+    category_terms = await _resolve_or_create_terms(session, Category, categories)
+    tag_terms = await _resolve_or_create_terms(session, Tag, tags)
+    tech_terms = await _resolve_or_create_terms(session, TechStack, tech_stack)
+
+    for position, (term_id, _) in enumerate(category_terms):
+        session.add(
+            ProjectCategory(  # pyright: ignore[reportCallIssue]
+                project_id=project_id,
+                category_id=term_id,
+                position=position,
+            )
+        )
+    for position, (term_id, _) in enumerate(tag_terms):
+        session.add(
+            ProjectTag(  # pyright: ignore[reportCallIssue]
+                project_id=project_id,
+                tag_id=term_id,
+                position=position,
+            )
+        )
+    for position, (term_id, _) in enumerate(tech_terms):
+        session.add(
+            ProjectTechStack(  # pyright: ignore[reportCallIssue]
+                project_id=project_id,
+                tech_stack_id=term_id,
+                position=position,
+            )
+        )
+
+
+async def seed_project_taxonomy_assignments(
+    session: AsyncSession,
+    *,
+    projects: list[Project],
+    random_seed: int,
+) -> None:
+    await _seed_taxonomy_vocab(session)
+    total = len(projects)
+    log(f"Applying taxonomy assignments to {total} projects...")
+    for idx, project in enumerate(projects, start=1):
+        categories, tags, tech_stack = project_taxonomy(
+            idx,
+            random_seed=random_seed,
+        )
+        await _replace_project_taxonomy(
+            session,
+            project_id=project.id,
+            categories=categories,
+            tags=tags,
+            tech_stack=tech_stack,
+        )
+        log(f"  taxonomy projects: {idx}/{total}")
+
+
+async def apply_edge_case_states(
+    session: AsyncSession,
+    *,
+    projects: list[Project],
+    published_projects: int,
+    random_seed: int,
+    now: datetime,
+) -> set[UUID]:
+    vote_cols = getattr(Vote, "__table__").c
+    deleted_indexes = _soft_deleted_project_indexes(
+        total_projects=len(projects),
+        published_projects=published_projects,
+        random_seed=random_seed,
+    )
+    deleted_ids: set[UUID] = set()
+    for idx, project in enumerate(projects, start=1):
+        if idx in deleted_indexes:
+            project.deleted_at = now - timedelta(days=1 + (idx % 45))
+            deleted_ids.add(project.id)
+            continue
+        project.deleted_at = None
+        if project.is_published:
+            if idx % 7 == 0:
+                project.published_at = now - timedelta(days=120 + (idx % 50))
+            elif idx % 5 == 0:
+                project.published_at = now - timedelta(days=3 + (idx % 20))
+            elif project.published_at is None:
+                project.published_at = now - timedelta(days=idx)
+
+    if deleted_ids:
+        await session.exec(delete(Vote).where(vote_cols.project_id.in_(deleted_ids)))
+        for project in projects:
+            if project.id in deleted_ids:
+                project.vote_count = 0
+                project.is_group_project = False
+    for project in projects:
+        session.add(project)
+    return deleted_ids
+
+
+def _deterministic_refresh_token(index: int, variant: str) -> str:
+    return f"mock-refresh-token-{variant}-{index:03d}"
+
+
+async def seed_refresh_sessions(
+    session: AsyncSession,
+    *,
+    users: list[User],
+    auth_service: AuthService,
+    now: datetime,
+) -> None:
+    refresh_session_cols = getattr(RefreshSession, "__table__").c
+    user_ids = [user.id for user in users]
+    if not user_ids:
+        return
+    await session.exec(
+        delete(RefreshSession).where(refresh_session_cols.user_id.in_(user_ids))
+    )
+    for idx, user in enumerate(users, start=1):
+        active_hash = auth_service.hash_refresh_token(
+            _deterministic_refresh_token(idx, "active")
+        )
+        session.add(
+            RefreshSession(  # pyright: ignore[reportCallIssue]
+                user_id=user.id,
+                token_hash=active_hash,
+                expires_at=now + timedelta(days=14 + (idx % 30)),
+                revoked_at=None,
+            )
+        )
+        if idx % 4 == 0:
+            revoked_hash = auth_service.hash_refresh_token(
+                _deterministic_refresh_token(idx, "revoked")
+            )
+            session.add(
+                RefreshSession(  # pyright: ignore[reportCallIssue]
+                    user_id=user.id,
+                    token_hash=revoked_hash,
+                    expires_at=now + timedelta(days=30),
+                    revoked_at=now - timedelta(days=1 + (idx % 5)),
+                )
+            )
+        if idx % 5 == 0:
+            expired_hash = auth_service.hash_refresh_token(
+                _deterministic_refresh_token(idx, "expired")
+            )
+            session.add(
+                RefreshSession(  # pyright: ignore[reportCallIssue]
+                    user_id=user.id,
+                    token_hash=expired_hash,
+                    expires_at=now - timedelta(days=2 + (idx % 10)),
+                    revoked_at=None,
+                )
+            )
+
+
 async def reset_mock_data(session: AsyncSession, *, email_domain: str) -> None:
     user_cols = getattr(User, "__table__").c
     project_cols = getattr(Project, "__table__").c
     vote_cols = getattr(Vote, "__table__").c
     member_cols = getattr(ProjectMember, "__table__").c
     refresh_session_cols = getattr(RefreshSession, "__table__").c
+    project_category_cols = getattr(ProjectCategory, "__table__").c
+    project_tag_cols = getattr(ProjectTag, "__table__").c
+    project_tech_stack_cols = getattr(ProjectTechStack, "__table__").c
 
     email_pattern = f"mock_user_%@{email_domain.lower()}"
 
@@ -315,6 +733,20 @@ async def reset_mock_data(session: AsyncSession, *, email_domain: str) -> None:
         if member_filters:
             await session.exec(delete(ProjectMember).where(sa.or_(*member_filters)))
         if project_ids:
+            await session.exec(
+                delete(ProjectCategory).where(
+                    project_category_cols.project_id.in_(project_ids)
+                )
+            )
+            await session.exec(
+                delete(ProjectTag).where(project_tag_cols.project_id.in_(project_ids))
+            )
+            await session.exec(
+                delete(ProjectTechStack).where(
+                    project_tech_stack_cols.project_id.in_(project_ids)
+                )
+            )
+        if project_ids:
             await session.exec(delete(Project).where(project_cols.id.in_(project_ids)))
         if user_ids:
             await session.exec(
@@ -329,6 +761,7 @@ async def get_or_create_mock_user(
     index: int,
     email_domain: str,
     password_hash: str,
+    role: str,
     rng: random.Random,
 ) -> User:
     user_cols = getattr(User, "__table__").c
@@ -340,6 +773,7 @@ async def get_or_create_mock_user(
     existing = result.first()
     if existing is not None:
         existing.username = username_for_index(index)
+        existing.role = role
         existing.full_name = full_name_for_index(index, rng)
         existing.profile_picture_url = f"https://avatar.gatorrank.mock/user-{index}.png"
         session.add(existing)
@@ -349,7 +783,7 @@ async def get_or_create_mock_user(
         email=email,
         username=username_for_index(index),
         password_hash=password_hash,
-        role="student",
+        role=role,
         full_name=full_name_for_index(index, rng),
         profile_picture_url=f"https://avatar.gatorrank.mock/user-{index}.png",
     )
@@ -432,12 +866,12 @@ async def ensure_owner_membership(
         member = ProjectMember(  # pyright: ignore[reportCallIssue]
             project_id=project_id,
             user_id=owner_user_id,
-            role="owner",
+            role=PROJECT_ROLE_OWNER,
         )
         session.add(member)
         return
 
-    member.role = "owner"
+    member.role = PROJECT_ROLE_OWNER
     session.add(member)
 
 
@@ -449,10 +883,13 @@ async def upsert_collaborators(
     owner_index: int,
     project_index: int,
     rng: random.Random,
+    with_edge_cases: bool,
 ) -> None:
     member_cols = getattr(ProjectMember, "__table__").c
 
     extra_count = 1 + (project_index % 4)
+    if with_edge_cases and project_index % 6 == 0:
+        extra_count = min(len(all_users) - 1, 5 + (project_index % 3))
     target_user_ids: list[UUID] = []
     while len(target_user_ids) < extra_count:
         offset = 1 + rng.randint(0, len(all_users) - 2)
@@ -473,7 +910,7 @@ async def upsert_collaborators(
     }
 
     for idx, user_id in enumerate(target_user_ids):
-        role = "maintainer" if idx == 0 else "contributor"
+        role = PROJECT_ROLE_MAINTAINER if idx == 0 else PROJECT_ROLE_CONTRIBUTOR
         member = existing_by_user.get(user_id)
         if member is None:
             session.add(
@@ -513,11 +950,17 @@ async def apply_votes(
     projects: list[Project],
     published_projects: int,
     total_votes: int,
+    excluded_project_ids: set[UUID] | None = None,
 ) -> None:
     vote_cols = getattr(Vote, "__table__").c
 
     mock_user_ids = [u.id for u in users]
-    published_project_ids = [project.id for project in projects[:published_projects]]
+    excluded_ids = excluded_project_ids or set()
+    published_project_ids = [
+        project.id
+        for project in projects[:published_projects]
+        if project.id not in excluded_ids
+    ]
 
     if mock_user_ids and published_project_ids:
         await session.exec(
@@ -533,6 +976,8 @@ async def apply_votes(
     )
 
     for project_idx, project in enumerate(projects[:published_projects], start=1):
+        if project.id in excluded_ids:
+            continue
         target = target_counts[project.id]
         voter_order: list[User] = []
         for i in range(len(users)):
@@ -550,6 +995,10 @@ async def apply_votes(
     await session.flush()
 
     for project in projects:
+        if project.id in excluded_ids:
+            project.vote_count = 0
+            session.add(project)
+            continue
         if not project.is_published:
             project.vote_count = 0
             session.add(project)
@@ -604,6 +1053,7 @@ async def seed_mock_data(cfg: SeedConfig) -> None:
                 index=i,
                 email_domain=cfg.email_domain,
                 password_hash=password_hash,
+                role=role_for_user_index(i),
                 rng=rng,
             )
             users.append(user)
@@ -644,8 +1094,28 @@ async def seed_mock_data(cfg: SeedConfig) -> None:
                 owner_index=owner_index,
                 project_index=i,
                 rng=rng,
+                with_edge_cases=cfg.with_edge_cases,
             )
             log(f"  collaborator projects: {i}/{cfg.group_projects}")
+
+        if cfg.with_taxonomy:
+            await seed_project_taxonomy_assignments(
+                session,
+                projects=projects,
+                random_seed=cfg.random_seed,
+            )
+
+        excluded_vote_project_ids: set[UUID] = set()
+        if cfg.with_edge_cases:
+            log("Applying project lifecycle edge-case states...")
+            excluded_vote_project_ids = await apply_edge_case_states(
+                session,
+                projects=projects,
+                published_projects=cfg.published_projects,
+                random_seed=cfg.random_seed,
+                now=now,
+            )
+            log(f"  edge-case soft-deleted projects: {len(excluded_vote_project_ids)}")
 
         log(f"Applying {cfg.total_votes} votes across published projects...")
         await apply_votes(
@@ -654,9 +1124,19 @@ async def seed_mock_data(cfg: SeedConfig) -> None:
             projects=projects,
             published_projects=cfg.published_projects,
             total_votes=cfg.total_votes,
+            excluded_project_ids=excluded_vote_project_ids,
         )
         for i in range(1, cfg.total_votes + 1):
             log(f"  votes: {i}/{cfg.total_votes}")
+
+        if cfg.with_auth_sessions:
+            log("Seeding refresh session fixtures...")
+            await seed_refresh_sessions(
+                session,
+                users=users,
+                auth_service=auth_service,
+                now=now,
+            )
 
         await session.commit()
 
@@ -668,6 +1148,11 @@ async def seed_mock_data(cfg: SeedConfig) -> None:
     )
     log(f"- Group projects: {cfg.group_projects}")
     log(f"- Votes targeted: {cfg.total_votes}")
+    log(f"- Taxonomy assignments: {'enabled' if cfg.with_taxonomy else 'disabled'}")
+    log(f"- Edge cases: {'enabled' if cfg.with_edge_cases else 'disabled'}")
+    log(
+        f"- Auth session fixtures: {'enabled' if cfg.with_auth_sessions else 'disabled'}"
+    )
 
 
 def main() -> None:
