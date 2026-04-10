@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Box,
   Flex,
@@ -11,6 +11,7 @@ import {
   Input,
   Textarea,
   Wrap,
+  Spinner,
 } from '@chakra-ui/react';
 import {
   LuPlus,
@@ -19,13 +20,17 @@ import {
   LuGithub,
   LuPlay,
   LuImage,
+  LuTag,
 } from 'react-icons/lu';
+import { listTags } from '@/lib/api/taxonomy';
+import type { ProjectMemberInfo, TaxonomyTerm } from '@/lib/api/types/project';
 import { toast } from '@/lib/ui/toast';
 
 const PROJECT_NAME_MAX = 50;
-const SHORT_DESCRIPTION_MAX = 70;
-const FULL_DESCRIPTION_MAX = 2000;
+const SHORT_DESCRIPTION_MAX = 280;
+const FULL_DESCRIPTION_MAX = 5000;
 const URL_MAX = 2048;
+const TAG_LIMIT = 10;
 
 const inputBase = {
   border: '1px solid',
@@ -77,18 +82,24 @@ function FieldLabel({ children }: { children: React.ReactNode }) {
   );
 }
 
-function TagPills({
-  items,
-  onRemove,
+function MemberPills({
+  members,
+  pendingEmails,
+  onRemoveMember,
+  isBusy,
 }: {
-  items: string[];
-  onRemove: (value: string) => void;
+  members: ProjectMemberInfo[];
+  pendingEmails: string[];
+  onRemoveMember: (idOrEmail: string) => void;
+  isBusy: boolean;
 }) {
+  if (members.length === 0 && pendingEmails.length === 0) return null;
+
   return (
     <Wrap gap="8px">
-      {items.map((item) => (
+      {members.map((member) => (
         <HStack
-          key={item}
+          key={member.user_id}
           gap="4px"
           px="10px"
           py="4px"
@@ -98,17 +109,50 @@ function TagPills({
           borderColor="gray.300"
         >
           <Text fontSize="sm" color="gray.700" lineHeight="20px">
-            {item}
+            {member.full_name ?? member.username}
+          </Text>
+          {member.role !== 'owner' && (
+            <Button
+              type="button"
+              aria-label={`Remove ${member.full_name ?? 'member'}`}
+              variant="ghost"
+              size="xs"
+              minW="auto"
+              h="auto"
+              p={0}
+              disabled={isBusy}
+              onClick={() => onRemoveMember(member.user_id)}
+            >
+              <LuX size={12} />
+            </Button>
+          )}
+        </HStack>
+      ))}
+
+      {pendingEmails.map((email) => (
+        <HStack
+          key={email}
+          gap="4px"
+          px="10px"
+          py="4px"
+          borderRadius="10px"
+          bg="white"
+          border="1px solid"
+          borderColor="gray.300"
+        >
+          <Text fontSize="sm" color="gray.700" lineHeight="20px">
+            {email}
           </Text>
           <Button
             type="button"
-            aria-label={`Remove ${item}`}
+            aria-label={`Remove ${email}`}
             variant="ghost"
             size="xs"
             minW="auto"
             h="auto"
             p={0}
-            onClick={() => onRemove(item)}
+            disabled={isBusy}
+            onClick={() => onRemoveMember(email)}
           >
             <LuX size={12} />
           </Button>
@@ -121,26 +165,24 @@ function TagPills({
 export type ProjectFormMode = 'create' | 'edit';
 
 export interface ProjectFormValues {
-  name: string;
+  title: string;
   shortDescription: string;
   fullDescription: string;
   imageUrl?: string | null;
   tags: string[];
-  teamMembers: string[];
   websiteUrl: string;
   githubUrl: string;
   demoVideoUrl: string;
 }
 
 export interface ProjectPayload {
-  name: string;
-  shortDescription: string;
-  fullDescription: string;
-  tags: string[];
-  teamMembers: string[];
-  websiteUrl?: string;
-  githubUrl?: string;
-  demoVideoUrl?: string;
+  title: string;
+  short_description: string;
+  long_description?: string | null;
+  demo_url?: string | null;
+  github_url?: string | null;
+  video_url?: string | null;
+  tags?: string[];
 }
 
 interface ProjectFormProps {
@@ -148,6 +190,17 @@ interface ProjectFormProps {
   initialValues: ProjectFormValues;
   onSubmit: (payload: ProjectPayload, values: ProjectFormValues) => void;
   onValidityChange?: (isDisabled: boolean) => void;
+  publishChecked: boolean;
+  onPublishCheckedChange: (checked: boolean) => void;
+  members?: ProjectMemberInfo[];
+  pendingMemberEmails?: string[];
+  onAddMember: (
+    email: string,
+  ) => Promise<{ ok: true } | { ok: false; message: string }>;
+  onRemoveMember: (
+    idOrEmail: string,
+  ) => Promise<{ ok: true } | { ok: false; message: string }>;
+  isBusy?: boolean;
 }
 
 export function ProjectForm({
@@ -155,28 +208,30 @@ export function ProjectForm({
   initialValues,
   onSubmit,
   onValidityChange,
+  publishChecked,
+  onPublishCheckedChange,
+  members = [],
+  pendingMemberEmails = [],
+  onAddMember,
+  onRemoveMember,
+  isBusy = false,
 }: ProjectFormProps) {
-  const [projectName, setProjectName] = useState(initialValues.name);
+  const [projectName, setProjectName] = useState(initialValues.title);
   const [shortDescription, setShortDescription] = useState(
     initialValues.shortDescription,
   );
   const [fullDescription, setFullDescription] = useState(
     initialValues.fullDescription,
   );
-
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const logoUrlRef = useRef<string | null>(null);
-  const [logoPreview, setLogoPreview] = useState<string | null>(
-    initialValues.imageUrl ?? null,
-  );
-
-  const [tagInput, setTagInput] = useState('');
   const [tags, setTags] = useState<string[]>(initialValues.tags);
+  const [tagInput, setTagInput] = useState('');
+  const [availableTags, setAvailableTags] = useState<TaxonomyTerm[]>([]);
+  const [tagsLoading, setTagsLoading] = useState(true);
+  const [tagsError, setTagsError] = useState<string | null>(null);
 
   const [memberInput, setMemberInput] = useState('');
-  const [teamMembers, setTeamMembers] = useState<string[]>(
-    initialValues.teamMembers,
-  );
+  const [memberSubmitting, setMemberSubmitting] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [websiteUrl, setWebsiteUrl] = useState(initialValues.websiteUrl);
   const [githubUrl, setGithubUrl] = useState(initialValues.githubUrl);
@@ -189,26 +244,150 @@ export function ProjectForm({
     websiteUrl?: string;
     githubUrl?: string;
     demoVideoUrl?: string;
+    urls?: string;
   }>({});
 
-  const addTag = () => {
-    const value = tagInput.trim();
-    if (!value) return;
-    setTags((prev: string[]) =>
-      prev.includes(value) ? prev : [...prev, value],
-    );
+  function normalizeTagName(value: string): string {
+    return value.trim().toLowerCase();
+  }
+
+  function containsControlChars(value: string): boolean {
+    return /[\u0000-\u001F\u007F-\u009F]/.test(value);
+  }
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadAvailableTags() {
+      try {
+        setTagsLoading(true);
+        const terms = await listTags();
+        if (cancelled) return;
+        setAvailableTags(terms);
+        setTagsError(null);
+      } catch (error) {
+        if (cancelled) return;
+        setTagsError(
+          error instanceof Error ? error.message : 'Could not load tags.',
+        );
+      } finally {
+        if (!cancelled) {
+          setTagsLoading(false);
+        }
+      }
+    }
+
+    void loadAvailableTags();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    setProjectName(initialValues.title);
+    setShortDescription(initialValues.shortDescription);
+    setFullDescription(initialValues.fullDescription);
+    setTags(initialValues.tags);
+    setWebsiteUrl(initialValues.websiteUrl);
+    setGithubUrl(initialValues.githubUrl);
+    setDemoVideoUrl(initialValues.demoVideoUrl);
+  }, [initialValues]);
+
+  const trimmedWebsite = websiteUrl.trim();
+  const trimmedGithub = githubUrl.trim();
+  const trimmedDemo = demoVideoUrl.trim();
+  const hasAtLeastOneUrl = Boolean(
+    trimmedWebsite || trimmedGithub || trimmedDemo,
+  );
+
+  const normalizedTagInput = tagInput.trim().toLowerCase();
+  const filteredTags = useMemo(
+    () =>
+      availableTags
+        .filter(
+          (term) =>
+            !tags.some(
+              (selected) =>
+                normalizeTagName(selected) === normalizeTagName(term.name),
+            ) &&
+            (!normalizedTagInput ||
+              term.name.toLowerCase().includes(normalizedTagInput)),
+        )
+        .slice(0, 8),
+    [availableTags, normalizedTagInput, tags],
+  );
+
+  const isSubmitDisabled =
+    !projectName.trim() || !shortDescription.trim() || !hasAtLeastOneUrl;
+
+  useEffect(() => {
+    onValidityChange?.(isSubmitDisabled);
+  }, [isSubmitDisabled, onValidityChange]);
+
+  const addTag = (name: string) => {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    if (
+      tags.some(
+        (existingTag) =>
+          normalizeTagName(existingTag) === normalizeTagName(trimmed),
+      )
+    ) {
+      toast.error({
+        title: 'Duplicate tag',
+        description: 'That tag has already been added to this project.',
+      });
+      return;
+    }
+    if (tags.length >= TAG_LIMIT) {
+      toast.error({
+        title: 'Tag limit reached',
+        description: `You can add up to ${TAG_LIMIT} tags to a project.`,
+      });
+      return;
+    }
+
+    if (trimmed.length < 2 || trimmed.length > 64) {
+      toast.error({
+        title: 'Invalid tag',
+        description: 'Tags must be between 2 and 64 characters long.',
+      });
+      return;
+    }
+
+    if (containsControlChars(trimmed)) {
+      toast.error({
+        title: 'Invalid tag',
+        description: 'Tags cannot include control characters.',
+      });
+      return;
+    }
+
+    setTags((prev) => [...prev, trimmed]);
     setTagInput('');
   };
 
-  const removeTag = (value: string) => {
-    setTags((prev: string[]) => prev.filter((t) => t !== value));
+  const handleAddTag = () => {
+    const normalized = tagInput.trim().toLowerCase();
+    if (!normalized) return;
+
+    const exact = availableTags.find(
+      (term) => term.name.toLowerCase() === normalized,
+    );
+
+    if (exact) {
+      addTag(exact.name);
+      return;
+    }
+
+    addTag(tagInput);
   };
 
-  const addMember = () => {
-    const raw = memberInput.trim();
-    if (!raw) return;
+  const handleAddMember = async () => {
+    const normalized = memberInput.trim().toLowerCase();
+    if (!normalized) return;
 
-    const normalized = raw.toLowerCase();
     if (!isValidUflEmail(normalized)) {
       toast.error({
         title: 'Invalid email',
@@ -216,51 +395,31 @@ export function ProjectForm({
       });
       return;
     }
-    setTeamMembers((prev: string[]) =>
-      prev.includes(normalized) ? prev : [...prev, normalized],
-    );
+
+    setMemberSubmitting(true);
+    const result = await onAddMember(normalized);
+    setMemberSubmitting(false);
+
+    if (!result.ok) {
+      toast.error({
+        title: 'Could not add member',
+        description: result.message,
+      });
+      return;
+    }
+
     setMemberInput('');
   };
 
-  const removeMember = (value: string) => {
-    const normalized = value.toLowerCase().trim();
-    setTeamMembers((prev: string[]) => prev.filter((m) => m !== normalized));
-  };
-
-  const handleLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    const previewUrl = URL.createObjectURL(file);
-    if (logoUrlRef.current) {
-      URL.revokeObjectURL(logoUrlRef.current);
-    }
-    logoUrlRef.current = previewUrl;
-    setLogoPreview(previewUrl);
-
-    e.target.value = '';
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
+  const handleRemoveMember = async (idOrEmail: string) => {
+    const result = await onRemoveMember(idOrEmail);
+    if (!result.ok) {
+      toast.error({
+        title: 'Could not remove member',
+        description: result.message,
+      });
     }
   };
-
-  const isSubmitDisabled =
-    !projectName.trim() ||
-    !shortDescription.trim() ||
-    !fullDescription.trim() ||
-    !logoPreview;
-
-  useEffect(() => {
-    onValidityChange?.(isSubmitDisabled);
-  }, [isSubmitDisabled, onValidityChange]);
-
-  useEffect(() => {
-    return () => {
-      if (logoUrlRef.current) {
-        URL.revokeObjectURL(logoUrlRef.current);
-      }
-    };
-  }, []);
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -271,9 +430,6 @@ export function ProjectForm({
     const trimmedName = projectName.trim();
     const trimmedShort = shortDescription.trim();
     const trimmedFull = fullDescription.trim();
-    const trimmedWebsite = websiteUrl.trim();
-    const trimmedGithub = githubUrl.trim();
-    const trimmedDemo = demoVideoUrl.trim();
 
     if (trimmedName.length > PROJECT_NAME_MAX) {
       nextErrors.projectName = `Project name must be ${PROJECT_NAME_MAX} characters or less.`;
@@ -283,6 +439,10 @@ export function ProjectForm({
     }
     if (trimmedFull.length > FULL_DESCRIPTION_MAX) {
       nextErrors.fullDescription = `Full description must be ${FULL_DESCRIPTION_MAX} characters or less.`;
+    }
+    if (!hasAtLeastOneUrl) {
+      nextErrors.urls =
+        'Add at least one project URL: website, GitHub, or demo video.';
     }
 
     if (trimmedWebsite) {
@@ -312,49 +472,48 @@ export function ProjectForm({
       nextErrors.projectName ??
       nextErrors.shortDescription ??
       nextErrors.fullDescription ??
+      nextErrors.urls ??
       nextErrors.websiteUrl ??
       nextErrors.githubUrl ??
       nextErrors.demoVideoUrl;
+
     if (firstError) {
       toast.error({
-        title:
-          mode === 'create' ? 'Validation error' : 'Update validation error',
+        title: 'Validation error',
         description: firstError,
       });
       return;
     }
 
     const payload: ProjectPayload = {
-      name: trimmedName,
-      shortDescription: trimmedShort,
-      fullDescription: trimmedFull,
-      tags,
-      teamMembers,
-      websiteUrl: trimmedWebsite || undefined,
-      githubUrl: trimmedGithub || undefined,
-      demoVideoUrl: trimmedDemo || undefined,
+      title: trimmedName,
+      short_description: trimmedShort,
+      long_description:
+        mode === 'edit' ? trimmedFull || null : trimmedFull || undefined,
+      demo_url:
+        mode === 'edit' ? trimmedWebsite || null : trimmedWebsite || undefined,
+      github_url:
+        mode === 'edit' ? trimmedGithub || null : trimmedGithub || undefined,
+      video_url:
+        mode === 'edit' ? trimmedDemo || null : trimmedDemo || undefined,
+      tags: mode === 'edit' ? tags : tags.length > 0 ? tags : undefined,
     };
 
-    const currentValues: ProjectFormValues = {
-      name: projectName,
+    onSubmit(payload, {
+      title: projectName,
       shortDescription,
       fullDescription,
-      imageUrl: logoPreview,
+      imageUrl: initialValues.imageUrl ?? null,
       tags,
-      teamMembers,
       websiteUrl,
       githubUrl,
       demoVideoUrl,
-    };
-
-    onSubmit(payload, currentValues);
+    });
   };
 
   return (
     <form id="project-form" onSubmit={handleSubmit}>
-      {/* Main layout */}
       <Flex gap="24px" align="stretch" flexDir={{ base: 'column', md: 'row' }}>
-        {/* Left column: required fields */}
         <VStack flex={1.4} align="stretch" gap="16px" minW={0}>
           <Box
             bg="gray.100"
@@ -383,7 +542,6 @@ export function ProjectForm({
                 Project Details
               </Text>
 
-              {/* Project name */}
               <VStack align="start" gap="4px" w="100%">
                 <FieldLabel>
                   Project Name{' '}
@@ -433,23 +591,17 @@ export function ProjectForm({
                 )}
               </VStack>
 
-              {/* Project logo */}
               <VStack align="start" gap="8px" w="100%">
-                <FieldLabel>
-                  Project Logo{' '}
-                  <Text as="span" color="red.500">
-                    *
-                  </Text>
-                </FieldLabel>
+                <FieldLabel>Project Logo</FieldLabel>
                 <input
                   ref={fileInputRef}
                   type="file"
                   accept="image/*"
                   style={{ display: 'none' }}
-                  onChange={handleLogoChange}
+                  disabled
                 />
                 <Box
-                  w={logoPreview ? '144px' : '100%'}
+                  w="100%"
                   h="144px"
                   bg="white"
                   borderRadius="10px"
@@ -458,50 +610,25 @@ export function ProjectForm({
                   display="flex"
                   alignItems="center"
                   justifyContent="center"
-                  cursor="pointer"
                   overflow="hidden"
-                  role="button"
-                  tabIndex={0}
-                  aria-label="Upload project logo"
-                  onClick={() => fileInputRef.current?.click()}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      e.preventDefault();
-                      fileInputRef.current?.click();
-                    }
-                  }}
+                  opacity={0.75}
                 >
-                  {logoPreview ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={logoPreview}
-                      alt="Project logo preview"
-                      style={{
-                        width: '100%',
-                        height: '100%',
-                        objectFit: 'cover',
-                        borderRadius: '10px',
-                      }}
-                    />
-                  ) : (
-                    <VStack gap="4px">
-                      <Box color="gray.500">
-                        <LuImage size={22} />
-                      </Box>
-                      <Text
-                        fontSize="sm"
-                        color="gray.600"
-                        lineHeight="20px"
-                        textAlign="center"
-                      >
-                        Click to upload a project logo
-                      </Text>
-                    </VStack>
-                  )}
+                  <VStack gap="4px">
+                    <Box color="gray.500">
+                      <LuImage size={22} />
+                    </Box>
+                    <Text
+                      fontSize="sm"
+                      color="gray.600"
+                      lineHeight="20px"
+                      textAlign="center"
+                    >
+                      Project logos are not available yet
+                    </Text>
+                  </VStack>
                 </Box>
               </VStack>
 
-              {/* Short description */}
               <VStack align="start" gap="4px" w="100%">
                 <FieldLabel>
                   Short Description{' '}
@@ -552,14 +679,8 @@ export function ProjectForm({
                 )}
               </VStack>
 
-              {/* Full description */}
               <VStack align="start" gap="4px" w="100%" flex={1} minH={0}>
-                <FieldLabel>
-                  Full Description{' '}
-                  <Text as="span" color="red.500">
-                    *
-                  </Text>
-                </FieldLabel>
+                <FieldLabel>Full Description</FieldLabel>
                 <Textarea
                   value={fullDescription}
                   onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -608,9 +729,39 @@ export function ProjectForm({
           </Box>
         </VStack>
 
-        {/* Right column: optional metadata */}
         <VStack flex={1} align="start" gap="16px" minW={0}>
-          {/* Tags */}
+          <Box bg="gray.100" borderRadius="13px" p="24px" w="100%">
+            <VStack align="start" gap="10px" w="100%">
+              <Text
+                fontSize="md"
+                fontWeight="bold"
+                color="gray.900"
+                lineHeight="30px"
+              >
+                Visibility
+              </Text>
+              <Text fontSize="sm" color="gray.500" lineHeight="24px">
+                Published projects appear on your profile. Drafts stay hidden
+                until you publish them.
+              </Text>
+              <HStack
+                as="label"
+                gap="10px"
+                cursor={isBusy ? 'not-allowed' : 'pointer'}
+              >
+                <input
+                  type="checkbox"
+                  checked={publishChecked}
+                  disabled={isBusy}
+                  onChange={(e) => onPublishCheckedChange(e.target.checked)}
+                />
+                <Text fontSize="sm" color="gray.900" lineHeight="20px">
+                  Publish this project
+                </Text>
+              </HStack>
+            </VStack>
+          </Box>
+
           <Box bg="gray.100" borderRadius="13px" p="24px" w="100%">
             <VStack align="start" gap="12px" w="100%">
               <Text
@@ -622,8 +773,10 @@ export function ProjectForm({
                 Tags
               </Text>
               <FieldLabel>
-                Add topics or technologies to help others discover your project.
+                Type your own tags or pick from suggestions. You can add up to{' '}
+                {TAG_LIMIT} tags to help others discover your project.
               </FieldLabel>
+
               <HStack gap="8px" w="100%">
                 <Input
                   value={tagInput}
@@ -633,10 +786,10 @@ export function ProjectForm({
                   onKeyDown={(e: React.KeyboardEvent) => {
                     if (e.key === 'Enter') {
                       e.preventDefault();
-                      addTag();
+                      handleAddTag();
                     }
                   }}
-                  placeholder="e.g., React, Python, ML..."
+                  placeholder="Start typing a tag"
                   {...inputBase}
                   h="40px"
                   flex={1}
@@ -649,18 +802,85 @@ export function ProjectForm({
                   h="40px"
                   px="10px"
                   _hover={{ bg: 'orange.500' }}
-                  onClick={addTag}
+                  onClick={handleAddTag}
                 >
                   <LuPlus size={16} />
                 </Button>
               </HStack>
+
+              {tagsLoading ? (
+                <HStack gap="8px">
+                  <Spinner size="sm" color="orange.400" />
+                  <Text fontSize="sm" color="gray.500">
+                    Loading tag suggestions...
+                  </Text>
+                </HStack>
+              ) : tagsError ? (
+                <Text fontSize="sm" color="orange.600">
+                  {tagsError} You can still add your own tags manually.
+                </Text>
+              ) : filteredTags.length > 0 ? (
+                <Wrap gap="8px">
+                  {filteredTags.map((term) => (
+                    <Button
+                      key={term.id}
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      borderColor="orange.200"
+                      bg="white"
+                      color="gray.700"
+                      _hover={{ bg: 'orange.50' }}
+                      onClick={() => addTag(term.name)}
+                    >
+                      <HStack gap="6px">
+                        <LuTag size={13} />
+                        <Text>{term.name}</Text>
+                      </HStack>
+                    </Button>
+                  ))}
+                </Wrap>
+              ) : null}
+
               {tags.length > 0 && (
-                <TagPills items={tags} onRemove={removeTag} />
+                <Wrap gap="8px">
+                  {tags.map((tag) => (
+                    <HStack
+                      key={tag}
+                      gap="4px"
+                      bg="white"
+                      border="1px solid"
+                      borderColor="orange.200"
+                      borderRadius="10px"
+                      px="10px"
+                      py="4px"
+                    >
+                      <Text fontSize="sm" color="gray.700" lineHeight="20px">
+                        {tag}
+                      </Text>
+                      <Button
+                        type="button"
+                        aria-label={`Remove ${tag}`}
+                        variant="ghost"
+                        size="xs"
+                        minW="auto"
+                        h="auto"
+                        p={0}
+                        onClick={() =>
+                          setTags((prev) =>
+                            prev.filter((value) => value !== tag),
+                          )
+                        }
+                      >
+                        <LuX size={12} />
+                      </Button>
+                    </HStack>
+                  ))}
+                </Wrap>
               )}
             </VStack>
           </Box>
 
-          {/* Team members */}
           <Box bg="gray.100" borderRadius="13px" p="24px" w="100%">
             <VStack align="start" gap="12px" w="100%">
               <Text
@@ -683,7 +903,7 @@ export function ProjectForm({
                   onKeyDown={(e: React.KeyboardEvent) => {
                     if (e.key === 'Enter') {
                       e.preventDefault();
-                      addMember();
+                      void handleAddMember();
                     }
                   }}
                   placeholder="name@ufl.edu"
@@ -699,18 +919,25 @@ export function ProjectForm({
                   h="40px"
                   px="10px"
                   _hover={{ bg: 'orange.500' }}
-                  onClick={addMember}
+                  onClick={() => {
+                    void handleAddMember();
+                  }}
+                  disabled={isBusy || memberSubmitting}
                 >
                   <LuPlus size={16} />
                 </Button>
               </HStack>
-              {teamMembers.length > 0 && (
-                <TagPills items={teamMembers} onRemove={removeMember} />
-              )}
+              <MemberPills
+                members={members}
+                pendingEmails={pendingMemberEmails}
+                onRemoveMember={(idOrEmail) => {
+                  void handleRemoveMember(idOrEmail);
+                }}
+                isBusy={isBusy || memberSubmitting}
+              />
             </VStack>
           </Box>
 
-          {/* Links */}
           <Box bg="gray.100" borderRadius="13px" p="24px" w="100%">
             <VStack align="start" gap="12px" w="100%">
               <Text
@@ -722,10 +949,15 @@ export function ProjectForm({
                 Links
               </Text>
               <FieldLabel>
-                Share where people can see your project online.
+                Add at least one project URL so people can visit your work.
               </FieldLabel>
 
-              {/* Website URL */}
+              {errors.urls && (
+                <Text fontSize="sm" color="red.500">
+                  {errors.urls}
+                </Text>
+              )}
+
               <VStack align="start" gap="4px" w="100%">
                 <FieldLabel>Website Link URL</FieldLabel>
                 <HStack gap="10px" w="100%">
@@ -736,10 +968,11 @@ export function ProjectForm({
                     value={websiteUrl}
                     onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
                       setWebsiteUrl(e.target.value);
-                      if (errors.websiteUrl)
+                      if (errors.websiteUrl || errors.urls)
                         setErrors((prev) => ({
                           ...prev,
                           websiteUrl: undefined,
+                          urls: undefined,
                         }));
                     }}
                     placeholder="https://yourproject.com"
@@ -756,7 +989,6 @@ export function ProjectForm({
                 )}
               </VStack>
 
-              {/* GitHub URL */}
               <VStack align="start" gap="4px" w="100%">
                 <FieldLabel>GitHub Repository</FieldLabel>
                 <HStack gap="10px" w="100%">
@@ -767,10 +999,11 @@ export function ProjectForm({
                     value={githubUrl}
                     onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
                       setGithubUrl(e.target.value);
-                      if (errors.githubUrl)
+                      if (errors.githubUrl || errors.urls)
                         setErrors((prev) => ({
                           ...prev,
                           githubUrl: undefined,
+                          urls: undefined,
                         }));
                     }}
                     placeholder="https://github.com/user/repo"
@@ -787,7 +1020,6 @@ export function ProjectForm({
                 )}
               </VStack>
 
-              {/* Demo video URL */}
               <VStack align="start" gap="4px" w="100%">
                 <FieldLabel>Demo Video URL</FieldLabel>
                 <HStack gap="10px" w="100%">
@@ -798,10 +1030,11 @@ export function ProjectForm({
                     value={demoVideoUrl}
                     onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
                       setDemoVideoUrl(e.target.value);
-                      if (errors.demoVideoUrl)
+                      if (errors.demoVideoUrl || errors.urls)
                         setErrors((prev) => ({
                           ...prev,
                           demoVideoUrl: undefined,
+                          urls: undefined,
                         }));
                     }}
                     placeholder="https://youtu.be/..."
@@ -821,8 +1054,6 @@ export function ProjectForm({
           </Box>
         </VStack>
       </Flex>
-
-      {/* Submit button is rendered by the page header; form handles submit only */}
     </form>
   );
 }

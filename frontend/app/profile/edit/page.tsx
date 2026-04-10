@@ -5,8 +5,9 @@ import { useRouter } from 'next/navigation';
 import { Box, Flex, Spinner } from '@chakra-ui/react';
 import { Navbar } from '@/components/layout/Navbar';
 import { useAuth } from '@/components/domain/AuthProvider';
+import { profileEditPath } from '@/lib/routes';
 
-/** Redirects `/profile/edit` to the canonical `/profile/{userId}/edit`. */
+/** Redirects `/profile/edit` to the canonical `/profile/{username}/edit`. */
 export default function ProfileEditIndexPage() {
   const router = useRouter();
   const { user, isReady } = useAuth();
@@ -17,7 +18,7 @@ export default function ProfileEditIndexPage() {
       router.replace('/login');
       return;
     }
-    router.replace(`/profile/${user.id}/edit`);
+    router.replace(profileEditPath(user.username));
   }, [isReady, user, router]);
 
   return (

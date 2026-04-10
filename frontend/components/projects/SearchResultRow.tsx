@@ -13,6 +13,7 @@ import {
 import { LuArrowRight, LuChevronUp, LuUsers } from 'react-icons/lu';
 import type { SearchProjectListItem } from '@/lib/api/types/search';
 import { useProjectVote } from '@/hooks/useProjectVote';
+import { projectPath } from '@/lib/routes';
 
 interface SearchResultRowProps {
   project: SearchProjectListItem;
@@ -35,12 +36,13 @@ export function SearchResultRow({ project }: SearchResultRowProps) {
     initialVoteCount: project.vote_count,
     initialViewerHasVoted: project.viewer_has_voted,
   });
+
   const taxonomy = project.tags.length > 0 ? project.tags : project.categories;
 
   return (
     <ChakraLink
       as={NextLink}
-      href={`/projects/${project.id}`}
+      href={projectPath(project.slug)}
       _hover={{ textDecoration: 'none' }}
       w="100%"
     >
