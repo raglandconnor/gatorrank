@@ -2,9 +2,10 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.api.deps.auth import get_current_user
+from app.api.deps.policy import require_policy
 from app.db.database import get_db
 from app.models.user import User
-from app.policy.roles import PolicyDeniedError, require_taxonomy_management
+from app.policy.roles import require_taxonomy_management
 from app.schemas.taxonomy import TaxonomyTermCreateRequest, TaxonomyTermResponse
 from app.services.taxonomy import TaxonomyConflictError, TaxonomyService
 
@@ -12,13 +13,10 @@ router = APIRouter(prefix="/taxonomy")
 
 
 def _require_taxonomy_admin(user: User) -> None:
-    try:
-        require_taxonomy_management(user)
-    except PolicyDeniedError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Taxonomy management forbidden",
-        ) from exc
+    require_policy(
+        lambda: require_taxonomy_management(user),
+        detail="Taxonomy management forbidden",
+    )
 
 
 @router.get(

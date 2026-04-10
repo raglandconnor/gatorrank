@@ -6,9 +6,11 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.api.deps.auth import get_current_user, get_current_user_optional
+from app.api.deps.policy import raise_policy_forbidden
 from app.api.deps.search import get_project_search_request, get_search_service
 from app.db.database import get_db
 from app.models.user import User
+from app.policy.roles import PolicyDeniedError
 from app.schemas.project import (
     ProjectCreateRequest,
     ProjectDetailResponse,
@@ -46,6 +48,7 @@ router = APIRouter()
     status_code=status.HTTP_201_CREATED,
     responses={
         401: {"description": "Authentication required"},
+        403: {"description": "Taxonomy create-on-miss forbidden"},
         422: {
             "description": (
                 "Validation error (for example: missing/blank title or "
@@ -66,7 +69,16 @@ async def create_project(
     This endpoint always creates a draft (`is_published=false`).
     """
     service = ProjectService(db)
-    return await service.create_project(created_by_id=current_user.id, payload=payload)
+    try:
+        return await service.create_project(
+            created_by_id=current_user.id,
+            payload=payload,
+        )
+    except PolicyDeniedError as exc:
+        raise_policy_forbidden(
+            detail="Taxonomy create-on-miss forbidden",
+            exc=exc,
+        )
 
 
 @router.get(
@@ -415,7 +427,12 @@ async def leave_project(
     response_model=ProjectDetailResponse,
     responses={
         401: {"description": "Authentication required"},
-        403: {"description": "Only the project owner can edit the project"},
+        403: {
+            "description": (
+                "Project edit forbidden (for example, non-owner access or taxonomy "
+                "create-on-miss policy denial)."
+            )
+        },
         404: {"description": "Project not found"},
         422: {
             "description": (
@@ -439,6 +456,11 @@ async def update_project(
             project_id=project_id,
             current_user_id=current_user.id,
             payload=payload,
+        )
+    except PolicyDeniedError as exc:
+        raise_policy_forbidden(
+            detail="Taxonomy create-on-miss forbidden",
+            exc=exc,
         )
     except ProjectAccessForbiddenError as exc:
         raise HTTPException(status_code=403, detail="Project edit forbidden") from exc

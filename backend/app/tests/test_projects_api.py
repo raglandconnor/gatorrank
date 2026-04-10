@@ -10,6 +10,7 @@ from app.api.deps.search import get_search_service
 from app.db.database import get_db
 from app.main import app
 from app.models.project_roles import ProjectMemberRole
+from app.policy.roles import PolicyDeniedError
 from app.schemas.project import (
     ProjectDetailResponse,
     ProjectListItemResponse,
@@ -230,6 +231,30 @@ def test_create_project_requires_auth():
 
     assert response.status_code == 401
     assert response.json()["detail"] == "Not authenticated"
+
+
+def test_create_project_policy_denied_returns_403():
+    user_id = uuid4()
+
+    app.dependency_overrides[get_db] = _override_get_db
+    app.dependency_overrides[get_current_user] = _override_current_user(user_id)
+    try:
+        with patch(
+            "app.api.v1.projects.ProjectService.create_project",
+            new=AsyncMock(
+                side_effect=PolicyDeniedError(
+                    "Taxonomy create-on-miss requires authentication"
+                )
+            ),
+        ):
+            response = client.post(
+                "/api/v1/projects", json=_build_create_project_payload()
+            )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 403
+    assert response.json()["detail"] == "Taxonomy create-on-miss forbidden"
 
 
 def test_create_project_passes_user_and_payload_to_service():
@@ -798,6 +823,31 @@ def test_update_project_forbidden_returns_403():
 
     assert response.status_code == 403
     assert response.json()["detail"] == "Project edit forbidden"
+
+
+def test_update_project_policy_denied_returns_403():
+    user_id = uuid4()
+
+    app.dependency_overrides[get_db] = _override_get_db
+    app.dependency_overrides[get_current_user] = _override_current_user(user_id)
+    try:
+        with patch(
+            "app.api.v1.projects.ProjectService.update_project",
+            new=AsyncMock(
+                side_effect=PolicyDeniedError(
+                    "Taxonomy create-on-miss requires authentication"
+                )
+            ),
+        ):
+            response = client.patch(
+                f"/api/v1/projects/{uuid4()}",
+                json=_build_update_project_payload(),
+            )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 403
+    assert response.json()["detail"] == "Taxonomy create-on-miss forbidden"
 
 
 def test_update_project_validation_error_returns_422():
