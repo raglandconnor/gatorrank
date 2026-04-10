@@ -24,6 +24,7 @@ from app.core.config import get_settings
 from app.db.database import AsyncSessionLocal
 from app.models.auth import RefreshSession
 from app.models.project import Project, ProjectMember, Vote
+from app.models.taxonomy import ProjectCategory, ProjectTag, ProjectTechStack
 from app.models.user import User
 
 
@@ -31,6 +32,9 @@ from app.models.user import User
 class CleanupCounts:
     votes: int = 0
     project_members: int = 0
+    project_categories: int = 0
+    project_tags: int = 0
+    project_tech_stacks: int = 0
     projects: int = 0
     refresh_sessions: int = 0
     users: int = 0
@@ -123,6 +127,9 @@ async def cleanup_mock_data(*, email_domain: str) -> CleanupCounts:
         project_cols = getattr(Project, "__table__").c
         refresh_session_cols = getattr(RefreshSession, "__table__").c
         user_cols = getattr(User, "__table__").c
+        project_category_cols = getattr(ProjectCategory, "__table__").c
+        project_tag_cols = getattr(ProjectTag, "__table__").c
+        project_tech_stack_cols = getattr(ProjectTechStack, "__table__").c
 
         user_ids = await _fetch_mock_user_ids(session, email_domain=email_domain)
         project_ids = await _fetch_mock_project_ids(session, mock_user_ids=user_ids)
@@ -146,6 +153,24 @@ async def cleanup_mock_data(*, email_domain: str) -> CleanupCounts:
                 delete(ProjectMember).where(sa.or_(*member_filters))
             )
             counts.project_members = member_result.rowcount or 0
+
+        if project_ids:
+            categories_result = await session.exec(
+                delete(ProjectCategory).where(
+                    project_category_cols.project_id.in_(project_ids)
+                )
+            )
+            counts.project_categories = categories_result.rowcount or 0
+            tags_result = await session.exec(
+                delete(ProjectTag).where(project_tag_cols.project_id.in_(project_ids))
+            )
+            counts.project_tags = tags_result.rowcount or 0
+            tech_stacks_result = await session.exec(
+                delete(ProjectTechStack).where(
+                    project_tech_stack_cols.project_id.in_(project_ids)
+                )
+            )
+            counts.project_tech_stacks = tech_stacks_result.rowcount or 0
 
         if project_ids:
             projects_result = await session.exec(
@@ -181,6 +206,9 @@ async def main() -> None:
     print("Mock cleanup complete")
     print(f"- votes: {counts.votes}")
     print(f"- project_members: {counts.project_members}")
+    print(f"- project_categories: {counts.project_categories}")
+    print(f"- project_tags: {counts.project_tags}")
+    print(f"- project_tech_stacks: {counts.project_tech_stacks}")
     print(f"- projects: {counts.projects}")
     print(f"- refresh_sessions: {counts.refresh_sessions}")
     print(f"- users: {counts.users}")
