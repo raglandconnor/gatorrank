@@ -795,7 +795,7 @@ class ProjectService:
         published_to: date | None = None,
         current_user_id: UUID | None = None,
     ) -> ProjectListResponse:
-        """Return authored project cards, including drafts, with owner-only cursor rules."""
+        """Return owner-associated (creator/member) project cards, including drafts."""
         limit = max(1, min(limit, 100))
 
         cursor_payload: dict[str, Any] | None = None
