@@ -665,13 +665,21 @@ class ProjectService:
         published_from: date | None = None,
         published_to: date | None = None,
         created_by_id: UUID | None = None,
+        associated_user_id: UUID | None = None,
         current_user_id: UUID | None = None,
     ) -> ProjectListResponse:
         """Return project cards with team size and taxonomy hydrated for every endpoint."""
+        if created_by_id is not None and associated_user_id is not None:
+            raise ValueError(
+                "created_by_id and associated_user_id cannot both be provided"
+            )
         limit = max(1, min(limit, 100))
 
         project_cols = getattr(Project, "__table__").c
-        statement = self._base_published_projects_query(created_by_id)
+        statement = self._base_published_projects_query(
+            created_by_id=created_by_id,
+            associated_user_id=associated_user_id,
+        )
         if (
             sort == "top"
             and cursor is not None
@@ -1087,7 +1095,10 @@ class ProjectService:
         )
 
     @staticmethod
-    def _base_published_projects_query(created_by_id: UUID | None = None):
+    def _base_published_projects_query(
+        created_by_id: UUID | None = None,
+        associated_user_id: UUID | None = None,
+    ):
         project_cols = getattr(Project, "__table__").c
         stmt = select(Project).where(
             project_cols.is_published.is_(True),
@@ -1095,6 +1106,19 @@ class ProjectService:
         )
         if created_by_id:
             stmt = stmt.where(project_cols.created_by_id == created_by_id)
+        if associated_user_id:
+            member_exists = sa.exists(
+                select(sa.literal(1)).where(
+                    ProjectMember.project_id == project_cols.id,
+                    ProjectMember.user_id == associated_user_id,
+                )
+            )
+            stmt = stmt.where(
+                sa.or_(
+                    project_cols.created_by_id == associated_user_id,
+                    member_exists,
+                )
+            )
         return stmt
 
     @staticmethod
@@ -1102,9 +1126,15 @@ class ProjectService:
         owner_id: UUID, *, visibility: OwnerProjectVisibility
     ):
         project_cols = getattr(Project, "__table__").c
+        member_exists = sa.exists(
+            select(sa.literal(1)).where(
+                ProjectMember.project_id == project_cols.id,
+                ProjectMember.user_id == owner_id,
+            )
+        )
         stmt = select(Project).where(
-            project_cols.created_by_id == owner_id,
             project_cols.deleted_at.is_(None),
+            sa.or_(project_cols.created_by_id == owner_id, member_exists),
         )
         if visibility == "published":
             stmt = stmt.where(project_cols.is_published.is_(True))
