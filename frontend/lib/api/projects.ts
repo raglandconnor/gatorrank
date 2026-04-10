@@ -30,7 +30,8 @@ export async function listProjects(
 
 /**
  * Public-safe project listing for unauthenticated pages (e.g. Home/Top Projects).
- * Does not trigger auth refresh/redirect behavior.
+ * Uses optional auth when a token exists so viewer flags (e.g. `viewer_has_voted`)
+ * can still be personalized without forcing auth UX.
  */
 export async function listProjectsPublic(
   query: ProjectListQuery = {},
@@ -43,7 +44,7 @@ export async function listProjectsPublic(
     published_to: query.published_to,
   });
   return requestJson<ProjectListResponse>(`/api/v1/projects${qs}`, {
-    auth: 'none',
+    auth: 'optional',
     method: 'GET',
     cache: 'no-store',
     fallbackErrorMessage: 'Failed to fetch projects',

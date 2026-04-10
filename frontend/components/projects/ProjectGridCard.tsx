@@ -10,6 +10,7 @@ import {
   LuTag,
 } from 'react-icons/lu';
 import type { Project } from '@/types/project';
+import { useProjectVote } from '@/hooks/useProjectVote';
 
 interface ProjectGridCardProps {
   project: Project;
@@ -18,8 +19,11 @@ interface ProjectGridCardProps {
 
 export function ProjectGridCard({ project, rank }: ProjectGridCardProps) {
   const [isHovered, setIsHovered] = useState(false);
-  const [isVoted, setIsVoted] = useState(false);
-  const voteCount = project.votes + (isVoted ? 1 : 0);
+  const { isVoted, voteCount, isPending, toggleVote } = useProjectVote({
+    projectId: String(project.id),
+    initialVoteCount: project.votes,
+    initialViewerHasVoted: project.viewerHasVoted ?? false,
+  });
 
   return (
     <Box
@@ -208,10 +212,11 @@ export function ProjectGridCard({ project, rank }: ProjectGridCardProps) {
             transition="background 0.15s, border-color 0.15s, box-shadow 0.15s"
             onClick={(e) => {
               e.stopPropagation();
-              setIsVoted((v) => !v);
+              void toggleVote();
             }}
             aria-label={`Upvote ${project.name}`}
             aria-pressed={isVoted}
+            disabled={isPending}
           >
             <Box color={isVoted ? 'orange.500' : 'gray.700'}>
               <LuChevronUp size={14} />
