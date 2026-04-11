@@ -5,5 +5,6 @@ export interface Project {
   description: string;
   tags: string[];
   votes: number;
+  viewerHasVoted?: boolean;
   comments: number;
 }

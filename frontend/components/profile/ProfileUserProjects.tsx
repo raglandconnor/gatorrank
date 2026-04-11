@@ -21,6 +21,7 @@ import {
 } from 'react-icons/lu';
 import { getUserProjects } from '@/lib/api/users';
 import type { ProjectListItem } from '@/lib/api/types/user';
+import { useProjectVote } from '@/hooks/useProjectVote';
 
 /* ── Project card using backend schema ──────────────────────── */
 function UserProjectCard({
@@ -31,8 +32,11 @@ function UserProjectCard({
   onEdit?: (id: string) => void;
 }) {
   const [isHovered, setIsHovered] = useState(false);
-  const [isVoted, setIsVoted] = useState(false);
-  const voteCount = project.vote_count + (isVoted ? 1 : 0);
+  const { isVoted, voteCount, toggleVote } = useProjectVote({
+    projectId: project.id,
+    initialVoteCount: project.vote_count,
+    initialViewerHasVoted: project.viewer_has_voted,
+  });
 
   return (
     <Box
@@ -158,9 +162,12 @@ function UserProjectCard({
               whileTap={{ scale: 1.2, y: -3 }}
               style={{ display: 'contents' }}
             >
-              <Flex
-                align="center"
-                justify="center"
+              <Button
+                type="button"
+                variant="plain"
+                display="flex"
+                alignItems="center"
+                justifyContent="center"
                 gap="4px"
                 bg={isVoted ? 'orange.50' : 'white'}
                 border="1.6px solid"
@@ -168,13 +175,14 @@ function UserProjectCard({
                 borderRadius="10px"
                 px="10px"
                 h="36px"
-                cursor="pointer"
                 _hover={{ bg: isVoted ? 'orange.100' : 'orange.50' }}
                 transition="background 0.15s, border-color 0.15s"
                 onClick={(e) => {
                   e.stopPropagation();
-                  setIsVoted((v) => !v);
+                  void toggleVote();
                 }}
+                aria-label={`Upvote ${project.title}`}
+                aria-pressed={isVoted}
               >
                 <Box color={isVoted ? 'orange.500' : 'gray.700'}>
                   <LuChevronUp size={14} />
@@ -202,7 +210,7 @@ function UserProjectCard({
                     </motion.span>
                   </AnimatePresence>
                 </Box>
-              </Flex>
+              </Button>
             </motion.div>
           </HStack>
         </VStack>

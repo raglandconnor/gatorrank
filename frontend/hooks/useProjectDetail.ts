@@ -13,6 +13,7 @@ interface ProjectViewModel {
   githubUrl: string;
   demoVideoUrl: string;
   votes: number;
+  viewerHasVoted: boolean;
 }
 
 export function useProjectDetail(
@@ -86,6 +87,7 @@ export function useProjectDetail(
       githubUrl: projectDetail.github_url ?? '',
       demoVideoUrl: projectDetail.video_url ?? '',
       votes: projectDetail.vote_count,
+      viewerHasVoted: projectDetail.viewer_has_voted,
     };
   }, [projectDetail]);
 

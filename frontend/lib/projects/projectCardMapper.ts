@@ -10,6 +10,7 @@ export function mapProjectListItemToCardProject(
     description: item.short_description,
     tags: item.tags.map((tag) => tag.name),
     votes: item.vote_count,
+    viewerHasVoted: item.viewer_has_voted,
     // Comments are not returned by current list endpoint.
     comments: 0,
   };

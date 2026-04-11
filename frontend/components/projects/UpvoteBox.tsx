@@ -1,13 +1,24 @@
 'use client';
 
-import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Box, Button, Text } from '@chakra-ui/react';
 import { LuChevronUp } from 'react-icons/lu';
+import { useProjectVote } from '@/hooks/useProjectVote';
 
-export function UpvoteBox({ votes }: { votes: number }) {
-  const [isVoted, setIsVoted] = useState(false);
-  const voteCount = votes + (isVoted ? 1 : 0);
+export function UpvoteBox({
+  projectId,
+  votes,
+  viewerHasVoted = false,
+}: {
+  projectId: string;
+  votes: number;
+  viewerHasVoted?: boolean;
+}) {
+  const { isVoted, voteCount, toggleVote } = useProjectVote({
+    projectId,
+    initialVoteCount: votes,
+    initialViewerHasVoted: viewerHasVoted,
+  });
 
   return (
     <motion.div
@@ -31,7 +42,6 @@ export function UpvoteBox({ votes }: { votes: number }) {
         border="2px solid"
         borderColor={isVoted ? 'orange.400' : 'orange.200'}
         borderRadius="12px"
-        cursor="pointer"
         userSelect="none"
         _hover={{ bg: isVoted ? 'orange.100' : 'orange.50' }}
         _focusVisible={{
@@ -39,7 +49,7 @@ export function UpvoteBox({ votes }: { votes: number }) {
           boxShadow: '0 0 0 3px rgba(251,146,60,0.35)',
         }}
         transition="background 0.15s, border-color 0.15s, box-shadow 0.15s"
-        onClick={() => setIsVoted((v) => !v)}
+        onClick={() => void toggleVote()}
         aria-label="Upvote"
         aria-pressed={isVoted}
       >

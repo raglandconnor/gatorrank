@@ -1,7 +1,7 @@
 'use client';
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Box, HStack, VStack, Text, Flex } from '@chakra-ui/react';
+import { Box, HStack, VStack, Text, Flex, Button } from '@chakra-ui/react';
 import {
   LuMessageSquare,
   LuChevronUp,
@@ -9,6 +9,7 @@ import {
   LuArrowRight,
 } from 'react-icons/lu';
 import type { Project } from '@/types/project';
+import { useProjectVote } from '@/hooks/useProjectVote';
 
 interface ProjectCardProps {
   project: Project;
@@ -17,8 +18,11 @@ interface ProjectCardProps {
 
 export function ProjectCard({ project, rank }: ProjectCardProps) {
   const [isHovered, setIsHovered] = useState(false);
-  const [isVoted, setIsVoted] = useState(false);
-  const voteCount = project.votes + (isVoted ? 1 : 0);
+  const { isVoted, voteCount, toggleVote } = useProjectVote({
+    projectId: String(project.id),
+    initialVoteCount: project.votes,
+    initialViewerHasVoted: project.viewerHasVoted ?? false,
+  });
 
   return (
     <HStack
@@ -136,10 +140,13 @@ export function ProjectCard({ project, rank }: ProjectCardProps) {
           whileTap={{ scale: 1.2, y: -3 }}
           style={{ display: 'contents' }}
         >
-          <Flex
-            direction="column"
-            align="center"
-            justify="center"
+          <Button
+            type="button"
+            variant="plain"
+            display="flex"
+            flexDirection="column"
+            alignItems="center"
+            justifyContent="center"
             w="44px"
             h="52px"
             overflow="hidden"
@@ -148,11 +155,12 @@ export function ProjectCard({ project, rank }: ProjectCardProps) {
             borderColor={isVoted ? 'orange.400' : 'orange.200'}
             borderRadius="10px"
             px="4px"
-            cursor="pointer"
             _hover={{ bg: isVoted ? 'orange.100' : 'orange.50' }}
             transition="background 0.15s, border-color 0.15s"
             gap="2px"
-            onClick={() => setIsVoted((v) => !v)}
+            onClick={() => void toggleVote()}
+            aria-label={`Upvote ${project.name}`}
+            aria-pressed={isVoted}
           >
             <Box color={isVoted ? 'orange.500' : 'gray.800'}>
               <LuChevronUp size={18} />
@@ -180,7 +188,7 @@ export function ProjectCard({ project, rank }: ProjectCardProps) {
                 </motion.span>
               </AnimatePresence>
             </Box>
-          </Flex>
+          </Button>
         </motion.div>
       </HStack>
     </HStack>

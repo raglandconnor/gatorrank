@@ -1,10 +1,11 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/components/domain/AuthProvider';
 import { toast } from '@/lib/ui/toast';
 import { loginErrorToast } from '@/lib/auth/toastMessages';
+import { resolveSafeReturnTo } from '@/lib/auth/returnTo';
 import {
   Box,
   Button,
@@ -22,6 +23,7 @@ import { isValidEduEmail } from '@/lib/validation';
 
 export function LoginFormPanel() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { login, isReady } = useAuth();
 
   const [showPassword, setShowPassword] = useState(false);
@@ -54,11 +56,12 @@ export function LoginFormPanel() {
     setIsSubmitting(true);
     try {
       await login(email.trim(), password, rememberMe);
+      const returnTo = resolveSafeReturnTo(searchParams.get('returnTo'));
       toast.success({
         title: 'Signed in',
-        description: 'Welcome back. Taking you to your profile…',
+        description: 'Welcome back. Taking you back…',
       });
-      router.push('/profile');
+      router.push(returnTo);
     } catch (err) {
       toast.error(loginErrorToast(err));
     } finally {

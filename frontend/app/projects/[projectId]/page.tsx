@@ -306,7 +306,11 @@ export default function ProjectDetailPage() {
 
               {/* Right upvote */}
               <Box pt="4px" flexShrink={0}>
-                <UpvoteBox votes={project.votes} />
+                <UpvoteBox
+                  projectId={project.id}
+                  votes={project.votes}
+                  viewerHasVoted={project.viewerHasVoted}
+                />
               </Box>
             </Flex>
 
