@@ -68,6 +68,7 @@ describe('projectCardMapper', () => {
     const item = listItemFixture({
       id: 'uuid-string',
       title: 'GatorMap',
+      slug: 'gatormap',
       short_description: 'Campus maps.',
       vote_count: 9,
       tags: [{ id: 'x', name: 'Maps' }],
@@ -76,6 +77,7 @@ describe('projectCardMapper', () => {
     expect(mapProjectListItemToCardProject(item)).toEqual({
       id: 'uuid-string',
       name: 'GatorMap',
+      slug: 'gatormap',
       description: 'Campus maps.',
       tags: ['Maps'],
       votes: 9,

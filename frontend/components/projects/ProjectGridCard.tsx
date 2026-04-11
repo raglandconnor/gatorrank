@@ -1,8 +1,17 @@
 'use client';
 
+import NextLink from 'next/link';
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Box, VStack, HStack, Text, Button } from '@chakra-ui/react';
+import {
+  Box,
+  VStack,
+  HStack,
+  Text,
+  Button,
+  LinkBox,
+  LinkOverlay,
+} from '@chakra-ui/react';
 import {
   LuMessageSquare,
   LuChevronUp,
@@ -11,6 +20,7 @@ import {
 } from 'react-icons/lu';
 import type { Project } from '@/types/project';
 import { useProjectVote } from '@/hooks/useProjectVote';
+import { projectPath } from '@/lib/routes';
 
 interface ProjectGridCardProps {
   project: Project;
@@ -26,7 +36,7 @@ export function ProjectGridCard({ project, rank }: ProjectGridCardProps) {
   });
 
   return (
-    <Box
+    <LinkBox
       bg={isHovered ? '#efefef' : 'gray.100'}
       borderRadius="13px"
       p={{ base: '20px', md: '24px' }}
@@ -38,9 +48,13 @@ export function ProjectGridCard({ project, rank }: ProjectGridCardProps) {
       h="100%"
       display="flex"
       flexDirection="column"
+      _focusWithin={{
+        outline: '2px solid',
+        outlineColor: 'orange.400',
+        outlineOffset: '2px',
+      }}
     >
       <VStack align="stretch" gap="14px" flex="1">
-        {/* Header: square image (side = row height, matches name + tags) + text */}
         <HStack align="stretch" gap="14px" w="100%">
           <Box
             alignSelf="stretch"
@@ -63,16 +77,23 @@ export function ProjectGridCard({ project, rank }: ProjectGridCardProps) {
             justify="flex-start"
           >
             <HStack gap="6px" align="center" w="100%">
-              <Text
-                fontSize="md"
-                fontWeight="bold"
-                color={isHovered ? 'orange.600' : 'gray.900'}
-                lineHeight="24px"
-                transition="color 0.15s"
-                lineClamp={1}
+              <LinkOverlay
+                as={NextLink}
+                href={projectPath(project.slug)}
+                _hover={{ textDecoration: 'none' }}
+                _focusVisible={{ textDecoration: 'none' }}
               >
-                {rank}. {project.name}
-              </Text>
+                <Text
+                  fontSize="md"
+                  fontWeight="bold"
+                  color={isHovered ? 'orange.600' : 'gray.900'}
+                  lineHeight="24px"
+                  transition="color 0.15s"
+                  lineClamp={1}
+                >
+                  {rank}. {project.name}
+                </Text>
+              </LinkOverlay>
               <Box
                 color="orange.600"
                 opacity={isHovered ? 1 : 0}
@@ -82,8 +103,14 @@ export function ProjectGridCard({ project, rank }: ProjectGridCardProps) {
                 <LuArrowRight size={13} />
               </Box>
             </HStack>
-            {/* Tags — same hover style as home ProjectCard */}
-            <HStack gap={0} align="center" flexWrap="wrap" w="100%">
+            <HStack
+              gap={0}
+              align="center"
+              flexWrap="wrap"
+              w="100%"
+              position="relative"
+              zIndex={1}
+            >
               <Box color="gray.800" mr="8px" flexShrink={0}>
                 <LuTag size={13} />
               </Box>
@@ -131,8 +158,9 @@ export function ProjectGridCard({ project, rank }: ProjectGridCardProps) {
           </VStack>
         </HStack>
 
-        {/* Body: full-width description */}
         <Text
+          position="relative"
+          zIndex={1}
           fontSize="sm"
           color="gray.800"
           lineHeight="24px"
@@ -142,8 +170,14 @@ export function ProjectGridCard({ project, rank }: ProjectGridCardProps) {
           {project.description}
         </Text>
 
-        {/* Footer: comments + upvote */}
-        <HStack gap="8px" pt="4px" w="100%" align="center">
+        <HStack
+          gap="8px"
+          pt="4px"
+          w="100%"
+          align="center"
+          position="relative"
+          zIndex={1}
+        >
           <Button
             type="button"
             variant="plain"
@@ -245,6 +279,6 @@ export function ProjectGridCard({ project, rank }: ProjectGridCardProps) {
           </Button>
         </HStack>
       </VStack>
-    </Box>
+    </LinkBox>
   );
 }
