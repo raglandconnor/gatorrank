@@ -95,6 +95,32 @@ export async function getProjectBySlug(slug: string): Promise<ProjectDetail> {
   );
 }
 
+export async function getProjectBySlugForViewer(
+  slug: string,
+  accessToken?: string | null,
+): Promise<ProjectDetail> {
+  if (!accessToken) {
+    return requestJson<ProjectDetail>(
+      `/api/v1/projects/slug/${encodeURIComponent(slug)}`,
+      {
+        auth: 'none',
+        method: 'GET',
+        cache: 'no-store',
+        fallbackErrorMessage: 'Failed to fetch project',
+      },
+    );
+  }
+  return requestJson<ProjectDetail>(
+    `/api/v1/projects/slug/${encodeURIComponent(slug)}`,
+    {
+      auth: 'optional',
+      method: 'GET',
+      cache: 'no-store',
+      fallbackErrorMessage: 'Failed to fetch project',
+    },
+  );
+}
+
 export async function createProject(
   payload: ProjectCreateInput,
 ): Promise<ProjectDetail> {

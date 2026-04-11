@@ -3,6 +3,7 @@ import { buildQueryString } from '@/lib/api/http';
 import {
   deleteProject,
   getProjectByIdForViewer,
+  getProjectBySlugForViewer,
   listProjectsPublic,
 } from '@/lib/api/projects';
 
@@ -154,6 +155,36 @@ describe('getProjectByIdForViewer', () => {
     expect(requestJsonMock).not.toHaveBeenCalledWith(
       '/api/v1/projects/p1',
       expect.objectContaining({ method: 'GET', cache: 'no-store' }),
+    );
+    expect(result.slug).toBe('demo-project');
+  });
+
+  test('getProjectBySlugForViewer uses anonymous request when access token is missing', async () => {
+    const result = await getProjectBySlugForViewer('demo-project', null);
+
+    expect(requestJsonMock).toHaveBeenCalledWith(
+      '/api/v1/projects/slug/demo-project',
+      {
+        auth: 'none',
+        method: 'GET',
+        cache: 'no-store',
+        fallbackErrorMessage: 'Failed to fetch project',
+      },
+    );
+    expect(result.id).toBe('p1');
+  });
+
+  test('getProjectBySlugForViewer uses optional-auth request path when access token exists', async () => {
+    const result = await getProjectBySlugForViewer('demo-project', 'token-1');
+
+    expect(requestJsonMock).toHaveBeenCalledWith(
+      '/api/v1/projects/slug/demo-project',
+      {
+        auth: 'optional',
+        method: 'GET',
+        cache: 'no-store',
+        fallbackErrorMessage: 'Failed to fetch project',
+      },
     );
     expect(result.slug).toBe('demo-project');
   });

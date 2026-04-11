@@ -23,12 +23,8 @@ import {
   LuLogOut,
   LuSearch,
 } from 'react-icons/lu';
-
-function getInitials(name: string): string {
-  const parts = name.trim().split(/\s+/);
-  if (parts.length === 1) return parts[0][0]?.toUpperCase() ?? '';
-  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
-}
+import { profilePath } from '@/lib/routes';
+import { UserAvatar } from '@/components/ui/UserAvatar';
 
 export function Navbar() {
   const { user, isReady, logout } = useAuth();
@@ -43,6 +39,7 @@ export function Navbar() {
     if (pathname === '/projects/create') return false;
     if (pathname === '/projects/edit') return false;
     if (pathname === '/profile/edit') return false;
+    if (/^\/projects\/[^/]+\/edit$/.test(pathname)) return false;
     if (/^\/profile\/[^/]+\/edit$/.test(pathname)) return false;
     return true;
   }, [pathname]);
@@ -130,35 +127,12 @@ export function Navbar() {
                     transition="opacity 0.15s"
                     tabIndex={0}
                   >
-                    {user.profile_picture_url ? (
-                      <img
-                        src={user.profile_picture_url}
-                        alt={user.full_name ?? user.email}
-                        style={{
-                          width: '38px',
-                          height: '38px',
-                          borderRadius: '50%',
-                          objectFit: 'cover',
-                          flexShrink: 0,
-                          display: 'block',
-                        }}
-                      />
-                    ) : (
-                      <Flex
-                        w="38px"
-                        h="38px"
-                        borderRadius="full"
-                        bg="orange.400"
-                        color="white"
-                        align="center"
-                        justify="center"
-                        fontSize="sm"
-                        fontWeight="bold"
-                        flexShrink={0}
-                      >
-                        {getInitials(user.full_name ?? user.email)}
-                      </Flex>
-                    )}
+                    <UserAvatar
+                      name={user.full_name ?? user.email}
+                      imageUrl={user.profile_picture_url}
+                      size="38px"
+                      fontSize="sm"
+                    />
                     <Text
                       fontSize="md"
                       fontWeight="medium"
@@ -190,7 +164,7 @@ export function Navbar() {
                     >
                       <Menu.Item
                         value="view-profile"
-                        onClick={() => router.push(`/profile/${user.id}`)}
+                        onClick={() => router.push(profilePath(user.username))}
                         px="14px"
                         py="10px"
                         fontSize="sm"
