@@ -155,7 +155,7 @@ function VotePill({
       _hover={{ bg: active ? 'orange.100' : 'orange.50' }}
       transition="background 0.15s, border-color 0.15s, opacity 0.15s"
       onClick={onClick}
-      disabled={pending}
+      aria-disabled={pending}
     >
       <Flex
         w="14px"

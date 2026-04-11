@@ -13,14 +13,12 @@ import {
   Wrap,
   Link as ChakraLink,
 } from '@chakra-ui/react';
-import { motion, AnimatePresence } from 'framer-motion';
 import {
   LuGithub,
   LuVideo,
   LuPlay,
   LuExternalLink,
   LuPencil,
-  LuChevronUp,
   LuFileText,
   LuSkipBack,
   LuSkipForward,
@@ -30,6 +28,7 @@ import {
 } from 'react-icons/lu';
 import { Navbar } from '@/components/layout/Navbar';
 import { useAuth } from '@/components/domain/AuthProvider';
+import { UpvoteBox } from '@/components/projects/UpvoteBox';
 import {
   getProjectByIdForViewer,
   getProjectBySlugForViewer,
@@ -71,84 +70,6 @@ function getYouTubeEmbedUrl(url: string): string | null {
   } catch {
     return null;
   }
-}
-
-function UpvoteBox({ votes }: { votes: number }) {
-  const [isVoted, setIsVoted] = useState(false);
-  const voteCount = votes + (isVoted ? 1 : 0);
-
-  return (
-    <motion.div
-      whileTap={{ scale: 1.2, y: -3 }}
-      style={{ display: 'contents' }}
-    >
-      <Button
-        type="button"
-        variant="plain"
-        display="flex"
-        flexDirection="column"
-        alignItems="center"
-        justifyContent="center"
-        p="0"
-        gap="8px"
-        w="108px"
-        minW="108px"
-        h="108px"
-        overflow="hidden"
-        bg={isVoted ? 'orange.50' : 'white'}
-        border="2px solid"
-        borderColor={isVoted ? 'orange.400' : 'orange.200'}
-        borderRadius="12px"
-        cursor="pointer"
-        userSelect="none"
-        _hover={{ bg: isVoted ? 'orange.100' : 'orange.50' }}
-        _focusVisible={{
-          borderColor: 'orange.400',
-          boxShadow: '0 0 0 3px rgba(251,146,60,0.35)',
-        }}
-        transition="background 0.15s, border-color 0.15s, box-shadow 0.15s"
-        onClick={() => setIsVoted((v) => !v)}
-        aria-label="Upvote"
-        aria-pressed={isVoted}
-      >
-        <Box color={isVoted ? 'orange.500' : 'gray.800'}>
-          <LuChevronUp size={24} />
-        </Box>
-        <Box position="relative" h="24px" w="100%" overflow="hidden">
-          <AnimatePresence mode="sync" initial={false}>
-            <motion.span
-              key={voteCount}
-              initial={{ y: 10, opacity: 0 }}
-              animate={{ y: 0, opacity: 1 }}
-              exit={{ y: -10, opacity: 0 }}
-              transition={{ duration: 0.15 }}
-              style={{
-                position: 'absolute',
-                inset: 0,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: '1.2rem',
-                fontWeight: 700,
-                lineHeight: '24px',
-                color: isVoted ? 'rgb(234,88,12)' : 'rgb(17,24,39)',
-              }}
-            >
-              {voteCount}
-            </motion.span>
-          </AnimatePresence>
-        </Box>
-        <Text
-          fontSize="xs"
-          letterSpacing="0.08em"
-          color={isVoted ? 'orange.600' : 'gray.600'}
-          lineHeight="14px"
-        >
-          UPVOTE
-        </Text>
-      </Button>
-    </motion.div>
-  );
 }
 
 function MemberMetaBlock({
@@ -579,7 +500,11 @@ export default function ProjectDetailPage() {
               </HStack>
 
               <Box pt="4px" flexShrink={0}>
-                <UpvoteBox votes={project.vote_count} />
+                <UpvoteBox
+                  projectId={project.id}
+                  votes={project.vote_count}
+                  viewerHasVoted={project.viewer_has_voted}
+                />
               </Box>
             </Flex>
 
