@@ -24,6 +24,7 @@ from app.models.taxonomy import (
     Tag,
     TechStack,
 )
+from app.models.comment import Comment
 
 __all__ = [
     "User",
@@ -48,4 +49,5 @@ __all__ = [
     "ProjectCategory",
     "ProjectTag",
     "ProjectTechStack",
+    "Comment",
 ]

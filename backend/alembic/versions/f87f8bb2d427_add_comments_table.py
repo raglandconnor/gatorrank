@@ -1,0 +1,47 @@
+"""Add Comments table
+
+Revision ID: f87f8bb2d427
+Revises: 11bca64bbcf9
+Create Date: 2026-04-11 09:58:03.166484
+
+"""
+from typing import Sequence, Union
+
+from alembic import op
+import sqlalchemy as sa
+
+
+# revision identifiers, used by Alembic.
+revision: str = 'f87f8bb2d427'
+down_revision: Union[str, Sequence[str], None] = '11bca64bbcf9'
+branch_labels: Union[str, Sequence[str], None] = None
+depends_on: Union[str, Sequence[str], None] = None
+
+
+def upgrade() -> None:
+    """Upgrade schema."""
+    op.create_table(
+        'comments',
+        sa.Column('id', sa.Uuid(), nullable=False),
+        sa.Column('project_id', sa.Uuid(), nullable=False),
+        sa.Column('author_id', sa.Uuid(), nullable=False),
+        sa.Column('body', sa.Text(), nullable=False),
+        sa.Column('moderation_state', sa.String(length=32), server_default='visible', nullable=False),
+        sa.Column('deleted_at', sa.DateTime(timezone=True), nullable=True),
+        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
+        sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
+        sa.ForeignKeyConstraint(['author_id'], ['users.id'], ),
+        sa.ForeignKeyConstraint(['project_id'], ['projects.id'], ),
+        sa.PrimaryKeyConstraint('id')
+    )
+    op.create_index(op.f('ix_comments_author_id'), 'comments', ['author_id'], unique=False)
+    op.create_index(op.f('ix_comments_project_id'), 'comments', ['project_id'], unique=False)
+    op.create_index('ix_comments_project_id_created_at', 'comments', ['project_id', 'created_at'], unique=False)
+
+
+def downgrade() -> None:
+    """Downgrade schema."""
+    op.drop_index('ix_comments_project_id_created_at', table_name='comments')
+    op.drop_index(op.f('ix_comments_project_id'), table_name='comments')
+    op.drop_index(op.f('ix_comments_author_id'), table_name='comments')
+    op.drop_table('comments')
