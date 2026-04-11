@@ -26,43 +26,15 @@ import { RoleBadge } from '@/components/ui/rolebadge';
 import { ProfileUserProjects } from '@/components/profile/ProfileUserProjects';
 import { useAuth } from '@/components/domain/AuthProvider';
 import { getUserPublic, getUserPublicByUsername } from '@/lib/api/users';
+import type { ExtendedProfile } from '@/lib/profile/profileShared';
+import {
+  EMPTY_EXTENDED,
+  loadExtendedProfile as loadExtended,
+} from '@/lib/profile/profileShared';
 import { isUuid } from '@/lib/profileSlug';
 import { profileEditPath, profilePath } from '@/lib/routes';
 import type { UserPublic } from '@/lib/api/types/user';
 import { UserAvatar } from '@/components/ui/UserAvatar';
-
-interface ExtendedProfile {
-  bio: string;
-  socials: { github?: string; linkedin?: string; website?: string };
-  major: string;
-  graduationYear: number;
-  courses: string[];
-  skills: string[];
-}
-
-const EMPTY_EXTENDED: ExtendedProfile = {
-  bio: '',
-  socials: {},
-  major: '',
-  graduationYear: 0,
-  courses: [],
-  skills: [],
-};
-
-function loadExtended(userId: string): ExtendedProfile {
-  if (typeof window === 'undefined') return EMPTY_EXTENDED;
-  try {
-    const raw = localStorage.getItem(`gatorrank_profile_ext_${userId}`);
-    if (raw)
-      return {
-        ...EMPTY_EXTENDED,
-        ...(JSON.parse(raw) as Partial<ExtendedProfile>),
-      };
-  } catch {
-    // ignore
-  }
-  return EMPTY_EXTENDED;
-}
 
 function SocialLink({
   href,

@@ -1,7 +1,7 @@
 'use client';
 
+import NextLink from 'next/link';
 import { useEffect, useState, type MouseEvent } from 'react';
-import { useRouter } from 'next/navigation';
 import {
   Box,
   Badge,
@@ -11,6 +11,8 @@ import {
   Flex,
   SimpleGrid,
   Spinner,
+  LinkBox,
+  LinkOverlay,
 } from '@chakra-ui/react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { LuMessageSquare, LuChevronUp, LuArrowRight } from 'react-icons/lu';
@@ -196,7 +198,6 @@ function VotePill({
 }
 
 function UserProjectCard({ project }: { project: ProjectListItem }) {
-  const router = useRouter();
   const [isHovered, setIsHovered] = useState(false);
   const { isVoted, voteCount, isPending, toggleVote } = useProjectVote({
     projectId: project.id,
@@ -212,7 +213,7 @@ function UserProjectCard({ project }: { project: ProjectListItem }) {
       : '#fff7db';
 
   return (
-    <Box
+    <LinkBox
       position="relative"
       bg={backgroundColor}
       borderRadius="13px"
@@ -222,12 +223,13 @@ function UserProjectCard({ project }: { project: ProjectListItem }) {
       transition="background 0.15s"
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
+      _focusWithin={{
+        outline: '2px solid',
+        outlineColor: 'orange.400',
+        outlineOffset: '2px',
+      }}
     >
-      <VStack
-        align="start"
-        gap="12px"
-        onClick={() => router.push(projectPath(project.slug))}
-      >
+      <VStack align="start" gap="12px" w="100%">
         <Box
           w="100%"
           h="144px"
@@ -240,18 +242,25 @@ function UserProjectCard({ project }: { project: ProjectListItem }) {
 
         <VStack align="start" gap="10px" w="100%">
           <HStack gap="8px" align="center" flexWrap="wrap">
-            <Text
-              fontSize="md"
-              fontWeight="bold"
-              color={isHovered ? 'orange.600' : 'gray.900'}
-              lineHeight="24px"
-              transition="color 0.15s"
-              overflow="hidden"
-              textOverflow="ellipsis"
-              whiteSpace="nowrap"
+            <LinkOverlay
+              as={NextLink}
+              href={projectPath(project.slug)}
+              _hover={{ textDecoration: 'none' }}
+              _focusVisible={{ textDecoration: 'none' }}
             >
-              {project.title}
-            </Text>
+              <Text
+                fontSize="md"
+                fontWeight="bold"
+                color={isHovered ? 'orange.600' : 'gray.900'}
+                lineHeight="24px"
+                transition="color 0.15s"
+                overflow="hidden"
+                textOverflow="ellipsis"
+                whiteSpace="nowrap"
+              >
+                {project.title}
+              </Text>
+            </LinkOverlay>
             {!project.is_published && (
               <Badge
                 bg="yellow.200"
@@ -278,6 +287,8 @@ function UserProjectCard({ project }: { project: ProjectListItem }) {
           </HStack>
 
           <Text
+            position="relative"
+            zIndex={1}
             fontSize="sm"
             color="gray.600"
             lineHeight="22px"
@@ -287,9 +298,15 @@ function UserProjectCard({ project }: { project: ProjectListItem }) {
             {project.short_description}
           </Text>
 
-          <HStack gap="8px" mt="2px">
-            <motion.div whileTap={{ scale: 1.06 }} style={{ display: 'contents' }}>
-              <CommentPill count={0} onClick={(event) => event.stopPropagation()} />
+          <HStack gap="8px" mt="2px" position="relative" zIndex={1}>
+            <motion.div
+              whileTap={{ scale: 1.06 }}
+              style={{ display: 'contents' }}
+            >
+              <CommentPill
+                count={0}
+                onClick={(event) => event.stopPropagation()}
+              />
             </motion.div>
 
             <motion.div
@@ -309,7 +326,7 @@ function UserProjectCard({ project }: { project: ProjectListItem }) {
           </HStack>
         </VStack>
       </VStack>
-    </Box>
+    </LinkBox>
   );
 }
 

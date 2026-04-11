@@ -35,47 +35,13 @@ import { getMe, patchMe } from '@/lib/api/users';
 import type { AuthUser } from '@/lib/api/types/auth';
 import type { UserPrivate } from '@/lib/api/types/user';
 import { useAuth } from '@/components/domain/AuthProvider';
+import {
+  loadExtendedProfile as loadExtended,
+  saveExtendedProfile as saveExtended,
+} from '@/lib/profile/profileShared';
 import { isUuid } from '@/lib/profileSlug';
 import { profilePath, profileEditPath } from '@/lib/routes';
 import { UserAvatar } from '@/components/ui/UserAvatar';
-
-interface ExtendedProfile {
-  bio: string;
-  socials: { github?: string; linkedin?: string; website?: string };
-  major: string;
-  graduationYear: number;
-  courses: string[];
-  skills: string[];
-}
-
-const EMPTY_EXTENDED: ExtendedProfile = {
-  bio: '',
-  socials: {},
-  major: '',
-  graduationYear: 0,
-  courses: [],
-  skills: [],
-};
-
-function loadExtended(userId: string): ExtendedProfile {
-  if (typeof window === 'undefined') return EMPTY_EXTENDED;
-  try {
-    const raw = localStorage.getItem(`gatorrank_profile_ext_${userId}`);
-    if (raw)
-      return {
-        ...EMPTY_EXTENDED,
-        ...(JSON.parse(raw) as Partial<ExtendedProfile>),
-      };
-  } catch {
-    // ignore
-  }
-  return EMPTY_EXTENDED;
-}
-
-function saveExtended(userId: string, ext: ExtendedProfile): void {
-  if (typeof window === 'undefined') return;
-  localStorage.setItem(`gatorrank_profile_ext_${userId}`, JSON.stringify(ext));
-}
 
 const inputBase = {
   border: '1px solid',

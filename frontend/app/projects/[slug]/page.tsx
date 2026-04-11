@@ -1,5 +1,6 @@
 'use client';
 
+import NextLink from 'next/link';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import {
@@ -36,101 +37,72 @@ import {
 import type { ProjectDetail } from '@/lib/api/types/project';
 import { isUuid } from '@/lib/profileSlug';
 import { profilePath, projectEditPath, projectPath } from '@/lib/routes';
+import { getYouTubeEmbedUrl } from '@/lib/projects/youtube';
 import { ProjectLogoPlaceholder } from '@/components/projects/ProjectLogoPlaceholder';
 import { FeatureLoadingState } from '@/components/ui/FeatureLoadingState';
 import { UserAvatar } from '@/components/ui/UserAvatar';
-
-function getYouTubeEmbedUrl(url: string): string | null {
-  const trimmed = url.trim();
-  if (!trimmed) return null;
-
-  try {
-    const parsed = new URL(trimmed);
-    const host = parsed.hostname.replace(/^www\./, '').toLowerCase();
-    let videoId = '';
-
-    if (host === 'youtu.be') {
-      videoId = parsed.pathname.split('/').filter(Boolean)[0] ?? '';
-    } else if (host === 'youtube.com' || host === 'm.youtube.com') {
-      if (parsed.pathname === '/watch') {
-        videoId = parsed.searchParams.get('v') ?? '';
-      } else if (parsed.pathname.startsWith('/shorts/')) {
-        videoId = parsed.pathname.split('/')[2] ?? '';
-      } else if (parsed.pathname.startsWith('/embed/')) {
-        videoId = parsed.pathname.split('/')[2] ?? '';
-      }
-    }
-
-    const videoIdRegex = /^[a-zA-Z0-9_-]{11}$/;
-    if (!videoId) return null;
-    const normalizedVideoId = videoId.trim();
-    if (!videoIdRegex.test(normalizedVideoId)) return null;
-
-    return `https://www.youtube.com/embed/${encodeURIComponent(normalizedVideoId)}`;
-  } catch {
-    return null;
-  }
-}
 
 function MemberMetaBlock({
   username,
   fullName,
   profilePictureUrl,
   description,
-  onClick,
 }: {
   username: string;
   fullName: string | null;
   profilePictureUrl: string | null;
   description: string;
-  onClick: () => void;
 }) {
   return (
-    <HStack
-      gap="12px"
-      cursor="pointer"
+    <ChakraLink
+      as={NextLink}
+      href={profilePath(username)}
+      display="inline-flex"
+      minW="fit-content"
+      borderRadius="14px"
+      border="1px solid"
+      borderColor="transparent"
+      px="10px"
+      py="8px"
+      bg="transparent"
       transition="background 0.15s, border-color 0.15s, box-shadow 0.15s, transform 0.15s"
       _hover={{
         bg: 'white',
         borderColor: 'orange.200',
         boxShadow: '0 10px 24px rgba(251,146,60,0.12)',
         transform: 'translateY(-1px)',
+        textDecoration: 'none',
       }}
-      _focusWithin={{
+      _focusVisible={{
         bg: 'white',
         borderColor: 'orange.200',
         boxShadow: '0 0 0 3px rgba(251,146,60,0.16)',
+        textDecoration: 'none',
       }}
-      onClick={onClick}
-      minW="fit-content"
-      border="1px solid"
-      borderColor="transparent"
-      borderRadius="14px"
-      px="10px"
-      py="8px"
-      bg="transparent"
     >
-      <UserAvatar
-        name={fullName ?? username}
-        imageUrl={profilePictureUrl}
-        size="52px"
-        fontSize="md"
-      />
-      <VStack align="start" gap="2px" minW={0}>
-        <Text
+      <HStack gap="12px" minW="fit-content">
+        <UserAvatar
+          name={fullName ?? username}
+          imageUrl={profilePictureUrl}
+          size="52px"
           fontSize="md"
-          fontWeight="bold"
-          color="gray.900"
-          lineHeight="22px"
-          lineClamp={1}
-        >
-          {fullName ?? username}
-        </Text>
-        <Text fontSize="sm" color="gray.600" lineHeight="18px" lineClamp={1}>
-          {description}
-        </Text>
-      </VStack>
-    </HStack>
+        />
+        <VStack align="start" gap="2px" minW={0}>
+          <Text
+            fontSize="md"
+            fontWeight="bold"
+            color="gray.900"
+            lineHeight="22px"
+            lineClamp={1}
+          >
+            {fullName ?? username}
+          </Text>
+          <Text fontSize="sm" color="gray.600" lineHeight="18px" lineClamp={1}>
+            {description}
+          </Text>
+        </VStack>
+      </HStack>
+    </ChakraLink>
   );
 }
 
@@ -221,7 +193,8 @@ export default function ProjectDetailPage() {
     if (!user?.id || !projectDetail?.members.length) return false;
     return projectDetail.members.some((member) => member.user_id === user.id);
   }, [projectDetail, user?.id]);
-  const canSeePublishStateBadge = Boolean(user?.id) && (isOwner || isProjectMember);
+  const canSeePublishStateBadge =
+    Boolean(user?.id) && (isOwner || isProjectMember);
 
   if (!isReady || loading) {
     return (
@@ -519,9 +492,6 @@ export default function ProjectDetailPage() {
                       fullName={projectCreator.full_name}
                       profilePictureUrl={projectCreator.profile_picture_url}
                       description="Project Creator"
-                      onClick={() =>
-                        router.push(profilePath(projectCreator.username))
-                      }
                     />
                   )}
                   {nonOwnerMembers.map((member) => (
@@ -531,7 +501,6 @@ export default function ProjectDetailPage() {
                       fullName={member.full_name}
                       profilePictureUrl={member.profile_picture_url}
                       description="Team Member"
-                      onClick={() => router.push(profilePath(member.username))}
                     />
                   ))}
                 </HStack>
@@ -728,16 +697,32 @@ export default function ProjectDetailPage() {
 
                     <HStack justify="space-between" gap="12px" align="center">
                       <HStack gap={{ base: '10px', md: '12px' }} color="white">
-                        <Box display="flex" alignItems="center" justifyContent="center">
+                        <Box
+                          display="flex"
+                          alignItems="center"
+                          justifyContent="center"
+                        >
                           <LuPlay size={18} fill="currentColor" />
                         </Box>
-                        <Box display="flex" alignItems="center" justifyContent="center">
+                        <Box
+                          display="flex"
+                          alignItems="center"
+                          justifyContent="center"
+                        >
                           <LuSkipBack size={18} />
                         </Box>
-                        <Box display="flex" alignItems="center" justifyContent="center">
+                        <Box
+                          display="flex"
+                          alignItems="center"
+                          justifyContent="center"
+                        >
                           <LuSkipForward size={18} />
                         </Box>
-                        <Box display="flex" alignItems="center" justifyContent="center">
+                        <Box
+                          display="flex"
+                          alignItems="center"
+                          justifyContent="center"
+                        >
                           <LuVolume2 size={18} />
                         </Box>
                         <Box
@@ -762,10 +747,18 @@ export default function ProjectDetailPage() {
                         >
                           00:00 / 10:00
                         </Text>
-                        <Box display="flex" alignItems="center" justifyContent="center">
+                        <Box
+                          display="flex"
+                          alignItems="center"
+                          justifyContent="center"
+                        >
                           <LuSettings2 size={18} />
                         </Box>
-                        <Box display="flex" alignItems="center" justifyContent="center">
+                        <Box
+                          display="flex"
+                          alignItems="center"
+                          justifyContent="center"
+                        >
                           <LuExpand size={18} />
                         </Box>
                       </HStack>

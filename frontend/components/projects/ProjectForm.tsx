@@ -13,14 +13,7 @@ import {
   Wrap,
   Spinner,
 } from '@chakra-ui/react';
-import {
-  LuPlus,
-  LuX,
-  LuGlobe,
-  LuGithub,
-  LuPlay,
-  LuTag,
-} from 'react-icons/lu';
+import { LuPlus, LuX, LuGlobe, LuGithub, LuPlay, LuTag } from 'react-icons/lu';
 import { listTags } from '@/lib/api/taxonomy';
 import type { ProjectMemberInfo, TaxonomyTerm } from '@/lib/api/types/project';
 import { toast } from '@/lib/ui/toast';
