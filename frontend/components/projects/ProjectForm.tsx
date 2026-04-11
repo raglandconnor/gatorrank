@@ -804,6 +804,7 @@ export function ProjectForm({
                 />
                 <Button
                   type="button"
+                  aria-label="Add tag"
                   bg="orange.400"
                   color="white"
                   borderRadius="10px"
@@ -921,6 +922,7 @@ export function ProjectForm({
                 />
                 <Button
                   type="button"
+                  aria-label="Add team member"
                   bg="orange.400"
                   color="white"
                   borderRadius="10px"

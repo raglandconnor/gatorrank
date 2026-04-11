@@ -161,7 +161,7 @@ export default function EditProfilePage() {
         const user = await getMe();
         if (isUuid(username)) {
           if (username !== user.id) {
-            router.replace(profilePath(user.username));
+            router.replace(profileEditPath(user.username));
             return;
           }
           router.replace(profileEditPath(user.username));
@@ -597,6 +597,7 @@ export default function EditProfilePage() {
                         <Box
                           as="button"
                           onClick={() => removeCourse(course)}
+                          aria-label={`Remove course ${course}`}
                           color="gray.400"
                           cursor="pointer"
                           display="flex"
@@ -797,6 +798,7 @@ export default function EditProfilePage() {
                     <Box
                       as="button"
                       onClick={() => removeSkill(skill)}
+                      aria-label={`Remove skill ${skill}`}
                       color="orange.300"
                       cursor="pointer"
                       display="flex"
