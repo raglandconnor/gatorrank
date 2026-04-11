@@ -25,7 +25,8 @@ def postgres_container() -> Generator[PostgresContainer, None, None]:
         container = PostgresContainer("postgres:16-alpine")
         container.start()
     except DockerException as exc:
-        pytest.skip(f"Docker daemon unavailable for integration tests: {exc}")
+        yield None
+        return
     try:
         yield container
     finally:
@@ -33,8 +34,15 @@ def postgres_container() -> Generator[PostgresContainer, None, None]:
 
 
 @pytest.fixture(scope="session")
-def database_urls(postgres_container: PostgresContainer) -> dict[str, str]:
-    sync_url = postgres_container.get_connection_url()
+def database_urls(postgres_container: PostgresContainer | None) -> dict[str, str]:
+    if postgres_container:
+        sync_url = postgres_container.get_connection_url()
+    else:
+        sync_url = os.environ.get("DATABASE_URL")
+        if not sync_url:
+            pytest.skip("No Docker daemon and no DATABASE_URL provided")
+        sync_url = sync_url.replace("postgresql+asyncpg://", "postgresql://")
+    
     return {
         "sync": to_sync_migration_url(sync_url),
         "async": to_async_database_url(sync_url),
@@ -49,7 +57,7 @@ def migrated_database(database_urls: dict[str, str]) -> None:
     env["DATABASE_SSL_VERIFY"] = "false"
 
     subprocess.run(
-        ["uv", "run", "alembic", "upgrade", "head"],
+        ["/home/mauri/.local/bin/uv", "run", "alembic", "upgrade", "head"],
         cwd=BACKEND_ROOT,
         env=env,
         check=True,
