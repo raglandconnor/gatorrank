@@ -399,23 +399,22 @@ export default function ProjectDetailPage() {
                         href={project.demo_url}
                         target="_blank"
                         rel="noopener noreferrer"
-                        _hover={{ textDecoration: 'none' }}
+                        display="inline-flex"
+                        alignItems="center"
+                        justifyContent="center"
+                        bg="orange.400"
+                        color="white"
+                        borderRadius="12px"
+                        h="44px"
+                        px="18px"
+                        fontSize="md"
+                        fontWeight="semibold"
+                        _hover={{ bg: 'orange.500', textDecoration: 'none' }}
                       >
-                        <Button
-                          bg="orange.400"
-                          color="white"
-                          borderRadius="12px"
-                          h="44px"
-                          px="18px"
-                          fontSize="md"
-                          fontWeight="semibold"
-                          _hover={{ bg: 'orange.500' }}
-                        >
-                          <HStack gap="8px">
-                            <LuExternalLink size={16} />
-                            <Text>Visit Website</Text>
-                          </HStack>
-                        </Button>
+                        <HStack gap="8px">
+                          <LuExternalLink size={16} />
+                          <Text>Visit Website</Text>
+                        </HStack>
                       </ChakraLink>
                     ) : null}
 
@@ -424,25 +423,24 @@ export default function ProjectDetailPage() {
                         href={project.github_url}
                         target="_blank"
                         rel="noopener noreferrer"
-                        _hover={{ textDecoration: 'none' }}
+                        display="inline-flex"
+                        alignItems="center"
+                        justifyContent="center"
+                        bg="white"
+                        color="gray.800"
+                        borderRadius="12px"
+                        h="44px"
+                        px="18px"
+                        fontSize="md"
+                        fontWeight="semibold"
+                        border="1px solid"
+                        borderColor="gray.300"
+                        _hover={{ bg: 'gray.50', textDecoration: 'none' }}
                       >
-                        <Button
-                          bg="white"
-                          color="gray.800"
-                          borderRadius="12px"
-                          h="44px"
-                          px="18px"
-                          fontSize="md"
-                          fontWeight="semibold"
-                          border="1px solid"
-                          borderColor="gray.300"
-                          _hover={{ bg: 'gray.50' }}
-                        >
-                          <HStack gap="8px">
-                            <LuGithub size={16} />
-                            <Text>GitHub</Text>
-                          </HStack>
-                        </Button>
+                        <HStack gap="8px">
+                          <LuGithub size={16} />
+                          <Text>GitHub</Text>
+                        </HStack>
                       </ChakraLink>
                     ) : null}
 

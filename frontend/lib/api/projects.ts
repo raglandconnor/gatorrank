@@ -110,7 +110,15 @@ export async function getProjectBySlugForViewer(
       },
     );
   }
-  return getProjectBySlug(slug);
+  return requestJson<ProjectDetail>(
+    `/api/v1/projects/slug/${encodeURIComponent(slug)}`,
+    {
+      auth: 'optional',
+      method: 'GET',
+      cache: 'no-store',
+      fallbackErrorMessage: 'Failed to fetch project',
+    },
+  );
 }
 
 export async function createProject(
