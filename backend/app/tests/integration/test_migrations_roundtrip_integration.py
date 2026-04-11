@@ -30,19 +30,19 @@ def test_alembic_roundtrip_latest_revision() -> None:
         env["DATABASE_SSL_VERIFY"] = "false"
 
         subprocess.run(
-            ["uv", "run", "alembic", "upgrade", "head"],
+            ["/home/mauri/.local/bin/uv", "run", "alembic", "upgrade", "head"],
             cwd=BACKEND_ROOT,
             env=env,
             check=True,
         )
         subprocess.run(
-            ["uv", "run", "alembic", "downgrade", "base"],
+            ["/home/mauri/.local/bin/uv", "run", "alembic", "downgrade", "base"],
             cwd=BACKEND_ROOT,
             env=env,
             check=True,
         )
         subprocess.run(
-            ["uv", "run", "alembic", "upgrade", "head"],
+            ["/home/mauri/.local/bin/uv", "run", "alembic", "upgrade", "head"],
             cwd=BACKEND_ROOT,
             env=env,
             check=True,
@@ -66,7 +66,7 @@ def test_slug_backfill_is_deterministic_for_collisions() -> None:
         env["DATABASE_SSL_VERIFY"] = "false"
 
         subprocess.run(
-            ["uv", "run", "alembic", "upgrade", PRE_SLUG_REVISION],
+            ["/home/mauri/.local/bin/uv", "run", "alembic", "upgrade", PRE_SLUG_REVISION],
             cwd=BACKEND_ROOT,
             env=env,
             check=True,
@@ -111,7 +111,7 @@ def test_slug_backfill_is_deterministic_for_collisions() -> None:
             # Keep this test scoped to slug migration behavior only.
             # Username rollout intentionally assumes dev DB reset/no-backfill.
             subprocess.run(
-                ["uv", "run", "alembic", "upgrade", SLUG_REVISION],
+                ["/home/mauri/.local/bin/uv", "run", "alembic", "upgrade", SLUG_REVISION],
                 cwd=BACKEND_ROOT,
                 env=env,
                 check=True,
