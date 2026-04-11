@@ -573,7 +573,7 @@ async def list_projects(
     sort: Literal["top", "new"] = Query(
         default="top",
         description=(
-            "`top` ranks by votes within a published date window; `new` sorts by creation time."
+            "`top` ranks by votes within a published date window; `new` sorts by publish time."
         ),
     ),
     published_from: date | None = Query(
@@ -595,7 +595,7 @@ async def list_projects(
 ) -> ProjectListResponse:
     """Return the published projects feed with project-card taxonomy parity.
 
-    `sort=new` returns newest-first ordering.
+    `sort=new` returns newest-first ordering by `published_at`.
 
     `sort=top` returns vote-ranked results within a published date window
     (`published_at`). The default window is the last 90 days, and callers may

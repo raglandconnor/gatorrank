@@ -719,18 +719,19 @@ class ProjectService:
             cursor_payload = self._decode_cursor(cursor, sort, top_range=top_range)
 
         if sort == "new":
+            statement = statement.where(project_cols.published_at.is_not(None))
             if cursor_payload is not None:
-                created_at = self._parse_datetime(cursor_payload["created_at"])
+                published_at = self._parse_datetime(cursor_payload["published_at"])
                 cursor_id = UUID(str(cursor_payload["id"]))
                 statement = statement.where(
-                    (project_cols.created_at < created_at)
+                    (project_cols.published_at < published_at)
                     | (
-                        (project_cols.created_at == created_at)
+                        (project_cols.published_at == published_at)
                         & (project_cols.id < cursor_id)
                     )
                 )
             statement = statement.order_by(
-                project_cols.created_at.desc(),
+                project_cols.published_at.desc(),
                 project_cols.id.desc(),
             )
         else:
@@ -1256,18 +1257,18 @@ class ProjectService:
     ) -> ProjectListResponse:
         project_cols = getattr(Project, "__table__").c
         statement = self._base_owner_projects_query(owner_id, visibility=visibility)
+        sort_timestamp = sa.func.coalesce(
+            project_cols.published_at, project_cols.created_at
+        )
         if cursor_payload is not None:
-            created_at = self._parse_datetime(cursor_payload["created_at"])
+            sort_ts = self._parse_datetime(cursor_payload["sort_timestamp"])
             cursor_id = UUID(str(cursor_payload["id"]))
             statement = statement.where(
-                (project_cols.created_at < created_at)
-                | (
-                    (project_cols.created_at == created_at)
-                    & (project_cols.id < cursor_id)
-                )
+                (sort_timestamp < sort_ts)
+                | ((sort_timestamp == sort_ts) & (project_cols.id < cursor_id))
             )
         statement = statement.order_by(
-            project_cols.created_at.desc(),
+            sort_timestamp.desc(),
             project_cols.id.desc(),
         ).limit(limit + 1)
         result = await self.db.exec(statement)
@@ -1517,10 +1518,12 @@ class ProjectService:
         top_range: tuple[date, date] | None = None,
     ) -> str:
         if sort == "new":
+            if project.published_at is None:
+                raise CursorError("Invalid cursor")
             payload: dict[str, str | int] = {
                 "sort": "new",
                 "id": str(project.id),
-                "created_at": project.created_at.isoformat(),
+                "published_at": project.published_at.isoformat(),
             }
         else:
             if top_range is None:
@@ -1550,9 +1553,13 @@ class ProjectService:
             "sort": sort,
             "visibility": visibility,
             "id": str(project.id),
-            "created_at": project.created_at.isoformat(),
         }
-        if sort == "top":
+        if sort == "new":
+            payload["sort_timestamp"] = (
+                project.published_at or project.created_at
+            ).isoformat()
+        else:
+            payload["created_at"] = project.created_at.isoformat()
             resolved_phase = phase or ("published" if project.is_published else "draft")
             payload["phase"] = resolved_phase
             if resolved_phase == "published":
@@ -1579,7 +1586,7 @@ class ProjectService:
             raise CursorError("Invalid cursor")
 
         if sort == "new":
-            required = {"scope", "sort", "visibility", "id", "created_at"}
+            required = {"scope", "sort", "visibility", "id", "sort_timestamp"}
         elif visibility == "draft":
             required = {"scope", "sort", "visibility", "phase", "id", "created_at"}
         else:
@@ -1608,8 +1615,10 @@ class ProjectService:
 
         try:
             UUID(str(payload["id"]))
-            self._parse_datetime(payload["created_at"])
-            if sort == "top":
+            if sort == "new":
+                self._parse_datetime(payload["sort_timestamp"])
+            else:
+                self._parse_datetime(payload["created_at"])
                 phase = str(payload["phase"])
                 if phase not in {"published", "draft"}:
                     raise CursorError("Invalid cursor")
@@ -1659,7 +1668,7 @@ class ProjectService:
         payload = decode_cursor_payload(cursor)
 
         if sort == "new":
-            required = {"sort", "id", "created_at"}
+            required = {"sort", "id", "published_at"}
         else:
             required = {
                 "sort",
@@ -1678,8 +1687,10 @@ class ProjectService:
 
         try:
             UUID(str(payload["id"]))
-            self._parse_datetime(payload["created_at"])
-            if sort == "top":
+            if sort == "new":
+                self._parse_datetime(payload["published_at"])
+            else:
+                self._parse_datetime(payload["created_at"])
                 int(payload["vote_count"])
                 payload_from = self._parse_date(payload["published_from"])
                 payload_to = self._parse_date(payload["published_to"])
