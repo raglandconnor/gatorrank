@@ -1248,6 +1248,69 @@ async def test_list_my_projects_sort_new_paginates_stably_for_associated_project
 
 
 @pytest.mark.asyncio
+async def test_list_my_projects_sort_new_uses_coalesced_published_and_created_timestamps(
+    api_client, db_session, monkeypatch
+):
+    jwt_secret = "integration-test-jwt-secret-at-least-32b"
+    monkeypatch.setattr(settings, "DATABASE_JWT_SECRET", jwt_secret)
+
+    owner_id = uuid4()
+    email = f"my-projects-coalesce-{uuid4().hex[:8]}@ufl.edu"
+    await seed_auth_user(
+        db_session, user_id=owner_id, email=email, username="my_projects_coalesce"
+    )
+    token = generate_token(owner_id, email, jwt_secret)
+
+    now = datetime.now(UTC)
+    published_late = await _seed_owned_project(
+        db_session,
+        created_by_id=owner_id,
+        title="Published Late",
+        slug=f"published-late-{uuid4().hex[:8]}",
+        is_published=True,
+        created_at=now - timedelta(minutes=10),
+    )
+    draft_mid = await _seed_owned_project(
+        db_session,
+        created_by_id=owner_id,
+        title="Draft Mid",
+        slug=f"draft-mid-{uuid4().hex[:8]}",
+        is_published=False,
+        created_at=now - timedelta(minutes=1),
+    )
+    published_old = await _seed_owned_project(
+        db_session,
+        created_by_id=owner_id,
+        title="Published Old",
+        slug=f"published-old-{uuid4().hex[:8]}",
+        is_published=True,
+        created_at=now - timedelta(minutes=2),
+    )
+    published_late.published_at = now
+    await db_session.commit()
+
+    async def override_get_db():
+        yield db_session
+
+    app.dependency_overrides[get_db] = override_get_db
+    try:
+        response = await api_client.get(
+            "/api/v1/users/me/projects?sort=new&visibility=all&limit=10",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert [item["id"] for item in payload["items"]] == [
+        str(published_late.id),
+        str(draft_mid.id),
+        str(published_old.id),
+    ]
+
+
+@pytest.mark.asyncio
 async def test_list_my_projects_sort_top_published_matches_top_window(
     api_client, db_session, monkeypatch
 ):

@@ -97,6 +97,38 @@ async def test_search_projects_keyword_matches_title_and_short_description(db_se
 
 
 @pytest.mark.asyncio
+async def test_search_projects_new_orders_by_published_at_not_created_at(db_session):
+    now = datetime.now(timezone.utc)
+    owner = await _seed_user(db_session, "search-new-published-order@ufl.edu")
+    first_created = await _seed_project(
+        db_session,
+        created_by_id=owner.id,
+        title="Published Sort Alpha",
+        short_description="sort by published_at alpha",
+        vote_count=1,
+        created_at=now - timedelta(minutes=2),
+    )
+    second_created = await _seed_project(
+        db_session,
+        created_by_id=owner.id,
+        title="Published Sort Beta",
+        short_description="sort by published_at beta",
+        vote_count=1,
+        created_at=now - timedelta(minutes=1),
+    )
+    first_created.published_at = now
+    second_created.published_at = now - timedelta(minutes=3)
+    await db_session.flush()
+
+    service = PostgresSearchService(db_session)
+    response = await service.search_projects(
+        request=ProjectSearchRequest(q="published sort", sort="new")
+    )
+
+    assert [item.id for item in response.items] == [first_created.id, second_created.id]
+
+
+@pytest.mark.asyncio
 async def test_search_projects_taxonomy_or_within_and_across_families(db_session):
     now = datetime.now(timezone.utc)
     owner = await _seed_user(db_session, "search-taxonomy@ufl.edu")
