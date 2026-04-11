@@ -30,6 +30,7 @@ def create_app() -> FastAPI:
     from app.api.v1.projects import router as projects_router
     from app.api.v1.taxonomy import router as taxonomy_router
     from app.api.v1.users import router as users_router
+    from app.api.v1.comments import router as comments_router
 
     app = FastAPI(lifespan=lifespan)
     app.state.settings = settings
@@ -60,6 +61,7 @@ def create_app() -> FastAPI:
     app.include_router(projects_router, prefix="/api/v1", tags=["projects"])
     app.include_router(taxonomy_router, prefix="/api/v1", tags=["taxonomy"])
     app.include_router(users_router, prefix="/api/v1", tags=["users"])
+    app.include_router(comments_router, prefix="/api/v1", tags=["comments"])
     return app
 
 
