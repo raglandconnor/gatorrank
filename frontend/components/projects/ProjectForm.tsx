@@ -390,26 +390,41 @@ export function ProjectForm({
     }
 
     setMemberSubmitting(true);
-    const result = await onAddMember(normalized);
-    setMemberSubmitting(false);
+    try {
+      const result = await onAddMember(normalized);
 
-    if (!result.ok) {
+      if (!result.ok) {
+        toast.error({
+          title: 'Could not add member',
+          description: result.message,
+        });
+        return;
+      }
+
+      setMemberInput('');
+    } catch {
       toast.error({
         title: 'Could not add member',
-        description: result.message,
+        description: 'Please try again.',
       });
-      return;
+    } finally {
+      setMemberSubmitting(false);
     }
-
-    setMemberInput('');
   };
 
   const handleRemoveMember = async (idOrEmail: string) => {
-    const result = await onRemoveMember(idOrEmail);
-    if (!result.ok) {
+    try {
+      const result = await onRemoveMember(idOrEmail);
+      if (!result.ok) {
+        toast.error({
+          title: 'Could not remove member',
+          description: result.message,
+        });
+      }
+    } catch {
       toast.error({
         title: 'Could not remove member',
-        description: result.message,
+        description: 'Please try again.',
       });
     }
   };
