@@ -35,6 +35,12 @@ import { profilePath, projectEditPath, projectPath } from '@/lib/routes';
 import { ProjectLogoPlaceholder } from '@/components/projects/ProjectLogoPlaceholder';
 import { FeatureLoadingState } from '@/components/ui/FeatureLoadingState';
 
+function getInitials(name: string): string {
+  const parts = name.trim().split(/\s+/);
+  if (parts.length === 1) return parts[0][0]?.toUpperCase() ?? '';
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
 function getYouTubeEmbedUrl(url: string): string | null {
   const trimmed = url.trim();
   if (!trimmed) return null;
@@ -183,16 +189,26 @@ function MemberMetaBlock({
       py="8px"
       bg="transparent"
     >
-      <Avatar.Root w="52px" h="52px" borderRadius="full" overflow="hidden">
-        <Avatar.Fallback
-          name={fullName ?? username}
-          bg="gray.300"
-          color="gray.700"
+      {profilePictureUrl ? (
+        <Avatar.Root w="52px" h="52px" borderRadius="full" overflow="hidden">
+          <Avatar.Image src={profilePictureUrl} />
+        </Avatar.Root>
+      ) : (
+        <Flex
+          w="52px"
+          h="52px"
+          borderRadius="full"
+          bg="orange.400"
+          color="white"
+          align="center"
+          justify="center"
           fontSize="md"
           fontWeight="bold"
-        />
-        {profilePictureUrl && <Avatar.Image src={profilePictureUrl} />}
-      </Avatar.Root>
+          flexShrink={0}
+        >
+          {getInitials(fullName ?? username)}
+        </Flex>
+      )}
       <VStack align="start" gap="2px" minW={0}>
         <Text
           fontSize="md"
@@ -536,19 +552,65 @@ export default function ProjectDetailPage() {
                       </Button>
                     )}
 
-                    {isOwner && (
+                    {project.github_url?.trim() ? (
+                      <ChakraLink
+                        href={project.github_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        _hover={{ textDecoration: 'none' }}
+                      >
+                        <Button
+                          bg="white"
+                          color="gray.800"
+                          borderRadius="12px"
+                          h="44px"
+                          px="18px"
+                          fontSize="md"
+                          fontWeight="semibold"
+                          border="1px solid"
+                          borderColor="gray.300"
+                          _hover={{ bg: 'gray.50' }}
+                        >
+                          <HStack gap="8px">
+                            <LuGithub size={16} />
+                            <Text>GitHub</Text>
+                          </HStack>
+                        </Button>
+                      </ChakraLink>
+                    ) : (
                       <Button
-                        type="button"
-                        variant="outline"
-                        border="1px solid"
-                        borderColor="orange.400"
-                        bg="white"
+                        bg="gray.200"
+                        color="gray.500"
                         borderRadius="12px"
                         h="44px"
                         px="18px"
                         fontSize="md"
-                        color="gray.800"
-                        _hover={{ bg: 'orange.50' }}
+                        fontWeight="semibold"
+                        border="1px solid"
+                        borderColor="gray.300"
+                        cursor="not-allowed"
+                        _hover={{ bg: 'gray.200' }}
+                        disabled
+                      >
+                        <HStack gap="8px">
+                          <LuGithub size={16} />
+                          <Text>GitHub</Text>
+                        </HStack>
+                      </Button>
+                    )}
+
+                    {isOwner && (
+                      <Button
+                        type="button"
+                        bg="orange.50"
+                        color="orange.800"
+                        borderRadius="12px"
+                        h="44px"
+                        px="18px"
+                        fontSize="md"
+                        fontWeight="semibold"
+                        _hover={{ bg: 'orange.100' }}
+                        boxShadow="inset 0 0 0 1px rgba(251,146,60,0.10)"
                         onClick={() =>
                           router.push(projectEditPath(project.slug))
                         }
@@ -573,49 +635,29 @@ export default function ProjectDetailPage() {
             <VStack align="stretch" gap="16px">
               <Box overflowX="auto" overflowY="hidden" pb="2px">
                 <HStack gap="20px" align="stretch" minW="max-content">
-                {projectCreator && (
-                  <MemberMetaBlock
-                    username={projectCreator.username}
-                    fullName={projectCreator.full_name}
-                    profilePictureUrl={projectCreator.profile_picture_url}
-                    description="Project Creator"
-                    onClick={() => router.push(profilePath(projectCreator.username))}
-                  />
-                )}
-                {nonOwnerMembers.map((member) => (
-                  <MemberMetaBlock
-                    key={member.user_id}
-                    username={member.username}
-                    fullName={member.full_name}
-                    profilePictureUrl={member.profile_picture_url}
-                    description="Team Member"
-                    onClick={() => router.push(profilePath(member.username))}
-                  />
-                ))}
+                  {projectCreator && (
+                    <MemberMetaBlock
+                      username={projectCreator.username}
+                      fullName={projectCreator.full_name}
+                      profilePictureUrl={projectCreator.profile_picture_url}
+                      description="Project Creator"
+                      onClick={() =>
+                        router.push(profilePath(projectCreator.username))
+                      }
+                    />
+                  )}
+                  {nonOwnerMembers.map((member) => (
+                    <MemberMetaBlock
+                      key={member.user_id}
+                      username={member.username}
+                      fullName={member.full_name}
+                      profilePictureUrl={member.profile_picture_url}
+                      description="Team Member"
+                      onClick={() => router.push(profilePath(member.username))}
+                    />
+                  ))}
                 </HStack>
               </Box>
-
-              {project.github_url?.trim() ? (
-                <HStack gap="16px" flexWrap="wrap">
-                  <ChakraLink
-                    href={project.github_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    display="inline-flex"
-                    alignItems="center"
-                    gap="6px"
-                    fontSize="md"
-                    color="gray.700"
-                    _hover={{
-                      color: 'gray.900',
-                      textDecoration: 'underline',
-                    }}
-                  >
-                    <LuGithub size={16} />
-                    GitHub
-                  </ChakraLink>
-                </HStack>
-              ) : null}
             </VStack>
           </Box>
         </Box>

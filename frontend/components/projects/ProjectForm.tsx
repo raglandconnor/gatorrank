@@ -24,7 +24,6 @@ import {
 import { listTags } from '@/lib/api/taxonomy';
 import type { ProjectMemberInfo, TaxonomyTerm } from '@/lib/api/types/project';
 import { toast } from '@/lib/ui/toast';
-import { ProjectLogoPlaceholder } from '@/components/projects/ProjectLogoPlaceholder';
 
 const PROJECT_NAME_MAX = 50;
 const SHORT_DESCRIPTION_MAX = 280;
@@ -609,8 +608,21 @@ export function ProjectForm({
                   borderColor="gray.300"
                   overflow="hidden"
                   opacity={0.75}
+                  bg="gray.50"
+                  display="flex"
+                  alignItems="center"
+                  justifyContent="center"
+                  px="20px"
                 >
-                  <ProjectLogoPlaceholder compact />
+                  <VStack gap="6px" textAlign="center">
+                    <Text fontSize="sm" fontWeight="semibold" color="gray.600">
+                      Project icons aren&apos;t available yet in GatorRank.
+                    </Text>
+                    <Text fontSize="xs" color="gray.500" lineHeight="18px">
+                      You&apos;ll be able to upload a custom icon in a future
+                      update.
+                    </Text>
+                  </VStack>
                 </Box>
                 <Text fontSize="sm" color="gray.600" lineHeight="20px">
                   Project logos are not available yet.
