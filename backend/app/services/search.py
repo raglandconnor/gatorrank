@@ -100,18 +100,19 @@ class PostgresSearchService(SearchService):
             )
 
         if request.sort == "new":
+            statement = statement.where(project_cols.published_at.is_not(None))
             if cursor_payload is not None:
-                created_at = self._parse_datetime(cursor_payload["created_at"])
+                published_at = self._parse_datetime(cursor_payload["published_at"])
                 cursor_id = UUID(str(cursor_payload["id"]))
                 statement = statement.where(
-                    (project_cols.created_at < created_at)
+                    (project_cols.published_at < published_at)
                     | (
-                        (project_cols.created_at == created_at)
+                        (project_cols.published_at == published_at)
                         & (project_cols.id < cursor_id)
                     )
                 )
             statement = statement.order_by(
-                project_cols.created_at.desc(),
+                project_cols.published_at.desc(),
                 project_cols.id.desc(),
             )
         else:
@@ -285,10 +286,12 @@ class PostgresSearchService(SearchService):
         top_range: tuple[date, date] | None,
     ) -> str:
         if sort == "new":
+            if project.published_at is None:
+                raise CursorError("Invalid cursor")
             payload: dict[str, str | int] = {
                 "sort": "new",
                 "id": str(project.id),
-                "created_at": project.created_at.isoformat(),
+                "published_at": project.published_at.isoformat(),
                 "search_sig": search_signature,
             }
         else:
@@ -315,7 +318,7 @@ class PostgresSearchService(SearchService):
     ) -> dict[str, str | int]:
         payload = decode_cursor_payload(cursor)
         if sort == "new":
-            required = {"sort", "id", "created_at", "search_sig"}
+            required = {"sort", "id", "published_at", "search_sig"}
         else:
             required = {
                 "sort",
@@ -336,7 +339,10 @@ class PostgresSearchService(SearchService):
 
         try:
             UUID(str(payload["id"]))
-            self._parse_datetime(payload["created_at"])
+            if sort == "new":
+                self._parse_datetime(payload["published_at"])
+            else:
+                self._parse_datetime(payload["created_at"])
             if sort == "top":
                 int(payload["vote_count"])
                 payload_from = self._parse_date(payload["published_from"])

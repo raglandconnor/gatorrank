@@ -285,11 +285,15 @@ async def test_list_projects_new_sort_cursor_pagination(db_session):
         is_published=True,
         created_at=now - timedelta(minutes=2),
     )
+    newest.published_at = now - timedelta(minutes=1)
+    middle.published_at = now
+    oldest.published_at = now - timedelta(minutes=2)
+    await db_session.flush()
 
     service = ProjectService(db_session)
 
     page_one = await service.list_projects(sort="new", limit=2)
-    assert [item.id for item in page_one.items] == [newest.id, middle.id]
+    assert [item.id for item in page_one.items] == [middle.id, newest.id]
     assert page_one.next_cursor is not None
 
     page_two = await service.list_projects(

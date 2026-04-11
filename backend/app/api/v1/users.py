@@ -39,7 +39,10 @@ ProjectsSort = Annotated[
     Literal["top", "new"],
     Query(
         ...,
-        description="Sort order: `new` by creation time, `top` by vote rank in date window.",
+        description=(
+            "Sort order: `new` newest-first (`published_at` for published projects, "
+            "`created_at` fallback where `published_at` is null), `top` by vote rank in date window."
+        ),
     ),
 ]
 MyProjectsVisibility = Annotated[
@@ -163,7 +166,8 @@ async def list_my_voted_projects(
         "Return the authenticated user's associated (creator or member), non-deleted projects with cursor "
         "pagination, computed `team_size`, and taxonomy fields (`categories`, "
         "`tags`, `tech_stack`). Drafts are included by default. "
-        "`sort=new` returns one newest-first stream across the selected visibility. "
+        "`sort=new` returns one newest-first stream across the selected visibility using "
+        "`COALESCE(published_at, created_at)`. "
         "`sort=top` reuses published date-window semantics for published results; "
         "when drafts are included, published results are returned first and drafts "
         "follow in newest-first order. `published_from` and `published_to` apply "
