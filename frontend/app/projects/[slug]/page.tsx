@@ -11,7 +11,6 @@ import {
   Text,
   Button,
   Wrap,
-  Avatar,
   Link as ChakraLink,
 } from '@chakra-ui/react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -22,6 +21,12 @@ import {
   LuExternalLink,
   LuPencil,
   LuChevronUp,
+  LuFileText,
+  LuSkipBack,
+  LuSkipForward,
+  LuVolume2,
+  LuSettings2,
+  LuExpand,
 } from 'react-icons/lu';
 import { Navbar } from '@/components/layout/Navbar';
 import { useAuth } from '@/components/domain/AuthProvider';
@@ -34,12 +39,7 @@ import { isUuid } from '@/lib/profileSlug';
 import { profilePath, projectEditPath, projectPath } from '@/lib/routes';
 import { ProjectLogoPlaceholder } from '@/components/projects/ProjectLogoPlaceholder';
 import { FeatureLoadingState } from '@/components/ui/FeatureLoadingState';
-
-function getInitials(name: string): string {
-  const parts = name.trim().split(/\s+/);
-  if (parts.length === 1) return parts[0][0]?.toUpperCase() ?? '';
-  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
-}
+import { UserAvatar } from '@/components/ui/UserAvatar';
 
 function getYouTubeEmbedUrl(url: string): string | null {
   const trimmed = url.trim();
@@ -189,26 +189,12 @@ function MemberMetaBlock({
       py="8px"
       bg="transparent"
     >
-      {profilePictureUrl ? (
-        <Avatar.Root w="52px" h="52px" borderRadius="full" overflow="hidden">
-          <Avatar.Image src={profilePictureUrl} />
-        </Avatar.Root>
-      ) : (
-        <Flex
-          w="52px"
-          h="52px"
-          borderRadius="full"
-          bg="orange.400"
-          color="white"
-          align="center"
-          justify="center"
-          fontSize="md"
-          fontWeight="bold"
-          flexShrink={0}
-        >
-          {getInitials(fullName ?? username)}
-        </Flex>
-      )}
+      <UserAvatar
+        name={fullName ?? username}
+        imageUrl={profilePictureUrl}
+        size="52px"
+        fontSize="md"
+      />
       <VStack align="start" gap="2px" minW={0}>
         <Text
           fontSize="md"
@@ -310,6 +296,11 @@ export default function ProjectDetailPage() {
   }, [projectDetail]);
   const projectCreator = projectMembers[0] ?? null;
   const nonOwnerMembers = projectMembers.slice(1);
+  const isProjectMember = useMemo(() => {
+    if (!user?.id || !projectDetail?.members.length) return false;
+    return projectDetail.members.some((member) => member.user_id === user.id);
+  }, [projectDetail, user?.id]);
+  const canSeePublishStateBadge = Boolean(user?.id) && (isOwner || isProjectMember);
 
   if (!isReady || loading) {
     return (
@@ -451,27 +442,29 @@ export default function ProjectDetailPage() {
                     >
                       {project.title}
                     </Text>
-                    <HStack
-                      gap="6px"
-                      bg={project.is_published ? 'green.500' : 'yellow.200'}
-                      color={project.is_published ? 'white' : 'yellow.900'}
-                      border="1px solid"
-                      borderColor={
-                        project.is_published ? 'green.500' : 'yellow.400'
-                      }
-                      borderRadius="full"
-                      px="12px"
-                      py="5px"
-                    >
-                      <Text
-                        fontSize="sm"
-                        lineHeight="18px"
-                        fontWeight="semibold"
-                        whiteSpace="nowrap"
+                    {canSeePublishStateBadge && (
+                      <HStack
+                        gap="6px"
+                        bg={project.is_published ? 'green.500' : 'yellow.200'}
+                        color={project.is_published ? 'white' : 'yellow.900'}
+                        border="1px solid"
+                        borderColor={
+                          project.is_published ? 'green.500' : 'yellow.400'
+                        }
+                        borderRadius="full"
+                        px="12px"
+                        py="5px"
                       >
-                        {project.is_published ? 'Published' : 'Draft'}
-                      </Text>
-                    </HStack>
+                        <Text
+                          fontSize="sm"
+                          lineHeight="18px"
+                          fontWeight="semibold"
+                          whiteSpace="nowrap"
+                        >
+                          {project.is_published ? 'Published' : 'Draft'}
+                        </Text>
+                      </HStack>
+                    )}
                   </HStack>
 
                   <Text
@@ -530,27 +523,7 @@ export default function ProjectDetailPage() {
                           </HStack>
                         </Button>
                       </ChakraLink>
-                    ) : (
-                      <Button
-                        bg="gray.200"
-                        color="gray.500"
-                        borderRadius="12px"
-                        h="44px"
-                        px="18px"
-                        fontSize="md"
-                        fontWeight="semibold"
-                        border="1px solid"
-                        borderColor="gray.300"
-                        cursor="not-allowed"
-                        _hover={{ bg: 'gray.200' }}
-                        disabled
-                      >
-                        <HStack gap="8px">
-                          <LuExternalLink size={16} />
-                          <Text>Visit Website</Text>
-                        </HStack>
-                      </Button>
-                    )}
+                    ) : null}
 
                     {project.github_url?.trim() ? (
                       <ChakraLink
@@ -577,27 +550,7 @@ export default function ProjectDetailPage() {
                           </HStack>
                         </Button>
                       </ChakraLink>
-                    ) : (
-                      <Button
-                        bg="gray.200"
-                        color="gray.500"
-                        borderRadius="12px"
-                        h="44px"
-                        px="18px"
-                        fontSize="md"
-                        fontWeight="semibold"
-                        border="1px solid"
-                        borderColor="gray.300"
-                        cursor="not-allowed"
-                        _hover={{ bg: 'gray.200' }}
-                        disabled
-                      >
-                        <HStack gap="8px">
-                          <LuGithub size={16} />
-                          <Text>GitHub</Text>
-                        </HStack>
-                      </Button>
-                    )}
+                    ) : null}
 
                     {isOwner && (
                       <Button
@@ -674,15 +627,19 @@ export default function ProjectDetailPage() {
             px={{ base: '18px', md: '24px' }}
             py={{ base: '22px', md: '28px' }}
           >
-            <Text
-              fontSize="2xl"
-              fontWeight="bold"
-              color="gray.900"
-              lineHeight="34px"
-              mb="14px"
-            >
-              About This Project
-            </Text>
+            <HStack mb="14px" gap="10px" align="center">
+              <Box color="gray.800">
+                <LuFileText size={22} />
+              </Box>
+              <Text
+                fontSize="2xl"
+                fontWeight="bold"
+                color="gray.900"
+                lineHeight="34px"
+              >
+                About This Project
+              </Text>
+            </HStack>
             <Text
               fontSize="md"
               color="gray.700"
@@ -744,108 +701,153 @@ export default function ProjectDetailPage() {
                 />
               </Box>
             ) : (
-              <Flex
-                direction="column"
-                align="stretch"
-                justify="space-between"
-                gap="18px"
-                minH={{ base: '240px', md: '300px' }}
+              <Box
+                position="relative"
+                aspectRatio="16 / 9"
                 border="1px solid"
                 borderColor="gray.300"
                 borderRadius="14px"
-                bg="linear-gradient(180deg, #141414 0%, #202020 100%)"
-                px={{ base: '20px', md: '28px' }}
-                py={{ base: '20px', md: '26px' }}
-                position="relative"
+                bg="#1f1f1f"
                 overflow="hidden"
+                w="100%"
               >
                 <Box
                   position="absolute"
                   inset={0}
-                  bg="radial-gradient(circle at top right, rgba(239,68,68,0.16), transparent 34%)"
+                  bg="linear-gradient(180deg, rgba(255,255,255,0.03), transparent 28%)"
                   pointerEvents="none"
                 />
-                <HStack justify="space-between" position="relative" zIndex={1}>
-                  <HStack
-                    gap="8px"
-                    px="12px"
-                    py="7px"
-                    bg="rgba(239, 68, 68, 0.95)"
-                    borderRadius="full"
-                  >
-                    <Box color="white">
-                      <LuPlay size={14} fill="currentColor" />
-                    </Box>
-                    <Text
-                      fontSize="xs"
-                      fontWeight="bold"
-                      letterSpacing="0.08em"
-                      color="white"
-                    >
-                      YOUTUBE
-                    </Text>
-                  </HStack>
-                  <Text
-                    fontSize="xs"
-                    color="whiteAlpha.700"
-                    letterSpacing="0.08em"
-                  >
-                    VIDEO PLACEHOLDER
-                  </Text>
-                </HStack>
+                <Box
+                  position="absolute"
+                  inset={0}
+                  bg="radial-gradient(circle at center, rgba(255,255,255,0.03), transparent 42%)"
+                  pointerEvents="none"
+                />
 
                 <Flex
-                  flex={1}
+                  position="absolute"
+                  insetX={0}
+                  top="0"
+                  bottom="70px"
                   align="center"
                   justify="center"
-                  position="relative"
                   zIndex={1}
+                  direction="column"
+                  gap="14px"
                 >
                   <Flex
-                    w={{ base: '72px', md: '88px' }}
-                    h={{ base: '72px', md: '88px' }}
+                    w={{ base: '88px', md: '104px' }}
+                    h={{ base: '88px', md: '104px' }}
                     borderRadius="full"
                     align="center"
                     justify="center"
-                    bg="rgba(255,255,255,0.14)"
-                    border="1px solid"
+                    bg="rgba(28, 28, 28, 0.74)"
+                    border="4px solid"
                     borderColor="whiteAlpha.300"
-                    boxShadow="0 20px 60px rgba(239,68,68,0.24)"
-                    backdropFilter="blur(8px)"
+                    boxShadow="0 20px 60px rgba(0,0,0,0.3)"
                   >
-                    <Box color="white" ml="4px">
-                      <LuPlay size={34} fill="currentColor" />
+                    <Box color="white" ml="5px">
+                      <LuPlay size={42} fill="currentColor" />
                     </Box>
                   </Flex>
+                  <Text
+                    fontSize={{ base: 'sm', md: 'md' }}
+                    fontWeight="medium"
+                    color="whiteAlpha.900"
+                    textAlign="center"
+                    px="20px"
+                  >
+                    No video has been added yet.
+                  </Text>
                 </Flex>
 
-                <VStack align="start" gap="8px" position="relative" zIndex={1}>
-                  <Text fontSize="lg" fontWeight="bold" color="white">
-                    {project.video_url?.trim()
-                      ? 'This video link is not embeddable yet.'
-                      : 'No project video yet.'}
-                  </Text>
-                  <Text fontSize="sm" color="whiteAlpha.800" lineHeight="22px">
-                    {project.video_url?.trim()
-                      ? 'Use a standard YouTube link to unlock the embedded player on this page.'
-                      : 'Add a YouTube link from the edit page to give your project a richer showcase.'}
-                  </Text>
-                  <Box
-                    w="100%"
-                    h="6px"
-                    borderRadius="full"
-                    bg="whiteAlpha.200"
-                    overflow="hidden"
-                  >
+                <Box
+                  position="absolute"
+                  left="0"
+                  right="0"
+                  bottom="0"
+                  zIndex={1}
+                  bg="rgba(12, 12, 12, 0.96)"
+                  borderTop="1px solid"
+                  borderColor="whiteAlpha.100"
+                  px={{ base: '14px', md: '18px' }}
+                  py={{ base: '10px', md: '12px' }}
+                >
+                  <VStack align="stretch" gap="10px">
                     <Box
-                      w={project.video_url?.trim() ? '36%' : '18%'}
-                      h="100%"
+                      w="100%"
+                      h="4px"
                       borderRadius="full"
-                      bg="rgba(239, 68, 68, 0.95)"
-                    />
-                  </Box>
-                </VStack>
-              </Flex>
+                      bg="whiteAlpha.300"
+                      overflow="hidden"
+                    >
+                      <Box
+                        w={project.video_url?.trim() ? '36%' : '0%'}
+                        h="100%"
+                        borderRadius="full"
+                        bg="rgba(239, 68, 68, 0.95)"
+                      />
+                      <Box
+                        position="relative"
+                        top="-6px"
+                        left={project.video_url?.trim() ? '36%' : '0%'}
+                        transform="translateX(-50%)"
+                        w="14px"
+                        h="14px"
+                        borderRadius="full"
+                        bg="white"
+                        border="2px solid"
+                        borderColor="rgba(239, 68, 68, 0.95)"
+                      />
+                    </Box>
+
+                    <HStack justify="space-between" gap="12px" align="center">
+                      <HStack gap={{ base: '10px', md: '12px' }} color="white">
+                        <Box display="flex" alignItems="center" justifyContent="center">
+                          <LuPlay size={18} fill="currentColor" />
+                        </Box>
+                        <Box display="flex" alignItems="center" justifyContent="center">
+                          <LuSkipBack size={18} />
+                        </Box>
+                        <Box display="flex" alignItems="center" justifyContent="center">
+                          <LuSkipForward size={18} />
+                        </Box>
+                        <Box display="flex" alignItems="center" justifyContent="center">
+                          <LuVolume2 size={18} />
+                        </Box>
+                        <Box
+                          display={{ base: 'none', md: 'block' }}
+                          w="140px"
+                          h="3px"
+                          borderRadius="full"
+                          bg="whiteAlpha.400"
+                          overflow="hidden"
+                          ml="4px"
+                        >
+                          <Box w="46%" h="100%" bg="whiteAlpha.900" />
+                        </Box>
+                      </HStack>
+
+                      <HStack gap={{ base: '12px', md: '14px' }} color="white">
+                        <Text
+                          fontSize={{ base: 'xs', md: 'sm' }}
+                          fontWeight="semibold"
+                          letterSpacing="0.02em"
+                          color="whiteAlpha.900"
+                        >
+                          00:00 / 10:00
+                        </Text>
+                        <Box display="flex" alignItems="center" justifyContent="center">
+                          <LuSettings2 size={18} />
+                        </Box>
+                        <Box display="flex" alignItems="center" justifyContent="center">
+                          <LuExpand size={18} />
+                        </Box>
+                      </HStack>
+                    </HStack>
+                  </VStack>
+                </Box>
+              </Box>
             )}
           </Box>
         </Box>

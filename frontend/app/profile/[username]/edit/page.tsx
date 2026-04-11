@@ -37,12 +37,7 @@ import type { UserPrivate } from '@/lib/api/types/user';
 import { useAuth } from '@/components/domain/AuthProvider';
 import { isUuid } from '@/lib/profileSlug';
 import { profilePath, profileEditPath } from '@/lib/routes';
-
-function getInitials(name: string): string {
-  const parts = name.trim().split(/\s+/);
-  if (parts.length === 1) return parts[0][0]?.toUpperCase() ?? '';
-  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
-}
+import { UserAvatar } from '@/components/ui/UserAvatar';
 
 interface ExtendedProfile {
   bio: string;
@@ -390,33 +385,12 @@ export default function EditProfilePage() {
             cursor="pointer"
             onClick={() => fileInputRef.current?.click()}
           >
-            {avatarPreview ? (
-              <img
-                src={avatarPreview}
-                alt={displayName}
-                style={{
-                  width: '96px',
-                  height: '96px',
-                  borderRadius: '50%',
-                  objectFit: 'cover',
-                  display: 'block',
-                }}
-              />
-            ) : (
-              <Flex
-                w="96px"
-                h="96px"
-                borderRadius="full"
-                bg="orange.400"
-                color="white"
-                align="center"
-                justify="center"
-                fontSize="2xl"
-                fontWeight="bold"
-              >
-                {getInitials(displayName)}
-              </Flex>
-            )}
+            <UserAvatar
+              name={displayName}
+              imageUrl={avatarPreview}
+              size="96px"
+              fontSize="2xl"
+            />
             <Box
               position="absolute"
               inset={0}

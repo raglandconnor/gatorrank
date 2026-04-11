@@ -29,12 +29,7 @@ import { getUserPublic, getUserPublicByUsername } from '@/lib/api/users';
 import { isUuid } from '@/lib/profileSlug';
 import { profileEditPath, profilePath } from '@/lib/routes';
 import type { UserPublic } from '@/lib/api/types/user';
-
-function getInitials(name: string): string {
-  const parts = name.trim().split(/\s+/);
-  if (parts.length === 1) return parts[0][0]?.toUpperCase() ?? '';
-  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
-}
+import { UserAvatar } from '@/components/ui/UserAvatar';
 
 interface ExtendedProfile {
   bio: string;
@@ -254,35 +249,12 @@ export default function ProfileUserPage() {
         {/* Profile hero */}
         <HStack gap="24px" mb="40px" align="flex-start">
           {/* Avatar */}
-          {publicUser.profile_picture_url ? (
-            <img
-              src={publicUser.profile_picture_url}
-              alt={displayName}
-              style={{
-                width: '96px',
-                height: '96px',
-                borderRadius: '50%',
-                objectFit: 'cover',
-                flexShrink: 0,
-                display: 'block',
-              }}
-            />
-          ) : (
-            <Flex
-              w="96px"
-              h="96px"
-              borderRadius="full"
-              bg="orange.400"
-              color="white"
-              align="center"
-              justify="center"
-              fontSize="2xl"
-              fontWeight="bold"
-              flexShrink={0}
-            >
-              {getInitials(displayName)}
-            </Flex>
-          )}
+          <UserAvatar
+            name={displayName}
+            imageUrl={publicUser.profile_picture_url}
+            size="96px"
+            fontSize="2xl"
+          />
 
           {/* Info */}
           <VStack align="start" gap="8px" flex={1}>
