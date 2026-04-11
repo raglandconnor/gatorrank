@@ -25,6 +25,7 @@ from app.models.taxonomy import (
     TechStack,
 )
 from app.models.comment import Comment
+from app.models.comment_like import CommentLike
 
 __all__ = [
     "User",
@@ -50,4 +51,5 @@ __all__ = [
     "ProjectTag",
     "ProjectTechStack",
     "Comment",
+    "CommentLike",
 ]
