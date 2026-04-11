@@ -53,8 +53,10 @@ def database_urls(postgres_container: PostgresContainer | None) -> dict[str, str
 def migrated_database(database_urls: dict[str, str]) -> None:
     env = os.environ.copy()
     env["DATABASE_URL"] = database_urls["sync"]
-    env["DATABASE_SSL"] = "false"
-    env["DATABASE_SSL_VERIFY"] = "false"
+    # Only force SSL off for a local testcontainer; for remote Supabase keep env SSL settings
+    if "localhost" in database_urls["sync"] or "127.0.0.1" in database_urls["sync"]:
+        env["DATABASE_SSL"] = "false"
+        env["DATABASE_SSL_VERIFY"] = "false"
 
     subprocess.run(
         ["/home/mauri/.local/bin/uv", "run", "alembic", "upgrade", "head"],
@@ -80,11 +82,20 @@ async def async_engine(
 
 @pytest_asyncio.fixture
 async def db_session(async_engine: AsyncEngine) -> AsyncGenerator[AsyncSession, None]:
-    async with async_engine.connect() as connection:
-        transaction = await connection.begin()
-        session = AsyncSession(bind=connection, expire_on_commit=False)
-        try:
-            yield session
-        finally:
-            await session.close()
-            await transaction.rollback()
+    """Per-test database session that issues real commits.
+
+    We do NOT attempt transaction rollback here because Supabase's FK constraint
+    checks see only the committed state of the database, so any savepoint-based
+    isolation scheme causes FK violations when a service inserts a child row that
+    references a parent row flushed but not yet "really" committed.
+
+    Instead, every test is written to:
+     - use uuid4-derived unique emails / slugs so rows from different test runs
+       never collide on unique constraints;
+     - scope list-result assertions to the IDs the test itself seeded, rather
+       than asserting exact global list contents.
+    """
+    async with AsyncSession(async_engine, expire_on_commit=False) as session:
+        yield session
+
+
