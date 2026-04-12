@@ -72,7 +72,7 @@ export async function getUserProjectsByUsername(
   return requestJson<ProjectListResponse>(
     `/api/v1/users/by-username/${encodeURIComponent(username)}/projects${buildProjectsQuery(query)}`,
     {
-      auth: 'required',
+      auth: 'optional',
       fallbackErrorMessage: 'Failed to fetch projects',
     },
   );

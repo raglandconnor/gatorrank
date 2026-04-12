@@ -1,5 +1,11 @@
 import { beforeEach, describe, expect, test, vi } from 'vitest';
-import { getMe, getUserPublic, patchMe } from '@/lib/api/users';
+import {
+  getMe,
+  getMyProjects,
+  getUserProjectsByUsername,
+  getUserPublic,
+  patchMe,
+} from '@/lib/api/users';
 
 const { requestJsonMock } = vi.hoisted(() => ({
   requestJsonMock: vi.fn(),
@@ -44,5 +50,29 @@ describe('users api client', () => {
       auth: 'none',
       fallbackErrorMessage: 'Failed to fetch user profile',
     });
+  });
+
+  test('getUserProjectsByUsername uses optional auth for public profile project access', async () => {
+    await getUserProjectsByUsername('d_dovale');
+
+    expect(requestJsonMock).toHaveBeenCalledWith(
+      '/api/v1/users/by-username/d_dovale/projects?limit=20&sort=new',
+      {
+        auth: 'optional',
+        fallbackErrorMessage: 'Failed to fetch projects',
+      },
+    );
+  });
+
+  test('getMyProjects keeps required auth for owner-only project access', async () => {
+    await getMyProjects();
+
+    expect(requestJsonMock).toHaveBeenCalledWith(
+      '/api/v1/users/me/projects?limit=20&visibility=all&sort=new',
+      {
+        auth: 'required',
+        fallbackErrorMessage: 'Failed to fetch your projects',
+      },
+    );
   });
 });

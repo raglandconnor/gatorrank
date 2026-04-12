@@ -25,15 +25,16 @@ import { AcademicInfoCard } from '@/components/profile/AcademicInfoCard';
 import { RoleBadge } from '@/components/ui/rolebadge';
 import { ProfileUserProjects } from '@/components/profile/ProfileUserProjects';
 import { useAuth } from '@/components/domain/AuthProvider';
-import { getUserPublic } from '@/lib/api/users';
-import { isUuid } from '@/lib/profileSlug';
-import type { UserPublic } from '@/lib/api/types/user';
+import { getUserPublic, getUserPublicByUsername } from '@/lib/api/users';
+import type { ExtendedProfile } from '@/lib/profile/profileShared';
 import {
   EMPTY_EXTENDED,
-  getInitials,
-  loadExtendedProfile,
-  type ExtendedProfile,
+  loadExtendedProfile as loadExtended,
 } from '@/lib/profile/profileShared';
+import { isUuid } from '@/lib/profileSlug';
+import { profileEditPath, profilePath } from '@/lib/routes';
+import type { UserPublic } from '@/lib/api/types/user';
+import { UserAvatar } from '@/components/ui/UserAvatar';
 
 function SocialLink({
   href,
@@ -74,33 +75,28 @@ type LoadState =
 
 export default function ProfileUserPage() {
   const router = useRouter();
-  const { userId } = useParams<{ userId: string }>();
+  const { username } = useParams<{ username: string }>();
   const { user: authUser, isReady } = useAuth();
-  const [state, setState] = useState<LoadState>(() =>
-    isUuid(userId) ? { status: 'loading' } : { status: 'notfound' },
-  );
+  const [state, setState] = useState<LoadState>({ status: 'loading' });
 
   // null = projects not yet loaded; -1 = error; >= 0 = item count
   const [projectCount, setProjectCount] = useState<number | null>(null);
 
-  const isOwn = isReady && authUser?.id === userId;
-
   useEffect(() => {
     async function load() {
-      if (!isUuid(userId)) {
-        setState({ status: 'notfound' });
-        setProjectCount(null);
-        return;
-      }
-
       setState({ status: 'loading' });
       setProjectCount(null);
 
       try {
-        const publicUser = await getUserPublic(userId);
+        const publicUser = isUuid(username)
+          ? await getUserPublic(username)
+          : await getUserPublicByUsername(username);
+        if (publicUser.username !== username) {
+          router.replace(profilePath(publicUser.username));
+        }
         const extended =
-          authUser?.id === userId
-            ? loadExtendedProfile(userId)
+          authUser?.id === publicUser.id
+            ? loadExtended(publicUser.id)
             : EMPTY_EXTENDED;
         setState({ status: 'ready', publicUser, extended });
       } catch (err) {
@@ -119,7 +115,7 @@ export default function ProfileUserPage() {
     }
 
     void load();
-  }, [userId, authUser?.id]);
+  }, [authUser?.id, router, username]);
 
   const handleProjectsLoaded = useCallback((count: number) => {
     setProjectCount(count);
@@ -187,6 +183,7 @@ export default function ProfileUserPage() {
   }
 
   const { publicUser, extended } = state;
+  const isOwn = isReady && authUser?.id === publicUser.id;
   const displayName =
     publicUser.full_name ??
     (isOwn && authUser?.email ? authUser.email : 'GatorRank User');
@@ -224,35 +221,12 @@ export default function ProfileUserPage() {
         {/* Profile hero */}
         <HStack gap="24px" mb="40px" align="flex-start">
           {/* Avatar */}
-          {publicUser.profile_picture_url ? (
-            <img
-              src={publicUser.profile_picture_url}
-              alt={displayName}
-              style={{
-                width: '96px',
-                height: '96px',
-                borderRadius: '50%',
-                objectFit: 'cover',
-                flexShrink: 0,
-                display: 'block',
-              }}
-            />
-          ) : (
-            <Flex
-              w="96px"
-              h="96px"
-              borderRadius="full"
-              bg="orange.400"
-              color="white"
-              align="center"
-              justify="center"
-              fontSize="2xl"
-              fontWeight="bold"
-              flexShrink={0}
-            >
-              {getInitials(displayName)}
-            </Flex>
-          )}
+          <UserAvatar
+            name={displayName}
+            imageUrl={publicUser.profile_picture_url}
+            size="96px"
+            fontSize="2xl"
+          />
 
           {/* Info */}
           <VStack align="start" gap="8px" flex={1}>
@@ -321,7 +295,9 @@ export default function ProfileUserPage() {
           {isOwn && (
             <HStack gap="12px" flexShrink={0} align="flex-start">
               <Button
-                onClick={() => router.push(`/profile/${userId}/edit`)}
+                onClick={() =>
+                  router.push(profileEditPath(publicUser.username))
+                }
                 variant="outline"
                 border="1px solid"
                 borderColor="orange.400"
@@ -382,7 +358,9 @@ export default function ProfileUserPage() {
                 color="white"
                 borderRadius="10px"
                 _hover={{ bg: 'orange.500' }}
-                onClick={() => router.push(`/profile/${userId}/edit`)}
+                onClick={() =>
+                  router.push(profileEditPath(publicUser.username))
+                }
               >
                 Complete your profile
               </Button>
@@ -434,7 +412,7 @@ export default function ProfileUserPage() {
 
             {/* Projects — always mounted to ensure onLoadComplete fires */}
             <ProfileUserProjects
-              userId={publicUser.id}
+              username={publicUser.username}
               isOwn={isOwn}
               onLoadComplete={handleProjectsLoaded}
             />

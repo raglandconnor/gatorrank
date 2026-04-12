@@ -44,6 +44,6 @@ describe('SearchResultRow', () => {
     expect(screen.getByText('Unpublished')).toBeInTheDocument();
 
     const link = screen.getByRole('link', { name: /Test Project/i });
-    expect(link).toHaveAttribute('href', '/projects/proj-1');
+    expect(link).toHaveAttribute('href', '/projects/test-project');
   });
 });
