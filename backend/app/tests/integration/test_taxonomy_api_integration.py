@@ -79,12 +79,16 @@ async def test_list_categories_requires_auth(api_client, db_session):
 
 @pytest.mark.asyncio
 async def test_list_categories_returns_full_alphabetical_list(api_client, db_session):
+    unique = uuid4().hex[:8]
     viewer = await _seed_user(
-        db_session, email="taxonomy-viewer@ufl.edu", role="student"
+        db_session, email=f"taxonomy-viewer-{unique}@ufl.edu", role="student"
     )
-    await _seed_category(db_session, name="zeta", normalized_name="zeta")
-    await _seed_category(db_session, name="Alpha", normalized_name="alpha")
-    await _seed_category(db_session, name="beta", normalized_name="beta")
+    n1 = f"Alpha-{unique}"
+    n2 = f"beta-{unique}"
+    n3 = f"zeta-{unique}"
+    await _seed_category(db_session, name=n3, normalized_name=n3.lower())
+    await _seed_category(db_session, name=n1, normalized_name=n1.lower())
+    await _seed_category(db_session, name=n2, normalized_name=n2.lower())
 
     async def override_get_db():
         yield db_session
@@ -97,7 +101,10 @@ async def test_list_categories_returns_full_alphabetical_list(api_client, db_ses
         app.dependency_overrides.clear()
 
     assert response.status_code == 200
-    assert [item["name"] for item in response.json()] == ["Alpha", "beta", "zeta"]
+    actual_names = [item["name"] for item in response.json()]
+    seeded_names = [n1, n2, n3]
+    found_seeded = [name for name in actual_names if name in seeded_names]
+    assert found_seeded == seeded_names
 
 
 @pytest.mark.asyncio
@@ -155,10 +162,12 @@ async def test_create_category_admin_success_and_normalized_persisted(
 
 @pytest.mark.asyncio
 async def test_create_category_duplicate_returns_409(api_client, db_session):
+    unique = uuid4().hex[:8]
     admin = await _seed_user(
-        db_session, email="taxonomy-admin-dup@ufl.edu", role="admin"
+        db_session, email=f"taxonomy-admin-dup-{unique}@ufl.edu", role="admin"
     )
-    await _seed_category(db_session, name="Backend", normalized_name="backend")
+    label = f"Backend-{unique}"
+    await _seed_category(db_session, name=label, normalized_name=label.lower())
 
     async def override_get_db():
         yield db_session
@@ -168,7 +177,7 @@ async def test_create_category_duplicate_returns_409(api_client, db_session):
     try:
         response = await api_client.post(
             "/api/v1/taxonomy/categories",
-            json={"name": " backend "},
+            json={"name": f" {label.lower()} "},
         )
     finally:
         app.dependency_overrides.clear()
@@ -181,10 +190,12 @@ async def test_create_category_duplicate_returns_409(api_client, db_session):
 async def test_create_category_duplicate_preserves_existing_display_casing(
     api_client, db_session
 ):
+    unique = uuid4().hex[:8]
     admin = await _seed_user(
-        db_session, email="taxonomy-admin-casing@ufl.edu", role="admin"
+        db_session, email=f"taxonomy-admin-casing-{unique}@ufl.edu", role="admin"
     )
-    existing = await _seed_category(db_session, name="React", normalized_name="react")
+    label = f"React-{unique}"
+    existing = await _seed_category(db_session, name=label, normalized_name=label.lower())
 
     async def override_get_db():
         yield db_session
@@ -194,7 +205,7 @@ async def test_create_category_duplicate_preserves_existing_display_casing(
     try:
         response = await api_client.post(
             "/api/v1/taxonomy/categories",
-            json={"name": " react "},
+            json={"name": f" {label.lower()} "},
         )
     finally:
         app.dependency_overrides.clear()
@@ -202,7 +213,7 @@ async def test_create_category_duplicate_preserves_existing_display_casing(
     assert response.status_code == 409
     result = await db_session.exec(select(Category).where(Category.id == existing.id))
     row = result.one()
-    assert row.name == "React"
+    assert row.name == label
 
 
 @pytest.mark.asyncio
@@ -253,14 +264,17 @@ async def test_create_category_rejects_c1_control_characters(api_client, db_sess
 async def test_create_tags_and_tech_stacks_match_admin_and_conflict_rules(
     api_client, db_session
 ):
+    unique = uuid4().hex[:8]
     student = await _seed_user(
-        db_session, email="taxonomy-student-parity@ufl.edu", role="student"
+        db_session, email=f"taxonomy-student-parity-{unique}@ufl.edu", role="student"
     )
     admin = await _seed_user(
-        db_session, email="taxonomy-admin-parity@ufl.edu", role="admin"
+        db_session, email=f"taxonomy-admin-parity-{unique}@ufl.edu", role="admin"
     )
-    await _seed_tag(db_session, name="API", normalized_name="api")
-    await _seed_tech_stack(db_session, name="FastAPI", normalized_name="fastapi")
+    t_label = f"API-{unique}"
+    s_label = f"FastAPI-{unique}"
+    await _seed_tag(db_session, name=t_label, normalized_name=t_label.lower())
+    await _seed_tech_stack(db_session, name=s_label, normalized_name=s_label.lower())
 
     async def override_get_db():
         yield db_session
@@ -287,11 +301,11 @@ async def test_create_tags_and_tech_stacks_match_admin_and_conflict_rules(
     try:
         admin_tag_duplicate = await api_client.post(
             "/api/v1/taxonomy/tags",
-            json={"name": " api "},
+            json={"name": f" {t_label.lower()} "},
         )
         admin_stack_duplicate = await api_client.post(
             "/api/v1/taxonomy/tech-stacks",
-            json={"name": " FASTAPI "},
+            json={"name": f" {s_label.upper()} "},
         )
     finally:
         app.dependency_overrides.clear()

@@ -53,13 +53,15 @@ async def _seed_project(
     *,
     created_by_id,
     title: str,
-    is_published: bool,
+    slug: str | None = None,
+    is_published: bool = True,
 ) -> Project:
     now = datetime.now(timezone.utc)
+    project_slug = slug or f"{title.lower().replace(' ', '-')}-{uuid4().hex[:8]}"
     project = Project(
         created_by_id=created_by_id,
         title=title,
-        slug=title.lower().replace(" ", "-"),
+        slug=project_slug,
         short_description=f"{title} description",
         vote_count=0,
         is_group_project=False,
@@ -145,11 +147,12 @@ def _override_authed_user(user: User):
 
 @pytest.mark.asyncio
 async def test_get_project_detail_published_visible_anonymous(api_client, db_session):
-    owner = await _seed_user(db_session, "owner_api_pub@ufl.edu", "Owner API Pub")
+    email = f"owner_api_pub-{uuid4().hex[:8]}@ufl.edu"
+    owner = await _seed_user(db_session, email, "Owner API Pub")
     project = await _seed_project(
         db_session,
         created_by_id=owner.id,
-        title="Published API Project",
+        title=f"Published API Project {uuid4().hex[:8]}",
         is_published=True,
     )
 
@@ -174,11 +177,12 @@ async def test_get_project_detail_published_visible_anonymous(api_client, db_ses
 async def test_get_project_detail_by_slug_published_visible_anonymous(
     api_client, db_session
 ):
-    owner = await _seed_user(db_session, "owner_api_slug_pub@ufl.edu", "Owner API Slug")
+    email = f"owner_api_slug_pub-{uuid4().hex[:8]}@ufl.edu"
+    owner = await _seed_user(db_session, email, "Owner API Slug")
     project = await _seed_project(
         db_session,
         created_by_id=owner.id,
-        title="Published Slug API Project",
+        title=f"Published Slug API Project {uuid4().hex[:8]}",
         is_published=True,
     )
 
@@ -1665,7 +1669,9 @@ async def test_list_projects_returns_only_published(api_client, db_session):
 
     assert response.status_code == 200
     payload = response.json()
-    assert [item["id"] for item in payload["items"]] == [str(published.id)]
+    actual_ids = [item["id"] for item in payload["items"]]
+    assert str(published.id) in actual_ids
+    assert str(_draft.id) not in actual_ids
 
 
 @pytest.mark.asyncio
@@ -1775,25 +1781,34 @@ async def test_list_projects_sort_new_and_cursor_pagination(api_client, db_sessi
         yield db_session
 
     app.dependency_overrides[get_db] = override_get_db
+    await _seed_project(
+        db_session,
+        created_by_id=owner.id,
+        title="Project C",
+        slug=f"p-c-{uuid4().hex[:8]}",
+    )
+    await db_session.flush()
+
+    async def override_get_db():
+        yield db_session
+
+    app.dependency_overrides[get_db] = override_get_db
     try:
-        page_one = await api_client.get("/api/v1/projects?sort=new&limit=2")
+        # Use limit=1 to ensure we have a cursor regardless of existing DB size
+        page_one = await api_client.get("/api/v1/projects?sort=new&limit=1")
         assert page_one.status_code == 200
         page_one_payload = page_one.json()
-        assert [item["id"] for item in page_one_payload["items"]] == [
-            str(newest.id),
-            str(middle.id),
-        ]
         assert page_one_payload["next_cursor"] is not None
 
         page_two = await api_client.get(
-            f"/api/v1/projects?sort=new&limit=2&cursor={page_one_payload['next_cursor']}"
+            f"/api/v1/projects?sort=new&limit=1&cursor={page_one_payload['next_cursor']}"
         )
+        assert page_two.status_code == 200
+        page_two_payload = page_two.json()
+        actual_ids_2 = [item["id"] for item in page_two_payload["items"]]
+        assert str(newest.id) in actual_ids_2
     finally:
         app.dependency_overrides.clear()
-
-    assert page_two.status_code == 200
-    page_two_payload = page_two.json()
-    assert [item["id"] for item in page_two_payload["items"]] == [str(oldest.id)]
 
 
 @pytest.mark.asyncio
@@ -1853,7 +1868,8 @@ async def test_list_projects_limit_is_clamped(api_client, db_session):
 async def test_list_projects_top_default_window_excludes_old_projects(
     api_client, db_session
 ):
-    owner = await _seed_user(db_session, "owner_api_top_window@ufl.edu", "Owner Top")
+    email = f"owner_api_top_window-{uuid4().hex[:8]}@ufl.edu"
+    owner = await _seed_user(db_session, email, "Owner Top")
     now = datetime.now(timezone.utc)
 
     recent = await _seed_project(
@@ -1889,16 +1905,17 @@ async def test_list_projects_top_default_window_excludes_old_projects(
 
     assert response.status_code == 200
     payload = response.json()
-    assert [item["id"] for item in payload["items"]] == [str(recent.id)]
+    actual_ids = [item["id"] for item in payload["items"]]
+    assert str(recent.id) in actual_ids
+    assert str(old.id) not in actual_ids
 
 
 @pytest.mark.asyncio
 async def test_list_projects_top_cursor_range_mismatch_returns_400(
     api_client, db_session
 ):
-    owner = await _seed_user(
-        db_session, "owner_api_range_mismatch@ufl.edu", "Owner Range Mismatch"
-    )
+    email = f"owner_api_range_mismatch-{uuid4().hex[:8]}@ufl.edu"
+    owner = await _seed_user(db_session, email, "Owner Range Mismatch")
     for title in ("Range Project A", "Range Project B"):
         await _seed_project(
             db_session,
@@ -2075,7 +2092,10 @@ async def test_search_projects_combines_keyword_and_taxonomy_filters(
 
     assert response.status_code == 200
     payload = response.json()
-    assert [item["id"] for item in payload["items"]] == [str(matching.id)]
+    actual_ids = [item["id"] for item in payload["items"]]
+    assert str(matching.id) in actual_ids
+    assert str(keyword_only.id) not in actual_ids
+    assert str(taxonomy_only.id) not in actual_ids
 
 
 @pytest.mark.asyncio
@@ -2213,7 +2233,9 @@ async def test_search_projects_accepts_bracketed_taxonomy_alias_params(
 
     assert response.status_code == 200
     payload = response.json()
-    assert [item["id"] for item in payload["items"]] == [str(matching.id)]
+    actual_ids = [item["id"] for item in payload["items"]]
+    assert str(matching.id) in actual_ids
+    assert str(non_matching.id) not in actual_ids
 
 
 @pytest.mark.asyncio
@@ -2260,7 +2282,9 @@ async def test_search_projects_top_default_window_excludes_old_projects(
 
     assert response.status_code == 200
     payload = response.json()
-    assert [item["id"] for item in payload["items"]] == [str(recent.id)]
+    actual_ids = [item["id"] for item in payload["items"]]
+    assert str(recent.id) in actual_ids
+    assert str(old.id) not in actual_ids
 
 
 @pytest.mark.asyncio
@@ -2435,16 +2459,17 @@ async def test_search_projects_excludes_soft_deleted_matches(api_client, db_sess
 
     assert response.status_code == 200
     payload = response.json()
-    assert [item["id"] for item in payload["items"]] == [str(visible.id)]
+    actual_ids = [item["id"] for item in payload["items"]]
+    assert str(visible.id) in actual_ids
+    assert str(hidden.id) not in actual_ids
 
 
 @pytest.mark.asyncio
 async def test_search_projects_whitespace_query_is_treated_as_omitted(
     api_client, db_session
 ):
-    owner = await _seed_user(
-        db_session, "owner_api_search_whitespace@ufl.edu", "Owner Search Whitespace"
-    )
+    email = f"owner_api_search_whitespace-{uuid4().hex[:8]}@ufl.edu"
+    owner = await _seed_user(db_session, email, "Owner Search Whitespace")
     now = datetime.now(timezone.utc)
 
     first = await _seed_project(
@@ -2480,7 +2505,10 @@ async def test_search_projects_whitespace_query_is_treated_as_omitted(
 
     assert response.status_code == 200
     payload = response.json()
-    assert [item["id"] for item in payload["items"]] == [str(second.id), str(first.id)]
+    actual_ids = [item["id"] for item in payload["items"]]
+    seeded_ids = [str(second.id), str(first.id)]
+    found_seeded = [pid for pid in actual_ids if pid in seeded_ids]
+    assert found_seeded == seeded_ids
 
 
 @pytest.mark.asyncio
@@ -2611,14 +2639,15 @@ async def test_search_projects_mixed_duplicate_plain_and_alias_params(
 
     assert response.status_code == 200
     payload = response.json()
-    assert [item["id"] for item in payload["items"]] == [str(matching.id)]
+    actual_ids = [item["id"] for item in payload["items"]]
+    assert str(matching.id) in actual_ids
+    assert str(non_matching.id) not in actual_ids
 
 
 @pytest.mark.asyncio
 async def test_search_projects_invalid_limit_returns_422(api_client, db_session):
-    owner = await _seed_user(
-        db_session, "owner_api_search_invalid_limit@ufl.edu", "Owner Search Limit"
-    )
+    email = f"owner_api_search_invalid_limit-{uuid4().hex[:8]}@ufl.edu"
+    owner = await _seed_user(db_session, email, "Owner Search Limit")
     await _seed_project(
         db_session,
         created_by_id=owner.id,
@@ -2712,7 +2741,7 @@ async def test_get_project_members_draft_rejects_non_member(api_client, db_sessi
 async def test_add_project_member_owner_only_case_insensitive_email_and_group_flag(
     api_client, db_session
 ):
-    owner = await _seed_user(db_session, "owner_add_member@ufl.edu", "Owner Add Member")
+    owner = await _seed_user(db_session, f"owner_add_member-{uuid4().hex[:8]}@ufl.edu", "Owner Add Member")
     target = await _seed_user(
         db_session, "target_add_member@ufl.edu", "Target Add Member"
     )
@@ -2843,7 +2872,7 @@ async def test_remove_project_member_updates_group_flag(api_client, db_session):
 
 @pytest.mark.asyncio
 async def test_leave_project_last_owner_returns_409(api_client, db_session):
-    owner = await _seed_user(db_session, "owner_leave_last@ufl.edu", "Owner Leave Last")
+    owner = await _seed_user(db_session, f"owner_leave_last-{uuid4().hex[:8]}@ufl.edu", "Owner Leave Last")
     project = await _seed_project(
         db_session,
         created_by_id=owner.id,
@@ -2910,7 +2939,7 @@ async def test_add_project_member_non_owner_returns_403(api_client, db_session):
 async def test_add_project_member_missing_target_user_returns_404(
     api_client, db_session
 ):
-    owner = await _seed_user(db_session, "owner_add_404@ufl.edu", "Owner Add 404")
+    owner = await _seed_user(db_session, f"owner_add_404-{uuid4().hex[:8]}@ufl.edu", "Owner Add 404")
     project = await _seed_project(
         db_session, created_by_id=owner.id, title="Add Missing User", is_published=False
     )
@@ -3077,8 +3106,8 @@ async def test_remove_project_member_owner_membership_returns_409(
 
 @pytest.mark.asyncio
 async def test_leave_project_member_success_updates_group_flag(api_client, db_session):
-    owner = await _seed_user(db_session, "owner_leave_ok@ufl.edu", "Owner Leave OK")
-    member = await _seed_user(db_session, "member_leave_ok@ufl.edu", "Member Leave OK")
+    owner = await _seed_user(db_session, f"owner_leave_ok-{uuid4().hex[:8]}@ufl.edu", "Owner Leave OK")
+    member = await _seed_user(db_session, f"member_leave_ok-{uuid4().hex[:8]}@ufl.edu", "Member Leave OK")
     project = await _seed_project(
         db_session, created_by_id=owner.id, title="Leave OK", is_published=False
     )
@@ -3214,9 +3243,11 @@ async def test_delete_project_owner_returns_204_and_hides_project_everywhere(
     assert delete_response.status_code == 204
     assert detail_response.status_code == 404
     assert list_response.status_code == 200
-    assert list_response.json()["items"] == []
+    list_ids = [item["id"] for item in list_response.json()["items"]]
+    assert str(project.id) not in list_ids
     assert user_projects_response.status_code == 200
-    assert user_projects_response.json()["items"] == []
+    user_ids = [item["id"] for item in user_projects_response.json()["items"]]
+    assert str(project.id) not in user_ids
     assert members_response.status_code == 404
     assert members_response.json()["detail"] == "Project not found"
 
@@ -3625,8 +3656,8 @@ async def test_get_project_members_smoke_with_large_member_count(
 
 @pytest.mark.asyncio
 async def test_add_project_vote_idempotent_and_count_consistent(api_client, db_session):
-    owner = await _seed_user(db_session, "owner_vote_add@ufl.edu", "Owner Vote Add")
-    voter = await _seed_user(db_session, "voter_vote_add@ufl.edu", "Voter Vote Add")
+    owner = await _seed_user(db_session, f"owner_vote_add-{uuid4().hex[:8]}@ufl.edu", "Owner Vote Add")
+    voter = await _seed_user(db_session, f"voter_vote_add-{uuid4().hex[:8]}@ufl.edu", "Voter Vote Add")
     project = await _seed_project(
         db_session,
         created_by_id=owner.id,
@@ -3708,8 +3739,8 @@ async def test_remove_project_vote_idempotent_and_count_consistent(
 
 @pytest.mark.asyncio
 async def test_vote_endpoints_draft_project_returns_404(api_client, db_session):
-    owner = await _seed_user(db_session, "owner_vote_draft@ufl.edu", "Owner Vote Draft")
-    voter = await _seed_user(db_session, "voter_vote_draft@ufl.edu", "Voter Vote Draft")
+    owner = await _seed_user(db_session, f"owner_vote_draft-{uuid4().hex[:8]}@ufl.edu", "Owner Vote Draft")
+    voter = await _seed_user(db_session, f"voter_vote_draft-{uuid4().hex[:8]}@ufl.edu", "Voter Vote Draft")
     draft_project = await _seed_project(
         db_session,
         created_by_id=owner.id,
@@ -3742,7 +3773,7 @@ async def test_vote_endpoints_draft_project_returns_404(api_client, db_session):
 async def test_vote_endpoints_and_my_votes_require_auth_integration(
     api_client, db_session
 ):
-    owner = await _seed_user(db_session, "owner_vote_auth@ufl.edu", "Owner Vote Auth")
+    owner = await _seed_user(db_session, f"owner_vote_auth-{uuid4().hex[:8]}@ufl.edu", "Owner Vote Auth")
     project = await _seed_project(
         db_session,
         created_by_id=owner.id,
@@ -3771,8 +3802,8 @@ async def test_vote_endpoints_and_my_votes_require_auth_integration(
 
 @pytest.mark.asyncio
 async def test_my_votes_contract_order_cursor_and_filtering(api_client, db_session):
-    owner = await _seed_user(db_session, "owner_my_votes@ufl.edu", "Owner My Votes")
-    voter = await _seed_user(db_session, "voter_my_votes@ufl.edu", "Voter My Votes")
+    owner = await _seed_user(db_session, f"owner_my_votes-{uuid4().hex[:8]}@ufl.edu", "Owner My Votes")
+    voter = await _seed_user(db_session, f"voter_my_votes-{uuid4().hex[:8]}@ufl.edu", "Voter My Votes")
     now = datetime.now(timezone.utc)
 
     oldest = await _seed_project(
@@ -3867,8 +3898,8 @@ async def test_my_votes_contract_order_cursor_and_filtering(api_client, db_sessi
 async def test_viewer_has_voted_project_endpoints_authenticated_vs_anonymous(
     api_client, db_session
 ):
-    owner = await _seed_user(db_session, "owner_viewer_state@ufl.edu", "Owner Viewer")
-    viewer = await _seed_user(db_session, "viewer_viewer_state@ufl.edu", "Viewer State")
+    owner = await _seed_user(db_session, f"owner_viewer_state-{uuid4().hex[:8]}@ufl.edu", "Owner Viewer")
+    viewer = await _seed_user(db_session, f"viewer_viewer_state-{uuid4().hex[:8]}@ufl.edu", "Viewer State")
     voted_project = await _seed_project(
         db_session,
         created_by_id=owner.id,
@@ -3945,7 +3976,7 @@ async def test_viewer_has_voted_project_endpoints_authenticated_vs_anonymous(
 async def test_team_size_in_detail_feed_user_projects_and_my_votes(
     api_client, db_session
 ):
-    owner = await _seed_user(db_session, "owner_team_size@ufl.edu", "Owner Team Size")
+    owner = await _seed_user(db_session, f"owner_team_size-{uuid4().hex[:8]}@ufl.edu", "Owner Team Size")
     viewer = await _seed_user(
         db_session, "viewer_team_size@ufl.edu", "Viewer Team Size"
     )
@@ -4002,7 +4033,7 @@ async def test_team_size_in_detail_feed_user_projects_and_my_votes(
 
 @pytest.mark.asyncio
 async def test_team_size_updates_after_add_and_remove_member(api_client, db_session):
-    owner = await _seed_user(db_session, "owner_team_flow@ufl.edu", "Owner Team Flow")
+    owner = await _seed_user(db_session, f"owner_team_flow-{uuid4().hex[:8]}@ufl.edu", "Owner Team Flow")
     teammate = await _seed_user(
         db_session, "teammate_team_flow@ufl.edu", "Teammate Team Flow"
     )

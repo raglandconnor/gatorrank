@@ -103,7 +103,7 @@ async def test_get_current_user_profile(api_client, db_session, monkeypatch):
 
     user_id = uuid4()
     email = f"user-{uuid4().hex[:8]}@ufl.edu"
-    username = "profile_user"
+    username = f"profile_user_{uuid4().hex[:8]}"
     await seed_auth_user(db_session, user_id=user_id, email=email, username=username)
     token = generate_token(user_id, email, jwt_secret)
 
@@ -345,12 +345,13 @@ async def test_get_current_user_profile_unknown_user_returns_401(
 async def test_get_user_profile(api_client, db_session, monkeypatch):
     user_id = uuid4()
     email = f"user-{uuid4().hex[:8]}@ufl.edu"
+    username = f"public_user_{uuid4().hex[:8]}"
 
     # Pre-insert user
     user = User(  # pyright: ignore[reportCallIssue]
         id=user_id,
         email=email,
-        username="public_user",
+        username=username,
         password_hash="integration-password-hash",
         full_name="Public User",
         role="student",
@@ -367,7 +368,7 @@ async def test_get_user_profile(api_client, db_session, monkeypatch):
         assert response.status_code == 200
         data = response.json()
         assert data["id"] == str(user_id)
-        assert data["username"] == "public_user"
+        assert data["username"] == username
         assert data["full_name"] == "Public User"
         assert "email" not in data  # Public info
     finally:
@@ -378,7 +379,7 @@ async def test_get_user_profile(api_client, db_session, monkeypatch):
 async def test_get_user_profile_by_username_case_insensitive(api_client, db_session):
     user_id = uuid4()
     email = f"user-{uuid4().hex[:8]}@ufl.edu"
-    username = "public_lookup_user"
+    username = f"public_lookup_{uuid4().hex[:8]}"
 
     user = User(  # pyright: ignore[reportCallIssue]
         id=user_id,
@@ -414,7 +415,7 @@ async def test_list_user_projects(api_client, db_session):
     user = User(  # pyright: ignore[reportCallIssue]
         id=user_id,
         email=email,
-        username="author_user",
+        username=f"author_user_{uuid4().hex[:8]}",
         password_hash="integration-password-hash",
         full_name="Author",
         role="student",
@@ -578,7 +579,7 @@ async def test_list_user_projects_dedupes_when_user_is_creator_and_member(
 async def test_list_user_projects_by_username(api_client, db_session):
     user_id = uuid4()
     email = f"user-{uuid4().hex[:8]}@ufl.edu"
-    username = "author_lookup_user"
+    username = f"author_lookup_{uuid4().hex[:8]}"
 
     user = User(  # pyright: ignore[reportCallIssue]
         id=user_id,
@@ -595,7 +596,7 @@ async def test_list_user_projects_by_username(api_client, db_session):
     p1 = Project(
         id=uuid4(),
         title="Published Project",
-        slug="published-project",
+        slug=f"published-project-{uuid4().hex[:8]}",
         short_description="Desc",
         is_published=True,
         published_at=now,
@@ -604,7 +605,7 @@ async def test_list_user_projects_by_username(api_client, db_session):
     p2 = Project(
         id=uuid4(),
         title="Draft Project",
-        slug="draft-project",
+        slug=f"draft-project-{uuid4().hex[:8]}",
         short_description="Desc",
         is_published=False,
         created_by_id=user_id,
@@ -634,7 +635,7 @@ async def test_list_user_projects_by_username_includes_published_member_projects
 ):
     target_user_id = uuid4()
     target_email = f"user-{uuid4().hex[:8]}@ufl.edu"
-    target_username = "member_lookup_user"
+    target_username = f"member_lookup_{uuid4().hex[:8]}"
     owner_id = uuid4()
     owner_email = f"user-{uuid4().hex[:8]}@ufl.edu"
 

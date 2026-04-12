@@ -51,7 +51,7 @@ async def _seed_project(
     project = Project(
         created_by_id=created_by_id,
         title=title,
-        slug=title.lower().replace(" ", "-"),
+        slug=f"{title.lower().replace(' ', '-')}-{uuid4().hex[:8]}",
         short_description=f"{title} description",
         vote_count=vote_count,
         is_group_project=False,
@@ -360,16 +360,18 @@ async def test_list_my_voted_projects_includes_taxonomy_in_assignment_order(db_s
         title=f"Taxonomy Vote Target {unique}",
     )
 
-    category_a = Category(
-        name="Zoology",
-        normalized_name="zoology",
-        created_at=now,
-    )
-    category_b = Category(name="AI", normalized_name="ai", created_at=now)
-    tag_a = Tag(name="Backend", normalized_name="backend", created_at=now)
-    tag_b = Tag(name="API", normalized_name="api", created_at=now)
-    stack_a = TechStack(name="React", normalized_name="react", created_at=now)
-    stack_b = TechStack(name="Bun", normalized_name="bun", created_at=now)
+    l1 = f"Zoology-{unique}"
+    l2 = f"AI-{unique}"
+    t1 = f"Backend-{unique}"
+    t2 = f"API-{unique}"
+    s1 = f"React-{unique}"
+    s2 = f"Bun-{unique}"
+    category_a = Category(name=l1, normalized_name=l1.lower(), created_at=now)
+    category_b = Category(name=l2, normalized_name=l2.lower(), created_at=now)
+    tag_a = Tag(name=t1, normalized_name=t1.lower(), created_at=now)
+    tag_b = Tag(name=t2, normalized_name=t2.lower(), created_at=now)
+    stack_a = TechStack(name=s1, normalized_name=s1.lower(), created_at=now)
+    stack_b = TechStack(name=s2, normalized_name=s2.lower(), created_at=now)
     db_session.add_all([category_a, category_b, tag_a, tag_b, stack_a, stack_b])
     await db_session.flush()
 
@@ -423,9 +425,9 @@ async def test_list_my_voted_projects_includes_taxonomy_in_assignment_order(db_s
     assert len(response.items) == 1
     item = response.items[0]
     assert item.id == project.id
-    assert [term.name for term in item.categories] == ["Zoology", "AI"]
-    assert [term.name for term in item.tags] == ["Backend", "API"]
-    assert [term.name for term in item.tech_stack] == ["React", "Bun"]
+    assert [term.name for term in item.categories] == [l1, l2]
+    assert [term.name for term in item.tags] == [t1, t2]
+    assert [term.name for term in item.tech_stack] == [s1, s2]
 
 
 @pytest.mark.asyncio
