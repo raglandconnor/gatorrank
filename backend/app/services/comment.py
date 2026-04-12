@@ -166,12 +166,12 @@ class CommentService:
         moderation_state: CommentModerationState,
         principal: User | None,
     ) -> None:
-        self._require_moderation_principal(principal)
         comment = await get_public_comment_for_mutation(
             self.db,
             comment_id=comment_id,
             require_not_deleted=True,
         )
+        self._require_moderation_principal(principal)
 
         comment.moderation_state = moderation_state
         try:
@@ -187,12 +187,12 @@ class CommentService:
         comment_id: UUID,
         principal: User | None,
     ) -> None:
-        self._require_moderation_principal(principal)
         comment = await get_public_comment_for_mutation(
             self.db,
             comment_id=comment_id,
             require_not_deleted=False,
         )
+        self._require_moderation_principal(principal)
         if comment.deleted_at is not None:
             return
 
