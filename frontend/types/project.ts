@@ -2,7 +2,6 @@
 export interface Project {
   id: string | number;
   name: string;
-  slug: string;
   description: string;
   tags: string[];
   votes: number;

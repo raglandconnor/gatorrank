@@ -1,18 +1,7 @@
 'use client';
-
-import NextLink from 'next/link';
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import {
-  Box,
-  HStack,
-  VStack,
-  Text,
-  Flex,
-  Button,
-  LinkBox,
-  LinkOverlay,
-} from '@chakra-ui/react';
+import { Box, HStack, VStack, Text, Flex, Button } from '@chakra-ui/react';
 import {
   LuMessageSquare,
   LuChevronUp,
@@ -21,7 +10,6 @@ import {
 } from 'react-icons/lu';
 import type { Project } from '@/types/project';
 import { useProjectVote } from '@/hooks/useProjectVote';
-import { projectPath } from '@/lib/routes';
 
 interface ProjectCardProps {
   project: Project;
@@ -37,45 +25,35 @@ export function ProjectCard({ project, rank }: ProjectCardProps) {
   });
 
   return (
-    <LinkBox
+    <HStack
       bg={isHovered ? '#efefef' : 'gray.100'}
       borderRadius="13px"
       px="20px"
       py="9px"
       gap="20px"
-      alignItems="center"
-      display="flex"
+      align="center"
       w="100%"
       cursor="pointer"
       transition="background 0.15s"
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
-      _focusWithin={{
-        outline: '2px solid',
-        outlineColor: 'orange.400',
-        outlineOffset: '2px',
-      }}
     >
+      {/* Icon placeholder */}
       <Box w="42px" h="40px" bg="gray.300" borderRadius="13px" flexShrink={0} />
 
+      {/* Name, description, tags */}
       <VStack align="start" gap="6px" flex={1} justify="center">
+        {/* Hoverable title with nav icon */}
         <HStack gap="6px" align="center" display="inline-flex">
-          <LinkOverlay
-            as={NextLink}
-            href={projectPath(project.slug)}
-            _hover={{ textDecoration: 'none' }}
-            _focusVisible={{ textDecoration: 'none' }}
+          <Text
+            fontSize="md"
+            fontWeight="bold"
+            color={isHovered ? 'orange.600' : 'gray.900'}
+            lineHeight="30px"
+            transition="color 0.15s"
           >
-            <Text
-              fontSize="md"
-              fontWeight="bold"
-              color={isHovered ? 'orange.600' : 'gray.900'}
-              lineHeight="30px"
-              transition="color 0.15s"
-            >
-              {rank}. {project.name}
-            </Text>
-          </LinkOverlay>
+            {rank}. {project.name}
+          </Text>
           <Box
             color="orange.600"
             opacity={isHovered ? 1 : 0}
@@ -86,23 +64,12 @@ export function ProjectCard({ project, rank }: ProjectCardProps) {
           </Box>
         </HStack>
 
-        <Text
-          position="relative"
-          zIndex={1}
-          fontSize="sm"
-          color="gray.800"
-          lineHeight="24px"
-        >
+        <Text fontSize="sm" color="gray.800" lineHeight="24px">
           {project.description}
         </Text>
 
-        <HStack
-          gap={0}
-          align="center"
-          flexWrap="wrap"
-          position="relative"
-          zIndex={1}
-        >
+        {/* Tags with hover underline */}
+        <HStack gap={0} align="center" flexWrap="wrap">
           <Box color="gray.800" mr="8px">
             <LuTag size={13} />
           </Box>
@@ -134,13 +101,9 @@ export function ProjectCard({ project, rank }: ProjectCardProps) {
         </HStack>
       </VStack>
 
-      <HStack
-        gap="20px"
-        py="17px"
-        flexShrink={0}
-        position="relative"
-        zIndex={1}
-      >
+      {/* Action buttons — equal height */}
+      <HStack gap="20px" py="17px" flexShrink={0}>
+        {/* Comments */}
         <motion.div whileTap={{ scale: 1.1 }} style={{ display: 'contents' }}>
           <Flex
             direction="column"
@@ -157,8 +120,6 @@ export function ProjectCard({ project, rank }: ProjectCardProps) {
             _hover={{ bg: 'orange.50' }}
             transition="background 0.15s"
             gap="2px"
-            role="button"
-            tabIndex={0}
           >
             <Box color="gray.800">
               <LuMessageSquare size={18} />
@@ -174,6 +135,7 @@ export function ProjectCard({ project, rank }: ProjectCardProps) {
           </Flex>
         </motion.div>
 
+        {/* Votes */}
         <motion.div
           whileTap={{ scale: 1.2, y: -3 }}
           style={{ display: 'contents' }}
@@ -229,6 +191,6 @@ export function ProjectCard({ project, rank }: ProjectCardProps) {
           </Button>
         </motion.div>
       </HStack>
-    </LinkBox>
+    </HStack>
   );
 }
