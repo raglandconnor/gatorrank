@@ -153,13 +153,13 @@ class CommentService:
         )
 
     async def delete_own_comment(self, *, comment_id: UUID, actor_id: UUID) -> None:
-        comment = await self.db.get(Comment, comment_id)
-        if comment is None:
-            raise CommentNotFoundError("Comment not found")
+        comment = await get_public_comment_for_mutation(
+            self.db,
+            comment_id=comment_id,
+            require_not_deleted=True,
+        )
         if comment.author_id != actor_id:
             raise CommentForbiddenError("Comment delete forbidden")
-        if comment.deleted_at is not None:
-            return
 
         comment.deleted_at = datetime.now(timezone.utc)
         try:
@@ -175,9 +175,11 @@ class CommentService:
         comment_id: UUID,
         moderation_state: str,
     ) -> None:
-        comment = await self.db.get(Comment, comment_id)
-        if comment is None:
-            raise CommentNotFoundError("Comment not found")
+        comment = await get_public_comment_for_mutation(
+            self.db,
+            comment_id=comment_id,
+            require_not_deleted=True,
+        )
 
         comment.moderation_state = moderation_state
         try:
@@ -188,9 +190,11 @@ class CommentService:
             raise
 
     async def moderator_delete_comment(self, *, comment_id: UUID) -> None:
-        comment = await self.db.get(Comment, comment_id)
-        if comment is None:
-            raise CommentNotFoundError("Comment not found")
+        comment = await get_public_comment_for_mutation(
+            self.db,
+            comment_id=comment_id,
+            require_not_deleted=False,
+        )
         if comment.deleted_at is not None:
             return
 
@@ -212,3 +216,34 @@ class CommentService:
         result = await self.db.exec(statement)
         if result.one_or_none() is None:
             raise CommentProjectNotFoundError("Project not found")
+
+
+async def get_public_comment_for_mutation(
+    db: AsyncSession,
+    *,
+    comment_id: UUID,
+    require_not_deleted: bool,
+) -> Comment:
+    """Return a comment only when both the comment and its parent project are visible."""
+    comment_cols = getattr(Comment, "__table__").c
+    project_cols = getattr(Project, "__table__").c
+
+    conditions = [
+        comment_cols.id == comment_id,
+        project_cols.id == comment_cols.project_id,
+        project_cols.deleted_at.is_(None),
+        project_cols.is_published.is_(True),
+    ]
+    if require_not_deleted:
+        conditions.append(comment_cols.deleted_at.is_(None))
+
+    statement = (
+        select(Comment)
+        .join(Project, project_cols.id == comment_cols.project_id)
+        .where(*conditions)
+    )
+    result = await db.exec(statement)
+    comment = result.first()
+    if comment is None:
+        raise CommentNotFoundError("Comment not found")
+    return comment

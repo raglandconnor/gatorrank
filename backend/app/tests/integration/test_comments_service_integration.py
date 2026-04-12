@@ -12,6 +12,7 @@ from app.schemas.comment import CommentCreateRequest
 from app.services.comment import (
     COMMENT_LIST_HARD_CAP,
     CommentForbiddenError,
+    CommentNotFoundError,
     CommentProjectNotFoundError,
     CommentService,
 )
@@ -225,6 +226,74 @@ async def test_delete_own_comment_forbids_non_author(db_session: AsyncSession):
     service = CommentService(db_session)
     with pytest.raises(CommentForbiddenError, match="Comment delete forbidden"):
         await service.delete_own_comment(comment_id=comment.id, actor_id=other_user.id)
+
+
+@pytest.mark.asyncio
+async def test_comment_mutations_reject_unpublished_project_comments(
+    db_session: AsyncSession,
+):
+    unique = uuid4().hex[:8]
+    owner = await _seed_user(db_session, f"svc-hidden-{unique}@ufl.edu", "Owner")
+    project = await _seed_project(
+        db_session,
+        created_by_id=owner.id,
+        title="Svc Hidden Mutations",
+        is_published=False,
+    )
+    comment = await _seed_comment(
+        db_session,
+        project_id=project.id,
+        author_id=owner.id,
+        body="hidden mutations",
+    )
+    await db_session.commit()
+
+    service = CommentService(db_session)
+
+    with pytest.raises(CommentNotFoundError, match="Comment not found"):
+        await service.delete_own_comment(comment_id=comment.id, actor_id=owner.id)
+
+    with pytest.raises(CommentNotFoundError, match="Comment not found"):
+        await service.moderate_comment(
+            comment_id=comment.id,
+            moderation_state="hidden",
+        )
+
+    with pytest.raises(CommentNotFoundError, match="Comment not found"):
+        await service.moderator_delete_comment(comment_id=comment.id)
+
+
+@pytest.mark.asyncio
+async def test_comment_mutations_reject_deleted_project_comments(
+    db_session: AsyncSession,
+):
+    unique = uuid4().hex[:8]
+    owner = await _seed_user(db_session, f"svc-deleted-{unique}@ufl.edu", "Owner")
+    project = await _seed_project(
+        db_session, created_by_id=owner.id, title="Svc Deleted Mutations"
+    )
+    comment = await _seed_comment(
+        db_session,
+        project_id=project.id,
+        author_id=owner.id,
+        body="deleted mutations",
+    )
+    project.deleted_at = datetime.now(timezone.utc)
+    await db_session.commit()
+
+    service = CommentService(db_session)
+
+    with pytest.raises(CommentNotFoundError, match="Comment not found"):
+        await service.delete_own_comment(comment_id=comment.id, actor_id=owner.id)
+
+    with pytest.raises(CommentNotFoundError, match="Comment not found"):
+        await service.moderate_comment(
+            comment_id=comment.id,
+            moderation_state="hidden",
+        )
+
+    with pytest.raises(CommentNotFoundError, match="Comment not found"):
+        await service.moderator_delete_comment(comment_id=comment.id)
 
 
 @pytest.mark.asyncio

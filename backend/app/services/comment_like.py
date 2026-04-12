@@ -7,7 +7,7 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.models.comment import Comment
 from app.models.comment_like import CommentLike
-from app.services.comment import CommentNotFoundError
+from app.services.comment import CommentNotFoundError, get_public_comment_for_mutation
 
 
 class CommentLikeService:
@@ -16,9 +16,11 @@ class CommentLikeService:
 
     async def add_like(self, *, comment_id: UUID, user_id: UUID) -> bool:
         """Add a like if absent. Returns True when a new like is created."""
-        comment = await self._get_comment(comment_id)
-        if comment is None:
-            raise CommentNotFoundError("Comment not found")
+        await get_public_comment_for_mutation(
+            self.db,
+            comment_id=comment_id,
+            require_not_deleted=True,
+        )
 
         like_cols = getattr(CommentLike, "__table__").c
         insert_statement = (
@@ -37,9 +39,11 @@ class CommentLikeService:
 
     async def remove_like(self, *, comment_id: UUID, user_id: UUID) -> bool:
         """Remove a like if present. Returns True when an existing like is removed."""
-        comment = await self._get_comment(comment_id)
-        if comment is None:
-            raise CommentNotFoundError("Comment not found")
+        await get_public_comment_for_mutation(
+            self.db,
+            comment_id=comment_id,
+            require_not_deleted=True,
+        )
 
         like_cols = getattr(CommentLike, "__table__").c
         delete_stmt = (
@@ -59,12 +63,3 @@ class CommentLikeService:
         except Exception:
             await self.db.rollback()
             raise
-
-    async def _get_comment(self, comment_id: UUID) -> Comment | None:
-        comment_cols = getattr(Comment, "__table__").c
-        statement = select(Comment).where(
-            comment_cols.id == comment_id,
-            comment_cols.deleted_at.is_(None),
-        )
-        result = await self.db.exec(statement)
-        return result.first()

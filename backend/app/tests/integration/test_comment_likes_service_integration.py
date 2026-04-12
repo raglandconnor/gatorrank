@@ -153,6 +153,56 @@ async def test_add_like_missing_comment_raises_not_found(db_session):
 
 
 @pytest.mark.asyncio
+async def test_like_and_unlike_reject_comments_on_unpublished_project(db_session):
+    unique = uuid4().hex[:8]
+    owner = await _seed_user(db_session, f"like-hidden-owner-{unique}@ufl.edu", "Owner")
+    liker = await _seed_user(db_session, f"like-hidden-liker-{unique}@ufl.edu", "Liker")
+    project = await _seed_project(
+        db_session,
+        created_by_id=owner.id,
+        title="Hidden Like Target",
+        is_published=False,
+    )
+    comment = await _seed_comment(
+        db_session, project_id=project.id, author_id=owner.id, body="hidden comment"
+    )
+    await db_session.commit()
+
+    service = CommentLikeService(db_session)
+
+    with pytest.raises(CommentNotFoundError, match="Comment not found"):
+        await service.add_like(comment_id=comment.id, user_id=liker.id)
+
+    with pytest.raises(CommentNotFoundError, match="Comment not found"):
+        await service.remove_like(comment_id=comment.id, user_id=liker.id)
+
+
+@pytest.mark.asyncio
+async def test_like_and_unlike_reject_comments_on_deleted_project(db_session):
+    unique = uuid4().hex[:8]
+    owner = await _seed_user(db_session, f"like-del-owner-{unique}@ufl.edu", "Owner")
+    liker = await _seed_user(db_session, f"like-del-liker-{unique}@ufl.edu", "Liker")
+    project = await _seed_project(
+        db_session,
+        created_by_id=owner.id,
+        title="Deleted Like Target",
+    )
+    comment = await _seed_comment(
+        db_session, project_id=project.id, author_id=owner.id, body="deleted project"
+    )
+    project.deleted_at = datetime.now(timezone.utc)
+    await db_session.commit()
+
+    service = CommentLikeService(db_session)
+
+    with pytest.raises(CommentNotFoundError, match="Comment not found"):
+        await service.add_like(comment_id=comment.id, user_id=liker.id)
+
+    with pytest.raises(CommentNotFoundError, match="Comment not found"):
+        await service.remove_like(comment_id=comment.id, user_id=liker.id)
+
+
+@pytest.mark.asyncio
 async def test_add_like_concurrent_duplicate_requests(async_engine: AsyncEngine):
     unique = uuid4().hex[:8]
     owner_id = None

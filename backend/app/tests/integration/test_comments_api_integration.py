@@ -4,6 +4,7 @@ from uuid import uuid4
 import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
+from sqlmodel import select
 
 from app.api.deps.auth import get_current_user, get_current_user_optional
 from app.db.database import get_db
@@ -328,3 +329,88 @@ async def test_list_comments_rejects_unpublished_project(api_client, db_session)
         app.dependency_overrides.clear()
 
     assert response.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_mutation_endpoints_return_404_for_unpublished_project_comments(
+    api_client, db_session
+):
+    unique = uuid4().hex[:8]
+    owner = await _seed_user(db_session, f"api-mut-owner-{unique}@ufl.edu", "Owner")
+    liker = await _seed_user(db_session, f"api-mut-liker-{unique}@ufl.edu", "Liker")
+    admin = await _seed_user(
+        db_session, f"api-mut-admin-{unique}@ufl.edu", "Admin", role="admin"
+    )
+    project = await _seed_project(
+        db_session,
+        created_by_id=owner.id,
+        title="API Hidden Mutations",
+        is_published=False,
+    )
+    comment = await _seed_comment(
+        db_session,
+        project_id=project.id,
+        author_id=owner.id,
+        body="cannot mutate me",
+    )
+    await db_session.commit()
+
+    app.dependency_overrides[get_db] = _override_get_db_factory(db_session)
+    try:
+        app.dependency_overrides[get_current_user] = lambda: liker
+        like_response = await api_client.post(f"/api/v1/comments/{comment.id}/like")
+        unlike_response = await api_client.delete(f"/api/v1/comments/{comment.id}/like")
+
+        app.dependency_overrides[get_current_user] = lambda: owner
+        delete_response = await api_client.delete(f"/api/v1/comments/{comment.id}")
+
+        app.dependency_overrides[get_current_user] = lambda: admin
+        moderation_response = await api_client.patch(
+            f"/api/v1/comments/{comment.id}/moderation",
+            json={"moderation_state": "hidden"},
+        )
+        moderator_delete_response = await api_client.delete(
+            f"/api/v1/comments/{comment.id}/moderation"
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert like_response.status_code == 404
+    assert unlike_response.status_code == 404
+    assert delete_response.status_code == 404
+    assert moderation_response.status_code == 404
+    assert moderator_delete_response.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_like_endpoint_does_not_create_like_for_deleted_project_comment(
+    api_client, db_session
+):
+    unique = uuid4().hex[:8]
+    owner = await _seed_user(db_session, f"api-like-owner-{unique}@ufl.edu", "Owner")
+    liker = await _seed_user(db_session, f"api-like-liker-{unique}@ufl.edu", "Liker")
+    project = await _seed_project(
+        db_session, created_by_id=owner.id, title="API Deleted Like Project"
+    )
+    comment = await _seed_comment(
+        db_session,
+        project_id=project.id,
+        author_id=owner.id,
+        body="should not gain likes",
+    )
+    project.deleted_at = datetime.now(timezone.utc)
+    await db_session.commit()
+
+    app.dependency_overrides[get_db] = _override_get_db_factory(db_session)
+    app.dependency_overrides[get_current_user] = lambda: liker
+    try:
+        response = await api_client.post(f"/api/v1/comments/{comment.id}/like")
+    finally:
+        app.dependency_overrides.clear()
+
+    likes_result = await db_session.exec(
+        select(CommentLike).where(CommentLike.comment_id == comment.id)
+    )
+
+    assert response.status_code == 404
+    assert likes_result.all() == []
