@@ -1769,6 +1769,9 @@ async def test_list_projects_sort_new_and_cursor_pagination(api_client, db_sessi
     )
     newest.created_at = now
     newest.updated_at = newest.created_at
+    newest.published_at = now - timedelta(minutes=1)
+    middle.published_at = now
+    oldest.published_at = now - timedelta(minutes=2)
     await db_session.flush()
 
     async def override_get_db():
@@ -1780,8 +1783,8 @@ async def test_list_projects_sort_new_and_cursor_pagination(api_client, db_sessi
         assert page_one.status_code == 200
         page_one_payload = page_one.json()
         assert [item["id"] for item in page_one_payload["items"]] == [
-            str(newest.id),
             str(middle.id),
+            str(newest.id),
         ]
         assert page_one_payload["next_cursor"] is not None
 

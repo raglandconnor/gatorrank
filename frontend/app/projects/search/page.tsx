@@ -183,7 +183,7 @@ export default function ProjectSearchPage() {
               onClick={() => updateUrl(query, 'new')}
               _hover={{ bg: 'white' }}
             >
-              New
+              Newest
             </Button>
           </HStack>
 
