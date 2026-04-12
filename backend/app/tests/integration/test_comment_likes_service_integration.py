@@ -21,12 +21,16 @@ from app.tests.integration.comment_test_helpers import (
 @pytest.mark.asyncio
 async def test_add_like_creates_like(db_session):
     unique = uuid4().hex[:8]
-    owner = await _seed_user(db_session, f"like-owner-{unique}@ufl.edu", "Owner")
-    liker = await _seed_user(db_session, f"like-liker-{unique}@ufl.edu", "Liker")
-    project = await _seed_project(
+    owner = await seed_comment_user(
+        db_session, email=f"like-owner-{unique}@ufl.edu", name="Owner"
+    )
+    liker = await seed_comment_user(
+        db_session, email=f"like-liker-{unique}@ufl.edu", name="Liker"
+    )
+    project = await seed_comment_project(
         db_session, created_by_id=owner.id, title="Like Target"
     )
-    comment = await _seed_comment(
+    comment = await seed_project_comment(
         db_session, project_id=project.id, author_id=owner.id, body="test comment"
     )
 
@@ -46,12 +50,16 @@ async def test_add_like_creates_like(db_session):
 @pytest.mark.asyncio
 async def test_add_like_duplicate_is_idempotent(db_session):
     unique = uuid4().hex[:8]
-    owner = await _seed_user(db_session, f"like-owner2-{unique}@ufl.edu", "Owner")
-    liker = await _seed_user(db_session, f"like-liker2-{unique}@ufl.edu", "Liker")
-    project = await _seed_project(
+    owner = await seed_comment_user(
+        db_session, email=f"like-owner2-{unique}@ufl.edu", name="Owner"
+    )
+    liker = await seed_comment_user(
+        db_session, email=f"like-liker2-{unique}@ufl.edu", name="Liker"
+    )
+    project = await seed_comment_project(
         db_session, created_by_id=owner.id, title="Duplicate Like Target"
     )
-    comment = await _seed_comment(
+    comment = await seed_project_comment(
         db_session, project_id=project.id, author_id=owner.id, body="test comment"
     )
 
@@ -67,12 +75,16 @@ async def test_add_like_duplicate_is_idempotent(db_session):
 @pytest.mark.asyncio
 async def test_remove_like_is_idempotent(db_session):
     unique = uuid4().hex[:8]
-    owner = await _seed_user(db_session, f"like-owner4-{unique}@ufl.edu", "Owner")
-    liker = await _seed_user(db_session, f"like-liker4-{unique}@ufl.edu", "Liker")
-    project = await _seed_project(
+    owner = await seed_comment_user(
+        db_session, email=f"like-owner4-{unique}@ufl.edu", name="Owner"
+    )
+    liker = await seed_comment_user(
+        db_session, email=f"like-liker4-{unique}@ufl.edu", name="Liker"
+    )
+    project = await seed_comment_project(
         db_session, created_by_id=owner.id, title="Remove Like Target"
     )
-    comment = await _seed_comment(
+    comment = await seed_project_comment(
         db_session, project_id=project.id, author_id=owner.id, body="test comment"
     )
 
@@ -88,8 +100,10 @@ async def test_remove_like_is_idempotent(db_session):
 
 @pytest.mark.asyncio
 async def test_add_like_missing_comment_raises_not_found(db_session):
-    user = await _seed_user(
-        db_session, f"like-missing-{uuid4().hex[:8]}@ufl.edu", "Liker"
+    user = await seed_comment_user(
+        db_session,
+        email=f"like-missing-{uuid4().hex[:8]}@ufl.edu",
+        name="Liker",
     )
 
     service = CommentLikeService(db_session)
@@ -100,15 +114,19 @@ async def test_add_like_missing_comment_raises_not_found(db_session):
 @pytest.mark.asyncio
 async def test_like_and_unlike_reject_comments_on_unpublished_project(db_session):
     unique = uuid4().hex[:8]
-    owner = await _seed_user(db_session, f"like-hidden-owner-{unique}@ufl.edu", "Owner")
-    liker = await _seed_user(db_session, f"like-hidden-liker-{unique}@ufl.edu", "Liker")
-    project = await _seed_project(
+    owner = await seed_comment_user(
+        db_session, email=f"like-hidden-owner-{unique}@ufl.edu", name="Owner"
+    )
+    liker = await seed_comment_user(
+        db_session, email=f"like-hidden-liker-{unique}@ufl.edu", name="Liker"
+    )
+    project = await seed_comment_project(
         db_session,
         created_by_id=owner.id,
         title="Hidden Like Target",
         is_published=False,
     )
-    comment = await _seed_comment(
+    comment = await seed_project_comment(
         db_session, project_id=project.id, author_id=owner.id, body="hidden comment"
     )
     await db_session.commit()
@@ -125,14 +143,18 @@ async def test_like_and_unlike_reject_comments_on_unpublished_project(db_session
 @pytest.mark.asyncio
 async def test_like_and_unlike_reject_comments_on_deleted_project(db_session):
     unique = uuid4().hex[:8]
-    owner = await _seed_user(db_session, f"like-del-owner-{unique}@ufl.edu", "Owner")
-    liker = await _seed_user(db_session, f"like-del-liker-{unique}@ufl.edu", "Liker")
-    project = await _seed_project(
+    owner = await seed_comment_user(
+        db_session, email=f"like-del-owner-{unique}@ufl.edu", name="Owner"
+    )
+    liker = await seed_comment_user(
+        db_session, email=f"like-del-liker-{unique}@ufl.edu", name="Liker"
+    )
+    project = await seed_comment_project(
         db_session,
         created_by_id=owner.id,
         title="Deleted Like Target",
     )
-    comment = await _seed_comment(
+    comment = await seed_project_comment(
         db_session, project_id=project.id, author_id=owner.id, body="deleted project"
     )
     project.deleted_at = datetime.now(timezone.utc)
@@ -156,18 +178,18 @@ async def test_add_like_concurrent_duplicate_requests(async_engine: AsyncEngine)
     comment_id = None
     try:
         async with AsyncSession(async_engine, expire_on_commit=False) as seed_session:
-            owner = await _seed_user(
-                seed_session, f"like-owner-race-{unique}@ufl.edu", "Owner"
+            owner = await seed_comment_user(
+                seed_session, email=f"like-owner-race-{unique}@ufl.edu", name="Owner"
             )
-            liker = await _seed_user(
-                seed_session, f"like-liker-race-{unique}@ufl.edu", "Liker"
+            liker = await seed_comment_user(
+                seed_session, email=f"like-liker-race-{unique}@ufl.edu", name="Liker"
             )
-            project = await _seed_project(
+            project = await seed_comment_project(
                 seed_session,
                 created_by_id=owner.id,
                 title=f"Like Race {unique}",
             )
-            comment = await _seed_comment(
+            comment = await seed_project_comment(
                 seed_session,
                 project_id=project.id,
                 author_id=owner.id,
@@ -198,22 +220,12 @@ async def test_add_like_concurrent_duplicate_requests(async_engine: AsyncEngine)
             assert len(all_likes) == 1
     finally:
         if None not in {owner_id, liker_id, project_id, comment_id}:
-            async with AsyncSession(async_engine, expire_on_commit=False) as cleanup:
-                comment_like_cols = getattr(CommentLike, "__table__").c
-                comment_cols = getattr(Comment, "__table__").c
-                project_cols = getattr(Project, "__table__").c
-                user_cols = getattr(User, "__table__").c
-                await cleanup.exec(
-                    delete(CommentLike).where(
-                        comment_like_cols.comment_id == comment_id
-                    )
-                )
-                await cleanup.exec(delete(Comment).where(comment_cols.id == comment_id))
-                await cleanup.exec(delete(Project).where(project_cols.id == project_id))
-                await cleanup.exec(
-                    delete(User).where(user_cols.id.in_([owner_id, liker_id]))
-                )
-                await cleanup.commit()
+            await cleanup_committed_comment_graph(
+                async_engine,
+                comment_id=comment_id,
+                project_id=project_id,
+                user_ids=[owner_id, liker_id],
+            )
 
 
 @pytest.mark.asyncio
@@ -225,18 +237,22 @@ async def test_remove_like_concurrent_duplicate_requests(async_engine: AsyncEngi
     comment_id = None
     try:
         async with AsyncSession(async_engine, expire_on_commit=False) as seed_session:
-            owner = await _seed_user(
-                seed_session, f"unlike-owner-race-{unique}@ufl.edu", "Owner"
+            owner = await seed_comment_user(
+                seed_session,
+                email=f"unlike-owner-race-{unique}@ufl.edu",
+                name="Owner",
             )
-            liker = await _seed_user(
-                seed_session, f"unlike-liker-race-{unique}@ufl.edu", "Liker"
+            liker = await seed_comment_user(
+                seed_session,
+                email=f"unlike-liker-race-{unique}@ufl.edu",
+                name="Liker",
             )
-            project = await _seed_project(
+            project = await seed_comment_project(
                 seed_session,
                 created_by_id=owner.id,
                 title=f"Unlike Race {unique}",
             )
-            comment = await _seed_comment(
+            comment = await seed_project_comment(
                 seed_session,
                 project_id=project.id,
                 author_id=owner.id,
@@ -270,19 +286,9 @@ async def test_remove_like_concurrent_duplicate_requests(async_engine: AsyncEngi
             assert likes_result.one_or_none() is None
     finally:
         if None not in {owner_id, liker_id, project_id, comment_id}:
-            async with AsyncSession(async_engine, expire_on_commit=False) as cleanup:
-                comment_like_cols = getattr(CommentLike, "__table__").c
-                comment_cols = getattr(Comment, "__table__").c
-                project_cols = getattr(Project, "__table__").c
-                user_cols = getattr(User, "__table__").c
-                await cleanup.exec(
-                    delete(CommentLike).where(
-                        comment_like_cols.comment_id == comment_id
-                    )
-                )
-                await cleanup.exec(delete(Comment).where(comment_cols.id == comment_id))
-                await cleanup.exec(delete(Project).where(project_cols.id == project_id))
-                await cleanup.exec(
-                    delete(User).where(user_cols.id.in_([owner_id, liker_id]))
-                )
-                await cleanup.commit()
+            await cleanup_committed_comment_graph(
+                async_engine,
+                comment_id=comment_id,
+                project_id=project_id,
+                user_ids=[owner_id, liker_id],
+            )

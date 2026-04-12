@@ -9,10 +9,15 @@ from sqlmodel import select
 from app.api.deps.auth import get_current_user, get_current_user_optional
 from app.db.database import get_db
 from app.main import app
-from app.models.comment import COMMENT_MODERATION_HIDDEN, Comment
+from app.models.comment import COMMENT_MODERATION_HIDDEN
 from app.models.comment_like import CommentLike
-from app.models.project import Project
-from app.models.user import User
+from app.tests.integration.comment_test_helpers import (
+    override_get_db_factory,
+    seed_comment_like,
+    seed_comment_project,
+    seed_comment_user,
+    seed_project_comment,
+)
 
 
 @pytest_asyncio.fixture
@@ -22,109 +27,30 @@ async def api_client():
         yield client
 
 
-async def _seed_user(db_session, email: str, name: str, role: str = "student") -> User:
-    now = datetime.now(timezone.utc)
-    user = User(
-        email=email,
-        username=f"user_{uuid4().hex[:10]}",
-        password_hash="integration-password-hash",
-        role=role,
-        full_name=name,
-        created_at=now,
-        updated_at=now,
-    )
-    db_session.add(user)
-    await db_session.flush()
-    return user
-
-
-async def _seed_project(
-    db_session,
-    *,
-    created_by_id,
-    title: str,
-    is_published: bool = True,
-) -> Project:
-    now = datetime.now(timezone.utc)
-    project = Project(
-        created_by_id=created_by_id,
-        title=title,
-        slug=f"{title.lower().replace(' ', '-')}-{uuid4().hex[:6]}",
-        short_description=f"{title} description",
-        is_group_project=False,
-        is_published=is_published,
-        published_at=now if is_published else None,
-        created_at=now,
-        updated_at=now,
-    )
-    db_session.add(project)
-    await db_session.flush()
-    return project
-
-
-async def _seed_comment(
-    db_session,
-    *,
-    project_id,
-    author_id,
-    body: str,
-    created_at: datetime | None = None,
-    moderation_state: str = "visible",
-    deleted_at: datetime | None = None,
-) -> Comment:
-    now = created_at or datetime.now(timezone.utc)
-    comment = Comment(
-        project_id=project_id,
-        author_id=author_id,
-        body=body,
-        moderation_state=moderation_state,
-        deleted_at=deleted_at,
-        created_at=now,
-        updated_at=now,
-    )
-    db_session.add(comment)
-    await db_session.flush()
-    return comment
-
-
-async def _seed_like(db_session, *, comment_id, user_id) -> CommentLike:
-    like = CommentLike(
-        comment_id=comment_id,
-        user_id=user_id,
-        created_at=datetime.now(timezone.utc),
-    )
-    db_session.add(like)
-    await db_session.flush()
-    return like
-
-
-def _override_get_db_factory(db_session):
-    async def override_get_db():
-        yield db_session
-
-    return override_get_db
-
-
 @pytest.mark.asyncio
 async def test_list_comments_is_public_and_includes_viewer_state(
     api_client, db_session
 ):
     unique = uuid4().hex[:8]
-    owner = await _seed_user(db_session, f"api-owner-{unique}@ufl.edu", "Owner")
-    viewer = await _seed_user(db_session, f"api-viewer-{unique}@ufl.edu", "Viewer")
-    project = await _seed_project(
+    owner = await seed_comment_user(
+        db_session, email=f"api-owner-{unique}@ufl.edu", name="Owner"
+    )
+    viewer = await seed_comment_user(
+        db_session, email=f"api-viewer-{unique}@ufl.edu", name="Viewer"
+    )
+    project = await seed_comment_project(
         db_session, created_by_id=owner.id, title="API Visible"
     )
-    comment = await _seed_comment(
+    comment = await seed_project_comment(
         db_session,
         project_id=project.id,
         author_id=owner.id,
         body="Great project",
     )
-    await _seed_like(db_session, comment_id=comment.id, user_id=viewer.id)
+    await seed_comment_like(db_session, comment_id=comment.id, user_id=viewer.id)
     await db_session.commit()
 
-    app.dependency_overrides[get_db] = _override_get_db_factory(db_session)
+    app.dependency_overrides[get_db] = override_get_db_factory(db_session)
     app.dependency_overrides[get_current_user_optional] = lambda: None
     try:
         anonymous_response = await api_client.get(
@@ -153,13 +79,15 @@ async def test_create_comment_requires_auth_and_returns_created_payload(
     api_client, db_session
 ):
     unique = uuid4().hex[:8]
-    owner = await _seed_user(db_session, f"api-create-{unique}@ufl.edu", "Owner")
-    project = await _seed_project(
+    owner = await seed_comment_user(
+        db_session, email=f"api-create-{unique}@ufl.edu", name="Owner"
+    )
+    project = await seed_comment_project(
         db_session, created_by_id=owner.id, title="API Create"
     )
     await db_session.commit()
 
-    app.dependency_overrides[get_db] = _override_get_db_factory(db_session)
+    app.dependency_overrides[get_db] = override_get_db_factory(db_session)
     try:
         unauthenticated_response = await api_client.post(
             f"/api/v1/projects/{project.id}/comments",
@@ -187,11 +115,17 @@ async def test_list_comments_honors_sorting_and_placeholder_behavior(
     api_client, db_session
 ):
     unique = uuid4().hex[:8]
-    owner = await _seed_user(db_session, f"api-sort-{unique}@ufl.edu", "Owner")
-    liker = await _seed_user(db_session, f"api-sort-l-{unique}@ufl.edu", "Liker")
-    project = await _seed_project(db_session, created_by_id=owner.id, title="API Sort")
+    owner = await seed_comment_user(
+        db_session, email=f"api-sort-{unique}@ufl.edu", name="Owner"
+    )
+    liker = await seed_comment_user(
+        db_session, email=f"api-sort-l-{unique}@ufl.edu", name="Liker"
+    )
+    project = await seed_comment_project(
+        db_session, created_by_id=owner.id, title="API Sort"
+    )
     now = datetime.now(timezone.utc)
-    hidden_comment = await _seed_comment(
+    hidden_comment = await seed_project_comment(
         db_session,
         project_id=project.id,
         author_id=owner.id,
@@ -199,7 +133,7 @@ async def test_list_comments_honors_sorting_and_placeholder_behavior(
         created_at=now - timedelta(hours=2),
         moderation_state=COMMENT_MODERATION_HIDDEN,
     )
-    deleted_comment = await _seed_comment(
+    deleted_comment = await seed_project_comment(
         db_session,
         project_id=project.id,
         author_id=owner.id,
@@ -207,18 +141,18 @@ async def test_list_comments_honors_sorting_and_placeholder_behavior(
         created_at=now - timedelta(hours=1),
         deleted_at=now,
     )
-    top_comment = await _seed_comment(
+    top_comment = await seed_project_comment(
         db_session,
         project_id=project.id,
         author_id=owner.id,
         body="top comment",
         created_at=now - timedelta(minutes=30),
     )
-    await _seed_like(db_session, comment_id=top_comment.id, user_id=owner.id)
-    await _seed_like(db_session, comment_id=top_comment.id, user_id=liker.id)
+    await seed_comment_like(db_session, comment_id=top_comment.id, user_id=owner.id)
+    await seed_comment_like(db_session, comment_id=top_comment.id, user_id=liker.id)
     await db_session.commit()
 
-    app.dependency_overrides[get_db] = _override_get_db_factory(db_session)
+    app.dependency_overrides[get_db] = override_get_db_factory(db_session)
     app.dependency_overrides[get_current_user_optional] = lambda: liker
     try:
         top_response = await api_client.get(f"/api/v1/projects/{project.id}/comments")
@@ -253,23 +187,28 @@ async def test_list_comments_honors_sorting_and_placeholder_behavior(
 @pytest.mark.asyncio
 async def test_delete_comment_and_admin_moderation_endpoints(api_client, db_session):
     unique = uuid4().hex[:8]
-    owner = await _seed_user(db_session, f"api-del-owner-{unique}@ufl.edu", "Owner")
-    other_user = await _seed_user(
-        db_session, f"api-del-other-{unique}@ufl.edu", "Other User"
+    owner = await seed_comment_user(
+        db_session, email=f"api-del-owner-{unique}@ufl.edu", name="Owner"
     )
-    admin = await _seed_user(
-        db_session, f"api-del-admin-{unique}@ufl.edu", "Admin", role="admin"
+    other_user = await seed_comment_user(
+        db_session, email=f"api-del-other-{unique}@ufl.edu", name="Other User"
     )
-    project = await _seed_project(
+    admin = await seed_comment_user(
+        db_session,
+        email=f"api-del-admin-{unique}@ufl.edu",
+        name="Admin",
+        role="admin",
+    )
+    project = await seed_comment_project(
         db_session, created_by_id=owner.id, title="API Delete"
     )
-    own_comment = await _seed_comment(
+    own_comment = await seed_project_comment(
         db_session,
         project_id=project.id,
         author_id=owner.id,
         body="delete me",
     )
-    moderated_comment = await _seed_comment(
+    moderated_comment = await seed_project_comment(
         db_session,
         project_id=project.id,
         author_id=other_user.id,
@@ -277,7 +216,7 @@ async def test_delete_comment_and_admin_moderation_endpoints(api_client, db_sess
     )
     await db_session.commit()
 
-    app.dependency_overrides[get_db] = _override_get_db_factory(db_session)
+    app.dependency_overrides[get_db] = override_get_db_factory(db_session)
     try:
         app.dependency_overrides[get_current_user] = lambda: other_user
         forbidden_delete = await api_client.delete(f"/api/v1/comments/{own_comment.id}")
@@ -312,8 +251,10 @@ async def test_delete_comment_and_admin_moderation_endpoints(api_client, db_sess
 @pytest.mark.asyncio
 async def test_list_comments_rejects_unpublished_project(api_client, db_session):
     unique = uuid4().hex[:8]
-    owner = await _seed_user(db_session, f"api-draft-{unique}@ufl.edu", "Owner")
-    draft_project = await _seed_project(
+    owner = await seed_comment_user(
+        db_session, email=f"api-draft-{unique}@ufl.edu", name="Owner"
+    )
+    draft_project = await seed_comment_project(
         db_session,
         created_by_id=owner.id,
         title="API Draft",
@@ -321,7 +262,7 @@ async def test_list_comments_rejects_unpublished_project(api_client, db_session)
     )
     await db_session.commit()
 
-    app.dependency_overrides[get_db] = _override_get_db_factory(db_session)
+    app.dependency_overrides[get_db] = override_get_db_factory(db_session)
     app.dependency_overrides[get_current_user_optional] = lambda: None
     try:
         response = await api_client.get(f"/api/v1/projects/{draft_project.id}/comments")
@@ -336,18 +277,25 @@ async def test_mutation_endpoints_return_404_for_unpublished_project_comments(
     api_client, db_session
 ):
     unique = uuid4().hex[:8]
-    owner = await _seed_user(db_session, f"api-mut-owner-{unique}@ufl.edu", "Owner")
-    liker = await _seed_user(db_session, f"api-mut-liker-{unique}@ufl.edu", "Liker")
-    admin = await _seed_user(
-        db_session, f"api-mut-admin-{unique}@ufl.edu", "Admin", role="admin"
+    owner = await seed_comment_user(
+        db_session, email=f"api-mut-owner-{unique}@ufl.edu", name="Owner"
     )
-    project = await _seed_project(
+    liker = await seed_comment_user(
+        db_session, email=f"api-mut-liker-{unique}@ufl.edu", name="Liker"
+    )
+    admin = await seed_comment_user(
+        db_session,
+        email=f"api-mut-admin-{unique}@ufl.edu",
+        name="Admin",
+        role="admin",
+    )
+    project = await seed_comment_project(
         db_session,
         created_by_id=owner.id,
         title="API Hidden Mutations",
         is_published=False,
     )
-    comment = await _seed_comment(
+    comment = await seed_project_comment(
         db_session,
         project_id=project.id,
         author_id=owner.id,
@@ -355,7 +303,7 @@ async def test_mutation_endpoints_return_404_for_unpublished_project_comments(
     )
     await db_session.commit()
 
-    app.dependency_overrides[get_db] = _override_get_db_factory(db_session)
+    app.dependency_overrides[get_db] = override_get_db_factory(db_session)
     try:
         app.dependency_overrides[get_current_user] = lambda: liker
         like_response = await api_client.post(f"/api/v1/comments/{comment.id}/like")
@@ -387,12 +335,16 @@ async def test_like_endpoint_does_not_create_like_for_deleted_project_comment(
     api_client, db_session
 ):
     unique = uuid4().hex[:8]
-    owner = await _seed_user(db_session, f"api-like-owner-{unique}@ufl.edu", "Owner")
-    liker = await _seed_user(db_session, f"api-like-liker-{unique}@ufl.edu", "Liker")
-    project = await _seed_project(
+    owner = await seed_comment_user(
+        db_session, email=f"api-like-owner-{unique}@ufl.edu", name="Owner"
+    )
+    liker = await seed_comment_user(
+        db_session, email=f"api-like-liker-{unique}@ufl.edu", name="Liker"
+    )
+    project = await seed_comment_project(
         db_session, created_by_id=owner.id, title="API Deleted Like Project"
     )
-    comment = await _seed_comment(
+    comment = await seed_project_comment(
         db_session,
         project_id=project.id,
         author_id=owner.id,
@@ -401,7 +353,7 @@ async def test_like_endpoint_does_not_create_like_for_deleted_project_comment(
     project.deleted_at = datetime.now(timezone.utc)
     await db_session.commit()
 
-    app.dependency_overrides[get_db] = _override_get_db_factory(db_session)
+    app.dependency_overrides[get_db] = override_get_db_factory(db_session)
     app.dependency_overrides[get_current_user] = lambda: liker
     try:
         response = await api_client.post(f"/api/v1/comments/{comment.id}/like")

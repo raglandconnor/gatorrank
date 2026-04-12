@@ -4,10 +4,11 @@ from uuid import uuid4
 import pytest
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from app.models.comment import COMMENT_MODERATION_HIDDEN, Comment
-from app.models.comment_like import CommentLike
-from app.models.project import Project
-from app.models.user import User
+from app.models.comment import (
+    COMMENT_MODERATION_HIDDEN,
+    Comment,
+    CommentModerationState,
+)
 from app.schemas.comment import CommentCreateRequest
 from app.services.comment import (
     COMMENT_LIST_HARD_CAP,
@@ -16,81 +17,12 @@ from app.services.comment import (
     CommentProjectNotFoundError,
     CommentService,
 )
-
-
-async def _seed_user(db_session, email: str, name: str) -> User:
-    now = datetime.now(timezone.utc)
-    user = User(
-        email=email,
-        username=f"user_{uuid4().hex[:10]}",
-        password_hash="integration-password-hash",
-        full_name=name,
-        created_at=now,
-        updated_at=now,
-    )
-    db_session.add(user)
-    await db_session.flush()
-    return user
-
-
-async def _seed_project(
-    db_session,
-    *,
-    created_by_id,
-    title: str,
-    is_published: bool = True,
-) -> Project:
-    now = datetime.now(timezone.utc)
-    project = Project(
-        created_by_id=created_by_id,
-        title=title,
-        slug=f"{title.lower().replace(' ', '-')}-{uuid4().hex[:6]}",
-        short_description=f"{title} description",
-        is_group_project=False,
-        is_published=is_published,
-        published_at=now if is_published else None,
-        created_at=now,
-        updated_at=now,
-    )
-    db_session.add(project)
-    await db_session.flush()
-    return project
-
-
-async def _seed_comment(
-    db_session,
-    *,
-    project_id,
-    author_id,
-    body: str,
-    created_at: datetime | None = None,
-    moderation_state: str = "visible",
-    deleted_at: datetime | None = None,
-) -> Comment:
-    now = created_at or datetime.now(timezone.utc)
-    comment = Comment(
-        project_id=project_id,
-        author_id=author_id,
-        body=body,
-        moderation_state=moderation_state,
-        deleted_at=deleted_at,
-        created_at=now,
-        updated_at=now,
-    )
-    db_session.add(comment)
-    await db_session.flush()
-    return comment
-
-
-async def _seed_like(db_session, *, comment_id, user_id) -> CommentLike:
-    like = CommentLike(
-        comment_id=comment_id,
-        user_id=user_id,
-        created_at=datetime.now(timezone.utc),
-    )
-    db_session.add(like)
-    await db_session.flush()
-    return like
+from app.tests.integration.comment_test_helpers import (
+    seed_comment_like,
+    seed_comment_project,
+    seed_comment_user,
+    seed_project_comment,
+)
 
 
 @pytest.mark.asyncio
@@ -98,35 +30,41 @@ async def test_list_comments_supports_top_oldest_and_newest_sorting(
     db_session: AsyncSession,
 ):
     unique = uuid4().hex[:8]
-    owner = await _seed_user(db_session, f"svc-owner-{unique}@ufl.edu", "Owner")
-    liker = await _seed_user(db_session, f"svc-liker-{unique}@ufl.edu", "Liker")
-    project = await _seed_project(db_session, created_by_id=owner.id, title="Svc Sort")
+    owner = await seed_comment_user(
+        db_session, email=f"svc-owner-{unique}@ufl.edu", name="Owner"
+    )
+    liker = await seed_comment_user(
+        db_session, email=f"svc-liker-{unique}@ufl.edu", name="Liker"
+    )
+    project = await seed_comment_project(
+        db_session, created_by_id=owner.id, title="Svc Sort"
+    )
 
     now = datetime.now(timezone.utc)
-    oldest = await _seed_comment(
+    oldest = await seed_project_comment(
         db_session,
         project_id=project.id,
         author_id=owner.id,
         body="oldest",
         created_at=now - timedelta(hours=3),
     )
-    middle = await _seed_comment(
+    middle = await seed_project_comment(
         db_session,
         project_id=project.id,
         author_id=owner.id,
         body="middle",
         created_at=now - timedelta(hours=2),
     )
-    newest = await _seed_comment(
+    newest = await seed_project_comment(
         db_session,
         project_id=project.id,
         author_id=owner.id,
         body="newest",
         created_at=now - timedelta(hours=1),
     )
-    await _seed_like(db_session, comment_id=middle.id, user_id=liker.id)
-    await _seed_like(db_session, comment_id=middle.id, user_id=owner.id)
-    await _seed_like(db_session, comment_id=oldest.id, user_id=liker.id)
+    await seed_comment_like(db_session, comment_id=middle.id, user_id=liker.id)
+    await seed_comment_like(db_session, comment_id=middle.id, user_id=owner.id)
+    await seed_comment_like(db_session, comment_id=oldest.id, user_id=liker.id)
     await db_session.commit()
 
     service = CommentService(db_session)
@@ -160,14 +98,18 @@ async def test_list_comments_supports_top_oldest_and_newest_sorting(
 @pytest.mark.asyncio
 async def test_list_comments_enforces_hard_cap(db_session: AsyncSession):
     unique = uuid4().hex[:8]
-    owner = await _seed_user(db_session, f"svc-cap-{unique}@ufl.edu", "Owner")
-    project = await _seed_project(db_session, created_by_id=owner.id, title="Svc Cap")
+    owner = await seed_comment_user(
+        db_session, email=f"svc-cap-{unique}@ufl.edu", name="Owner"
+    )
+    project = await seed_comment_project(
+        db_session, created_by_id=owner.id, title="Svc Cap"
+    )
 
     base_time = datetime.now(timezone.utc) - timedelta(
         minutes=COMMENT_LIST_HARD_CAP + 5
     )
     for index in range(COMMENT_LIST_HARD_CAP + 5):
-        await _seed_comment(
+        await seed_project_comment(
             db_session,
             project_id=project.id,
             author_id=owner.id,
@@ -187,8 +129,10 @@ async def test_list_comments_enforces_hard_cap(db_session: AsyncSession):
 @pytest.mark.asyncio
 async def test_create_comment_rejects_unpublished_project(db_session: AsyncSession):
     unique = uuid4().hex[:8]
-    owner = await _seed_user(db_session, f"svc-draft-{unique}@ufl.edu", "Owner")
-    draft_project = await _seed_project(
+    owner = await seed_comment_user(
+        db_session, email=f"svc-draft-{unique}@ufl.edu", name="Owner"
+    )
+    draft_project = await seed_comment_project(
         db_session,
         created_by_id=owner.id,
         title="Svc Draft",
@@ -208,14 +152,16 @@ async def test_create_comment_rejects_unpublished_project(db_session: AsyncSessi
 @pytest.mark.asyncio
 async def test_delete_own_comment_forbids_non_author(db_session: AsyncSession):
     unique = uuid4().hex[:8]
-    owner = await _seed_user(db_session, f"svc-owner-del-{unique}@ufl.edu", "Owner")
-    other_user = await _seed_user(
-        db_session, f"svc-other-del-{unique}@ufl.edu", "Other User"
+    owner = await seed_comment_user(
+        db_session, email=f"svc-owner-del-{unique}@ufl.edu", name="Owner"
     )
-    project = await _seed_project(
+    other_user = await seed_comment_user(
+        db_session, email=f"svc-other-del-{unique}@ufl.edu", name="Other User"
+    )
+    project = await seed_comment_project(
         db_session, created_by_id=owner.id, title="Svc Delete Permissions"
     )
-    comment = await _seed_comment(
+    comment = await seed_project_comment(
         db_session,
         project_id=project.id,
         author_id=owner.id,
@@ -233,14 +179,16 @@ async def test_comment_mutations_reject_unpublished_project_comments(
     db_session: AsyncSession,
 ):
     unique = uuid4().hex[:8]
-    owner = await _seed_user(db_session, f"svc-hidden-{unique}@ufl.edu", "Owner")
-    project = await _seed_project(
+    owner = await seed_comment_user(
+        db_session, email=f"svc-hidden-{unique}@ufl.edu", name="Owner"
+    )
+    project = await seed_comment_project(
         db_session,
         created_by_id=owner.id,
         title="Svc Hidden Mutations",
         is_published=False,
     )
-    comment = await _seed_comment(
+    comment = await seed_project_comment(
         db_session,
         project_id=project.id,
         author_id=owner.id,
@@ -256,7 +204,7 @@ async def test_comment_mutations_reject_unpublished_project_comments(
     with pytest.raises(CommentNotFoundError, match="Comment not found"):
         await service.moderate_comment(
             comment_id=comment.id,
-            moderation_state="hidden",
+            moderation_state=CommentModerationState.HIDDEN,
             principal=owner,
         )
 
@@ -269,11 +217,13 @@ async def test_comment_mutations_reject_deleted_project_comments(
     db_session: AsyncSession,
 ):
     unique = uuid4().hex[:8]
-    owner = await _seed_user(db_session, f"svc-deleted-{unique}@ufl.edu", "Owner")
-    project = await _seed_project(
+    owner = await seed_comment_user(
+        db_session, email=f"svc-deleted-{unique}@ufl.edu", name="Owner"
+    )
+    project = await seed_comment_project(
         db_session, created_by_id=owner.id, title="Svc Deleted Mutations"
     )
-    comment = await _seed_comment(
+    comment = await seed_project_comment(
         db_session,
         project_id=project.id,
         author_id=owner.id,
@@ -290,7 +240,7 @@ async def test_comment_mutations_reject_deleted_project_comments(
     with pytest.raises(CommentNotFoundError, match="Comment not found"):
         await service.moderate_comment(
             comment_id=comment.id,
-            moderation_state="hidden",
+            moderation_state=CommentModerationState.HIDDEN,
             principal=owner,
         )
 
@@ -303,16 +253,22 @@ async def test_service_level_moderation_requires_admin_principal(
     db_session: AsyncSession,
 ):
     unique = uuid4().hex[:8]
-    owner = await _seed_user(db_session, f"svc-mod-owner-{unique}@ufl.edu", "Owner")
-    student = await _seed_user(
-        db_session, f"svc-mod-student-{unique}@ufl.edu", "Student"
+    owner = await seed_comment_user(
+        db_session, email=f"svc-mod-owner-{unique}@ufl.edu", name="Owner"
     )
-    admin = await _seed_user(db_session, f"svc-mod-admin-{unique}@ufl.edu", "Admin")
-    admin.role = "admin"
-    project = await _seed_project(
+    student = await seed_comment_user(
+        db_session, email=f"svc-mod-student-{unique}@ufl.edu", name="Student"
+    )
+    admin = await seed_comment_user(
+        db_session,
+        email=f"svc-mod-admin-{unique}@ufl.edu",
+        name="Admin",
+        role="admin",
+    )
+    project = await seed_comment_project(
         db_session, created_by_id=owner.id, title="Svc Moderation Policy"
     )
-    comment = await _seed_comment(
+    comment = await seed_project_comment(
         db_session,
         project_id=project.id,
         author_id=owner.id,
@@ -325,20 +281,20 @@ async def test_service_level_moderation_requires_admin_principal(
     with pytest.raises(CommentForbiddenError, match="Comment moderation forbidden"):
         await service.moderate_comment(
             comment_id=comment.id,
-            moderation_state="hidden",
+            moderation_state=CommentModerationState.HIDDEN,
             principal=student,
         )
 
     await service.moderate_comment(
         comment_id=comment.id,
-        moderation_state="hidden",
+        moderation_state=CommentModerationState.HIDDEN,
         principal=admin,
     )
     await service.moderator_delete_comment(comment_id=comment.id, principal=admin)
 
     refreshed_comment = await db_session.get(Comment, comment.id)
     assert refreshed_comment is not None
-    assert refreshed_comment.moderation_state == "hidden"
+    assert refreshed_comment.moderation_state == CommentModerationState.HIDDEN
     assert refreshed_comment.deleted_at is not None
 
 
@@ -347,18 +303,20 @@ async def test_hidden_and_deleted_comments_remain_placeholder_ready(
     db_session: AsyncSession,
 ):
     unique = uuid4().hex[:8]
-    owner = await _seed_user(db_session, f"svc-ph-{unique}@ufl.edu", "Owner")
-    project = await _seed_project(
+    owner = await seed_comment_user(
+        db_session, email=f"svc-ph-{unique}@ufl.edu", name="Owner"
+    )
+    project = await seed_comment_project(
         db_session, created_by_id=owner.id, title="Svc Placeholder"
     )
-    hidden = await _seed_comment(
+    hidden = await seed_project_comment(
         db_session,
         project_id=project.id,
         author_id=owner.id,
         body="hidden body",
         moderation_state=COMMENT_MODERATION_HIDDEN,
     )
-    deleted = await _seed_comment(
+    deleted = await seed_project_comment(
         db_session,
         project_id=project.id,
         author_id=owner.id,
