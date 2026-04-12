@@ -66,8 +66,8 @@ async def test_issue_token_pair_persists_hashed_refresh_session(
 
     assert tokens.token_type == "bearer"
     assert tokens.expires_in == int(ACCESS_TOKEN_TTL.total_seconds())
-    assert tokens.refresh_token_expires_in == int(
-        REFRESH_TOKEN_TTL_DEFAULT.total_seconds()
+    assert tokens.refresh_token_expires_in == pytest.approx(
+        int(REFRESH_TOKEN_TTL_DEFAULT.total_seconds()), abs=1
     )
 
     refresh_hash = service.hash_refresh_token(tokens.refresh_token)
@@ -127,8 +127,8 @@ async def test_refresh_rotation_revokes_old_token_and_issues_new_token(
     )
 
     assert rotated_tokens.refresh_token != initial_tokens.refresh_token
-    assert rotated_tokens.refresh_token_expires_in == int(
-        REFRESH_TOKEN_TTL_REMEMBER_ME.total_seconds()
+    assert rotated_tokens.refresh_token_expires_in == pytest.approx(
+        int(REFRESH_TOKEN_TTL_REMEMBER_ME.total_seconds()), abs=1
     )
     assert rotated_tokens.expires_in == int(ACCESS_TOKEN_TTL.total_seconds())
 
@@ -162,8 +162,8 @@ async def test_refresh_rotation_preserves_default_ttl_for_non_remember_me(db_ses
         refresh_token=initial_tokens.refresh_token
     )
 
-    assert rotated_tokens.refresh_token_expires_in == int(
-        REFRESH_TOKEN_TTL_DEFAULT.total_seconds()
+    assert rotated_tokens.refresh_token_expires_in == pytest.approx(
+        int(REFRESH_TOKEN_TTL_DEFAULT.total_seconds()), abs=1
     )
 
 

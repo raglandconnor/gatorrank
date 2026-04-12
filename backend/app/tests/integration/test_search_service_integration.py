@@ -58,12 +58,14 @@ async def _seed_project(
 
 @pytest.mark.asyncio
 async def test_search_projects_keyword_matches_title_and_short_description(db_session):
+    unique = uuid4().hex[:8]
     now = datetime.now(timezone.utc)
-    owner = await _seed_user(db_session, "search-keyword@ufl.edu")
+    owner = await _seed_user(db_session, f"search-keyword-{unique}@ufl.edu")
+    keyword = f"Gator-{unique}"
     title_match = await _seed_project(
         db_session,
         created_by_id=owner.id,
-        title="Gator Search",
+        title=f"{keyword} Search",
         short_description="Plain text",
         vote_count=10,
         created_at=now,
@@ -72,7 +74,7 @@ async def test_search_projects_keyword_matches_title_and_short_description(db_se
         db_session,
         created_by_id=owner.id,
         title="No keyword here",
-        short_description="This uses gAtOr keyword in description",
+        short_description=f"This uses {keyword} keyword in description",
         vote_count=9,
         created_at=now - timedelta(minutes=1),
     )
@@ -87,7 +89,7 @@ async def test_search_projects_keyword_matches_title_and_short_description(db_se
 
     service = PostgresSearchService(db_session)
     response = await service.search_projects(
-        request=ProjectSearchRequest(q="  GATOR  ", sort="new")
+        request=ProjectSearchRequest(q=f"  {keyword.upper()}  ", sort="new")
     )
 
     assert [item.id for item in response.items] == [
@@ -98,8 +100,13 @@ async def test_search_projects_keyword_matches_title_and_short_description(db_se
 
 @pytest.mark.asyncio
 async def test_search_projects_taxonomy_or_within_and_across_families(db_session):
+    unique = uuid4().hex[:8]
     now = datetime.now(timezone.utc)
-    owner = await _seed_user(db_session, "search-taxonomy@ufl.edu")
+    owner = await _seed_user(db_session, f"search-taxonomy-{unique}@ufl.edu")
+    c1 = f"AI-{unique}"
+    t1 = f"Python-{unique}"
+    t2 = f"TypeScript-{unique}"
+    c3 = f"Web-{unique}"
     match_all = await _seed_project(
         db_session,
         created_by_id=owner.id,
@@ -128,22 +135,22 @@ async def test_search_projects_taxonomy_or_within_and_across_families(db_session
     project_service = ProjectService(db_session)
     await project_service._replace_project_taxonomy_assignments(
         project_id=match_all.id,
-        categories=["AI"],
-        tags=["Python"],
+        categories=[c1],
+        tags=[t1],
         tech_stack=[],
         taxonomy_principal=owner,
     )
     await project_service._replace_project_taxonomy_assignments(
         project_id=_ai_only.id,
-        categories=["AI"],
-        tags=["TypeScript"],
+        categories=[c1],
+        tags=[t2],
         tech_stack=[],
         taxonomy_principal=owner,
     )
     await project_service._replace_project_taxonomy_assignments(
         project_id=_python_only.id,
-        categories=["Web"],
-        tags=["Python"],
+        categories=[c3],
+        tags=[t1],
         tech_stack=[],
         taxonomy_principal=owner,
     )
@@ -152,8 +159,8 @@ async def test_search_projects_taxonomy_or_within_and_across_families(db_session
     service = PostgresSearchService(db_session)
     response = await service.search_projects(
         request=ProjectSearchRequest(
-            categories=["ai"],
-            tags=["python", "not-real-tag"],
+            categories=[c1.lower()],
+            tags=[t1.lower(), "not-real-tag"],
             sort="new",
         )
     )
@@ -167,12 +174,14 @@ async def test_search_projects_taxonomy_or_within_and_across_families(db_session
 
 @pytest.mark.asyncio
 async def test_search_projects_cursor_is_bound_to_search_context(db_session):
+    unique = uuid4().hex[:8]
     now = datetime.now(timezone.utc)
-    owner = await _seed_user(db_session, "search-cursor-context@ufl.edu")
+    owner = await _seed_user(db_session, f"search-cursor-context-{unique}@ufl.edu")
+    keyword = f"alpha-{unique}"
     await _seed_project(
         db_session,
         created_by_id=owner.id,
-        title="Context Alpha",
+        title=f"Context {keyword}",
         short_description="Alpha project",
         vote_count=5,
         created_at=now,
@@ -180,7 +189,7 @@ async def test_search_projects_cursor_is_bound_to_search_context(db_session):
     await _seed_project(
         db_session,
         created_by_id=owner.id,
-        title="Context Alpha 2",
+        title=f"Context {keyword} 2",
         short_description="Alpha project two",
         vote_count=4,
         created_at=now - timedelta(minutes=1),
@@ -188,7 +197,7 @@ async def test_search_projects_cursor_is_bound_to_search_context(db_session):
 
     service = PostgresSearchService(db_session)
     first_page = await service.search_projects(
-        request=ProjectSearchRequest(q="alpha", sort="new", limit=1)
+        request=ProjectSearchRequest(q=keyword, sort="new", limit=1)
     )
     assert first_page.next_cursor is not None
 
@@ -205,12 +214,14 @@ async def test_search_projects_cursor_is_bound_to_search_context(db_session):
 
 @pytest.mark.asyncio
 async def test_search_projects_top_default_window_excludes_old_projects(db_session):
+    unique = uuid4().hex[:8]
     now = datetime.now(timezone.utc)
-    owner = await _seed_user(db_session, "search-top-window@ufl.edu")
+    owner = await _seed_user(db_session, f"search-top-window-{unique}@ufl.edu")
+    keyword = f"window search {unique}"
     recent = await _seed_project(
         db_session,
         created_by_id=owner.id,
-        title="Window Search",
+        title=f"{keyword} Recent",
         short_description="Window result recent",
         vote_count=10,
         created_at=now - timedelta(days=5),
@@ -218,7 +229,7 @@ async def test_search_projects_top_default_window_excludes_old_projects(db_sessi
     _old = await _seed_project(
         db_session,
         created_by_id=owner.id,
-        title="Window Search Old",
+        title=f"{keyword} Old",
         short_description="Window result old",
         vote_count=999,
         created_at=now - timedelta(days=150),
@@ -226,7 +237,7 @@ async def test_search_projects_top_default_window_excludes_old_projects(db_sessi
 
     service = PostgresSearchService(db_session)
     response = await service.search_projects(
-        request=ProjectSearchRequest(q="window search", sort="top")
+        request=ProjectSearchRequest(q=keyword, sort="top")
     )
 
     assert [item.id for item in response.items] == [recent.id]
@@ -265,12 +276,14 @@ async def test_search_projects_keyword_special_chars_are_treated_as_literals(
 
 @pytest.mark.asyncio
 async def test_search_projects_top_cursor_continuity_and_range_mismatch(db_session):
+    unique = uuid4().hex[:8]
     now = datetime.now(UTC)
-    owner = await _seed_user(db_session, "search-top-cursor-window@ufl.edu")
+    owner = await _seed_user(db_session, f"search-top-cursor-window-{unique}@ufl.edu")
+    keyword = f"top cursor {unique}"
     first = await _seed_project(
         db_session,
         created_by_id=owner.id,
-        title="Top cursor first",
+        title=f"{keyword} first",
         short_description="top cursor first",
         vote_count=20,
         created_at=now - timedelta(days=1),
@@ -278,7 +291,7 @@ async def test_search_projects_top_cursor_continuity_and_range_mismatch(db_sessi
     second = await _seed_project(
         db_session,
         created_by_id=owner.id,
-        title="Top cursor second",
+        title=f"{keyword} second",
         short_description="top cursor second",
         vote_count=10,
         created_at=now - timedelta(days=2),
@@ -286,7 +299,7 @@ async def test_search_projects_top_cursor_continuity_and_range_mismatch(db_sessi
     _third = await _seed_project(
         db_session,
         created_by_id=owner.id,
-        title="Top cursor third",
+        title=f"{keyword} third",
         short_description="top cursor third",
         vote_count=5,
         created_at=now - timedelta(days=3),
@@ -294,14 +307,14 @@ async def test_search_projects_top_cursor_continuity_and_range_mismatch(db_sessi
 
     service = PostgresSearchService(db_session)
     page_one = await service.search_projects(
-        request=ProjectSearchRequest(q="top cursor", sort="top", limit=2)
+        request=ProjectSearchRequest(q=keyword, sort="top", limit=2)
     )
     assert [item.id for item in page_one.items] == [first.id, second.id]
     assert page_one.next_cursor is not None
 
     page_two = await service.search_projects(
         request=ProjectSearchRequest(
-            q="top cursor",
+            q=keyword,
             sort="top",
             limit=2,
             cursor=page_one.next_cursor,
@@ -312,7 +325,7 @@ async def test_search_projects_top_cursor_continuity_and_range_mismatch(db_sessi
     with pytest.raises(CursorError, match="Cursor does not match requested search"):
         await service.search_projects(
             request=ProjectSearchRequest(
-                q="top cursor",
+                q=keyword,
                 sort="top",
                 limit=2,
                 cursor=page_one.next_cursor,
@@ -327,11 +340,14 @@ async def test_search_projects_filter_truth_table_or_within_and_across_families(
     db_session,
 ):
     now = datetime.now(timezone.utc)
-    owner = await _seed_user(db_session, "search-filter-matrix@ufl.edu")
+    unique = uuid4().hex[:8]
+    now = datetime.now(timezone.utc)
+    owner = await _seed_user(db_session, f"search-filter-matrix-{unique}@ufl.edu")
+    keyword = f"Matrix-{unique}"
     p1 = await _seed_project(
         db_session,
         created_by_id=owner.id,
-        title="Matrix one",
+        title=f"{keyword} one",
         short_description="category ai tag python",
         vote_count=10,
         created_at=now,
@@ -339,7 +355,7 @@ async def test_search_projects_filter_truth_table_or_within_and_across_families(
     p2 = await _seed_project(
         db_session,
         created_by_id=owner.id,
-        title="Matrix two",
+        title=f"{keyword} two",
         short_description="category web tag python",
         vote_count=9,
         created_at=now - timedelta(minutes=1),
@@ -347,30 +363,34 @@ async def test_search_projects_filter_truth_table_or_within_and_across_families(
     _p3 = await _seed_project(
         db_session,
         created_by_id=owner.id,
-        title="Matrix three",
+        title=f"{keyword} three",
         short_description="category ai tag rust",
         vote_count=8,
         created_at=now - timedelta(minutes=2),
     )
+    c1 = f"AI-{unique}"
+    t1 = f"Python-{unique}"
+    t2 = f"Rust-{unique}"
+    c3 = f"Web-{unique}"
     project_service = ProjectService(db_session)
     await project_service._replace_project_taxonomy_assignments(
         project_id=p1.id,
-        categories=["AI"],
-        tags=["Python"],
+        categories=[c1],
+        tags=[t1],
         tech_stack=[],
         taxonomy_principal=owner,
     )
     await project_service._replace_project_taxonomy_assignments(
         project_id=p2.id,
-        categories=["Web"],
-        tags=["Python"],
+        categories=[c3],
+        tags=[t1],
         tech_stack=[],
         taxonomy_principal=owner,
     )
     await project_service._replace_project_taxonomy_assignments(
         project_id=_p3.id,
-        categories=["AI"],
-        tags=["Rust"],
+        categories=[c1],
+        tags=[t2],
         tech_stack=[],
         taxonomy_principal=owner,
     )
@@ -378,13 +398,13 @@ async def test_search_projects_filter_truth_table_or_within_and_across_families(
 
     service = PostgresSearchService(db_session)
     tags_only = await service.search_projects(
-        request=ProjectSearchRequest(tags=["python", "rust"], sort="new")
+        request=ProjectSearchRequest(tags=[t1.lower(), t2.lower()], sort="new")
     )
     assert [item.id for item in tags_only.items] == [p1.id, p2.id, _p3.id]
 
     tags_and_category = await service.search_projects(
         request=ProjectSearchRequest(
-            tags=["python", "rust"], categories=["ai"], sort="new"
+            tags=[t1.lower(), t2.lower()], categories=[c1.lower()], sort="new"
         )
     )
     assert [item.id for item in tags_and_category.items] == [p1.id, _p3.id]
@@ -393,20 +413,25 @@ async def test_search_projects_filter_truth_table_or_within_and_across_families(
 @pytest.mark.asyncio
 async def test_search_projects_unknown_term_mixed_filter_behavior(db_session):
     now = datetime.now(timezone.utc)
-    owner = await _seed_user(db_session, "search-unknown-mixed@ufl.edu")
+    unique = uuid4().hex[:8]
+    now = datetime.now(timezone.utc)
+    owner = await _seed_user(db_session, f"search-unknown-mixed-{unique}@ufl.edu")
+    keyword = f"Unknown-{unique}"
     match = await _seed_project(
         db_session,
         created_by_id=owner.id,
-        title="Unknown mixed match",
+        title=f"{keyword} mixed match",
         short_description="known tag only",
         vote_count=10,
         created_at=now,
     )
+    c1 = f"AI-{unique}"
+    t1 = f"Python-{unique}"
     project_service = ProjectService(db_session)
     await project_service._replace_project_taxonomy_assignments(
         project_id=match.id,
-        categories=["AI"],
-        tags=["Python"],
+        categories=[c1],
+        tags=[t1],
         tech_stack=[],
         taxonomy_principal=owner,
     )
@@ -414,13 +439,13 @@ async def test_search_projects_unknown_term_mixed_filter_behavior(db_session):
 
     service = PostgresSearchService(db_session)
     mixed = await service.search_projects(
-        request=ProjectSearchRequest(tags=["python", "no-such-tag"], sort="new")
+        request=ProjectSearchRequest(tags=[t1.lower(), "no-such-tag"], sort="new")
     )
     assert [item.id for item in mixed.items] == [match.id]
 
     cross_family_unknown = await service.search_projects(
         request=ProjectSearchRequest(
-            tags=["python"],
+            tags=[t1.lower()],
             categories=["definitely-not-real"],
             sort="new",
         )
@@ -433,21 +458,24 @@ async def test_search_projects_viewer_has_voted_differs_for_authenticated_user(
     db_session,
 ):
     now = datetime.now(timezone.utc)
-    owner = await _seed_user(db_session, "search-voted-owner@ufl.edu")
-    voter = await _seed_user(db_session, "search-voted-viewer@ufl.edu")
+    unique = uuid4().hex[:8]
+    now = datetime.now(timezone.utc)
+    owner = await _seed_user(db_session, f"search-voted-owner-{unique}@ufl.edu")
+    voter = await _seed_user(db_session, f"search-voted-viewer-{unique}@ufl.edu")
+    keyword = f"vote-check-{unique}"
     voted = await _seed_project(
         db_session,
         created_by_id=owner.id,
-        title="Voted project",
-        short_description="viewer vote check",
+        title=f"Voted project {unique}",
+        short_description=keyword,
         vote_count=1,
         created_at=now,
     )
     unvoted = await _seed_project(
         db_session,
         created_by_id=owner.id,
-        title="Unvoted project",
-        short_description="viewer vote check",
+        title=f"Unvoted project {unique}",
+        short_description=keyword,
         vote_count=0,
         created_at=now - timedelta(minutes=1),
     )
@@ -456,10 +484,10 @@ async def test_search_projects_viewer_has_voted_differs_for_authenticated_user(
 
     service = PostgresSearchService(db_session)
     anonymous = await service.search_projects(
-        request=ProjectSearchRequest(q="viewer vote check", sort="new")
+        request=ProjectSearchRequest(q=keyword, sort="new")
     )
     authed = await service.search_projects(
-        request=ProjectSearchRequest(q="viewer vote check", sort="new"),
+        request=ProjectSearchRequest(q=keyword, sort="new"),
         current_user_id=voter.id,
     )
 
@@ -474,11 +502,14 @@ async def test_search_projects_viewer_has_voted_differs_for_authenticated_user(
 @pytest.mark.asyncio
 async def test_search_projects_excludes_soft_deleted_matches(db_session):
     now = datetime.now(timezone.utc)
-    owner = await _seed_user(db_session, "search-soft-delete@ufl.edu")
+    unique = uuid4().hex[:8]
+    now = datetime.now(timezone.utc)
+    owner = await _seed_user(db_session, f"search-soft-delete-{unique}@ufl.edu")
+    keyword = f"Deleted-{unique}"
     visible = await _seed_project(
         db_session,
         created_by_id=owner.id,
-        title="Deleted scope",
+        title=f"{keyword} scope visible",
         short_description="visible record",
         vote_count=10,
         created_at=now,
@@ -486,7 +517,7 @@ async def test_search_projects_excludes_soft_deleted_matches(db_session):
     deleted = await _seed_project(
         db_session,
         created_by_id=owner.id,
-        title="Deleted scope",
+        title=f"{keyword} scope deleted",
         short_description="should be excluded",
         vote_count=100,
         created_at=now - timedelta(minutes=1),
@@ -497,7 +528,7 @@ async def test_search_projects_excludes_soft_deleted_matches(db_session):
 
     service = PostgresSearchService(db_session)
     response = await service.search_projects(
-        request=ProjectSearchRequest(q="deleted scope", sort="new")
+        request=ProjectSearchRequest(q=keyword, sort="new")
     )
 
     assert [item.id for item in response.items] == [visible.id]

@@ -54,17 +54,18 @@ async def _seed_project(db_session, *, created_by_id) -> Project:
 @pytest.mark.asyncio
 async def test_taxonomy_normalized_name_unique_within_each_vocabulary(db_session):
     now = datetime.now(timezone.utc)
+    label = f"React-{uuid4().hex[:8]}"
     category_one = Category(
-        name="React",
-        normalized_name="react",
+        name=label,
+        normalized_name=label.lower(),
         created_at=now,
     )
     db_session.add(category_one)
     await db_session.flush()
 
     category_duplicate = Category(
-        name="REACT",
-        normalized_name="react",
+        name=label.upper(),
+        normalized_name=label.lower(),
         created_at=now,
     )
     with pytest.raises(IntegrityError):
@@ -76,17 +77,18 @@ async def test_taxonomy_normalized_name_unique_within_each_vocabulary(db_session
 @pytest.mark.asyncio
 async def test_tag_normalized_name_unique_within_vocabulary(db_session):
     now = datetime.now(timezone.utc)
+    label = f"Backend-{uuid4().hex[:8]}"
     tag_one = Tag(
-        name="Backend",
-        normalized_name="backend",
+        name=label,
+        normalized_name=label.lower(),
         created_at=now,
     )
     db_session.add(tag_one)
     await db_session.flush()
 
     tag_duplicate = Tag(
-        name="BACKEND",
-        normalized_name="backend",
+        name=label.upper(),
+        normalized_name=label.lower(),
         created_at=now,
     )
     with pytest.raises(IntegrityError):
@@ -98,17 +100,18 @@ async def test_tag_normalized_name_unique_within_vocabulary(db_session):
 @pytest.mark.asyncio
 async def test_tech_stack_normalized_name_unique_within_vocabulary(db_session):
     now = datetime.now(timezone.utc)
+    label = f"PostgreSQL-{uuid4().hex[:8]}"
     stack_one = TechStack(
-        name="PostgreSQL",
-        normalized_name="postgresql",
+        name=label,
+        normalized_name=label.lower(),
         created_at=now,
     )
     db_session.add(stack_one)
     await db_session.flush()
 
     stack_duplicate = TechStack(
-        name="POSTGRESQL",
-        normalized_name="postgresql",
+        name=label.upper(),
+        normalized_name=label.lower(),
         created_at=now,
     )
     with pytest.raises(IntegrityError):
@@ -120,9 +123,10 @@ async def test_tech_stack_normalized_name_unique_within_vocabulary(db_session):
 @pytest.mark.asyncio
 async def test_same_normalized_label_allowed_across_vocabularies(db_session):
     now = datetime.now(timezone.utc)
-    category = Category(name="AI", normalized_name="ai", created_at=now)
-    tag = Tag(name="AI", normalized_name="ai", created_at=now)
-    tech_stack = TechStack(name="AI", normalized_name="ai", created_at=now)
+    label = f"AI-{uuid4().hex[:8]}"
+    category = Category(name=label, normalized_name=label.lower(), created_at=now)
+    tag = Tag(name=label, normalized_name=label.lower(), created_at=now)
+    tech_stack = TechStack(name=label, normalized_name=label.lower(), created_at=now)
 
     db_session.add(category)
     db_session.add(tag)
@@ -140,7 +144,8 @@ async def test_project_category_join_enforces_unique_pair(db_session):
     user = await _seed_user(db_session, "taxonomy-pair-position@ufl.edu")
     project = await _seed_project(db_session, created_by_id=user.id)
 
-    category_one = Category(name="Web", normalized_name="web", created_at=now)
+    label = f"Web-{uuid4().hex[:8]}"
+    category_one = Category(name=label, normalized_name=label.lower(), created_at=now)
     db_session.add(category_one)
     await db_session.flush()
 
@@ -171,8 +176,10 @@ async def test_project_category_join_enforces_unique_position(db_session):
     user = await _seed_user(db_session, "taxonomy-position-only@ufl.edu")
     project = await _seed_project(db_session, created_by_id=user.id)
 
-    category_one = Category(name="Web", normalized_name="web", created_at=now)
-    category_two = Category(name="ML", normalized_name="ml", created_at=now)
+    l1 = f"Web-{uuid4().hex[:8]}"
+    l2 = f"ML-{uuid4().hex[:8]}"
+    category_one = Category(name=l1, normalized_name=l1.lower(), created_at=now)
+    category_two = Category(name=l2, normalized_name=l2.lower(), created_at=now)
     db_session.add(category_one)
     db_session.add(category_two)
     await db_session.flush()
@@ -206,12 +213,16 @@ async def test_project_tag_and_tech_stack_positions_represent_order(db_session):
     user = await _seed_user(db_session, "taxonomy-order@ufl.edu")
     project = await _seed_project(db_session, created_by_id=user.id)
 
-    tag_one = Tag(name="Backend", normalized_name="backend", created_at=now)
-    tag_two = Tag(name="Frontend", normalized_name="frontend", created_at=now)
-    stack_one = TechStack(name="FastAPI", normalized_name="fastapi", created_at=now)
+    l1 = f"Backend-{uuid4().hex[:8]}"
+    l2 = f"Frontend-{uuid4().hex[:8]}"
+    s1 = f"FastAPI-{uuid4().hex[:8]}"
+    s2 = f"PostgreSQL-{uuid4().hex[:8]}"
+    tag_one = Tag(name=l1, normalized_name=l1.lower(), created_at=now)
+    tag_two = Tag(name=l2, normalized_name=l2.lower(), created_at=now)
+    stack_one = TechStack(name=s1, normalized_name=s1.lower(), created_at=now)
     stack_two = TechStack(
-        name="PostgreSQL",
-        normalized_name="postgresql",
+        name=s2,
+        normalized_name=s2.lower(),
         created_at=now,
     )
     db_session.add(tag_one)
@@ -271,8 +282,11 @@ async def test_project_tag_join_enforces_unique_pair_and_position(db_session):
     user = await _seed_user(db_session, "taxonomy-tag-constraints@ufl.edu")
     project = await _seed_project(db_session, created_by_id=user.id)
 
-    tag_one = Tag(name="Backend", normalized_name="backend", created_at=now)
-    tag_two = Tag(name="Frontend", normalized_name="frontend", created_at=now)
+    unique = uuid4().hex[:8]
+    l1 = f"Backend-{unique}"
+    l2 = f"Frontend-{unique}"
+    tag_one = Tag(name=l1, normalized_name=l1.lower(), created_at=now)
+    tag_two = Tag(name=l2, normalized_name=l2.lower(), created_at=now)
     db_session.add(tag_one)
     db_session.add(tag_two)
     await db_session.flush()
@@ -313,10 +327,13 @@ async def test_project_tech_stack_join_enforces_unique_pair_and_position(db_sess
     user = await _seed_user(db_session, "taxonomy-tech-stack-constraints@ufl.edu")
     project = await _seed_project(db_session, created_by_id=user.id)
 
-    stack_one = TechStack(name="FastAPI", normalized_name="fastapi", created_at=now)
+    unique = uuid4().hex[:8]
+    l1 = f"FastAPI-{unique}"
+    l2 = f"PostgreSQL-{unique}"
+    stack_one = TechStack(name=l1, normalized_name=l1.lower(), created_at=now)
     stack_two = TechStack(
-        name="PostgreSQL",
-        normalized_name="postgresql",
+        name=l2,
+        normalized_name=l2.lower(),
         created_at=now,
     )
     db_session.add(stack_one)
@@ -361,11 +378,15 @@ async def test_project_tech_stack_join_enforces_unique_pair_and_position(db_sess
 @pytest.mark.asyncio
 async def test_join_tables_enforce_foreign_keys(db_session):
     now = datetime.now(timezone.utc)
-    user = await _seed_user(db_session, "taxonomy-fk@ufl.edu")
+    unique = uuid4().hex[:8]
+    user = await _seed_user(db_session, f"taxonomy-fk-{unique}@ufl.edu")
     project = await _seed_project(db_session, created_by_id=user.id)
-    category = Category(name="Web", normalized_name="web", created_at=now)
-    tag = Tag(name="Backend", normalized_name="backend", created_at=now)
-    stack = TechStack(name="FastAPI", normalized_name="fastapi", created_at=now)
+    l1 = f"Web-{unique}"
+    l2 = f"Backend-{unique}"
+    l3 = f"FastAPI-{unique}"
+    category = Category(name=l1, normalized_name=l1.lower(), created_at=now)
+    tag = Tag(name=l2, normalized_name=l2.lower(), created_at=now)
+    stack = TechStack(name=l3, normalized_name=l3.lower(), created_at=now)
     db_session.add(category)
     db_session.add(tag)
     db_session.add(stack)

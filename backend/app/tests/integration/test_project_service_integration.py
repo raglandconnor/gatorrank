@@ -87,9 +87,9 @@ async def _seed_vote(
 @pytest.mark.asyncio
 async def test_get_project_detail_visibility(db_session):
     now = datetime.now(timezone.utc)
-    owner = await _seed_user(db_session, "owner@ufl.edu", "Owner")
-    member = await _seed_user(db_session, "member@ufl.edu", "Member")
-    stranger = await _seed_user(db_session, "stranger@ufl.edu", "Stranger")
+    owner = await _seed_user(db_session, f"owner-{uuid4().hex[:8]}@ufl.edu", "Owner")
+    member = await _seed_user(db_session, f"member-{uuid4().hex[:8]}@ufl.edu", "Member")
+    stranger = await _seed_user(db_session, f"stranger-{uuid4().hex[:8]}@ufl.edu", "Stranger")
 
     published = await _seed_project(
         db_session,
@@ -131,12 +131,13 @@ async def test_get_project_detail_visibility(db_session):
 @pytest.mark.asyncio
 async def test_list_projects_top_sort_and_published_filter(db_session):
     now = datetime.now(timezone.utc)
-    owner = await _seed_user(db_session, "owner2@ufl.edu", "Owner2")
+    suffix = uuid4().hex[:8]
+    owner = await _seed_user(db_session, f"owner2-{suffix}@ufl.edu", "Owner2")
 
     p1 = await _seed_project(
         db_session,
         created_by_id=owner.id,
-        title="Top 1",
+        title=f"Top 1 {suffix}",
         vote_count=100,
         is_published=True,
         created_at=now - timedelta(hours=1),
@@ -144,7 +145,7 @@ async def test_list_projects_top_sort_and_published_filter(db_session):
     p2 = await _seed_project(
         db_session,
         created_by_id=owner.id,
-        title="Top 2",
+        title=f"Top 2 {suffix}",
         vote_count=90,
         is_published=True,
         created_at=now - timedelta(hours=2),
@@ -159,7 +160,8 @@ async def test_list_projects_top_sort_and_published_filter(db_session):
     )
 
     service = ProjectService(db_session)
-    result = await service.list_projects(sort="top", limit=10)
+    # Isolate by created_by_id to avoid noise from other tests in shared DB
+    result = await service.list_projects(sort="top", limit=10, created_by_id=owner.id)
 
     assert [item.id for item in result.items] == [p1.id, p2.id]
 
@@ -169,7 +171,7 @@ async def test_list_projects_top_default_window_excludes_old_published_projects(
     db_session,
 ):
     now = datetime.now(timezone.utc)
-    owner = await _seed_user(db_session, "owner-window@ufl.edu", "Owner Window")
+    owner = await _seed_user(db_session, f"owner-window-{uuid4().hex[:8]}@ufl.edu", "Owner Window")
 
     recent = await _seed_project(
         db_session,
@@ -189,7 +191,7 @@ async def test_list_projects_top_default_window_excludes_old_published_projects(
     )
 
     service = ProjectService(db_session)
-    result = await service.list_projects(sort="top", limit=10)
+    result = await service.list_projects(sort="top", limit=10, created_by_id=owner.id)
 
     assert [item.id for item in result.items] == [recent.id]
 
@@ -204,8 +206,8 @@ async def test_get_project_detail_returns_none_for_missing_project(db_session):
 @pytest.mark.asyncio
 async def test_get_project_detail_sets_viewer_has_voted(db_session):
     now = datetime.now(timezone.utc)
-    owner = await _seed_user(db_session, "owner-voted-detail@ufl.edu", "Owner")
-    voter = await _seed_user(db_session, "voter-voted-detail@ufl.edu", "Voter")
+    owner = await _seed_user(db_session, f"owner-voted-detail-{uuid4().hex[:8]}@ufl.edu", "Owner")
+    voter = await _seed_user(db_session, f"voter-voted-detail-{uuid4().hex[:8]}@ufl.edu", "Voter")
     project = await _seed_project(
         db_session,
         created_by_id=owner.id,
@@ -231,12 +233,13 @@ async def test_get_project_detail_sets_viewer_has_voted(db_session):
 @pytest.mark.asyncio
 async def test_list_projects_top_sort_tiebreakers(db_session):
     now = datetime.now(timezone.utc)
-    owner = await _seed_user(db_session, "owner4@ufl.edu", "Owner4")
+    owner = await _seed_user(db_session, f"owner4-{uuid4().hex[:8]}@ufl.edu", "Owner4")
 
+    suffix = uuid4().hex[:8]
     newest = await _seed_project(
         db_session,
         created_by_id=owner.id,
-        title="Tie Newest",
+        title=f"Tie Newest {suffix}",
         vote_count=42,
         is_published=True,
         created_at=now,
@@ -244,14 +247,14 @@ async def test_list_projects_top_sort_tiebreakers(db_session):
     older = await _seed_project(
         db_session,
         created_by_id=owner.id,
-        title="Tie Older",
+        title=f"Tie Older {suffix}",
         vote_count=42,
         is_published=True,
         created_at=now - timedelta(minutes=5),
     )
 
     service = ProjectService(db_session)
-    result = await service.list_projects(sort="top", limit=10)
+    result = await service.list_projects(sort="top", limit=10, created_by_id=owner.id)
 
     assert [item.id for item in result.items][:2] == [newest.id, older.id]
 
@@ -259,12 +262,13 @@ async def test_list_projects_top_sort_tiebreakers(db_session):
 @pytest.mark.asyncio
 async def test_list_projects_new_sort_cursor_pagination(db_session):
     now = datetime.now(timezone.utc)
-    owner = await _seed_user(db_session, "owner3@ufl.edu", "Owner3")
+    owner = await _seed_user(db_session, f"owner3-{uuid4().hex[:8]}@ufl.edu", "Owner3")
 
+    suffix = uuid4().hex[:8]
     newest = await _seed_project(
         db_session,
         created_by_id=owner.id,
-        title="Newest",
+        title=f"Newest {suffix}",
         vote_count=1,
         is_published=True,
         created_at=now,
@@ -272,7 +276,7 @@ async def test_list_projects_new_sort_cursor_pagination(db_session):
     middle = await _seed_project(
         db_session,
         created_by_id=owner.id,
-        title="Middle",
+        title=f"Middle {suffix}",
         vote_count=1,
         is_published=True,
         created_at=now - timedelta(minutes=1),
@@ -280,7 +284,7 @@ async def test_list_projects_new_sort_cursor_pagination(db_session):
     oldest = await _seed_project(
         db_session,
         created_by_id=owner.id,
-        title="Oldest",
+        title=f"Oldest {suffix}",
         vote_count=1,
         is_published=True,
         created_at=now - timedelta(minutes=2),
@@ -288,12 +292,12 @@ async def test_list_projects_new_sort_cursor_pagination(db_session):
 
     service = ProjectService(db_session)
 
-    page_one = await service.list_projects(sort="new", limit=2)
+    page_one = await service.list_projects(sort="new", limit=2, created_by_id=owner.id)
     assert [item.id for item in page_one.items] == [newest.id, middle.id]
     assert page_one.next_cursor is not None
 
     page_two = await service.list_projects(
-        sort="new", limit=2, cursor=page_one.next_cursor
+        sort="new", limit=2, cursor=page_one.next_cursor, created_by_id=owner.id
     )
     assert [item.id for item in page_two.items] == [oldest.id]
     assert page_two.next_cursor is None
@@ -302,13 +306,13 @@ async def test_list_projects_new_sort_cursor_pagination(db_session):
 @pytest.mark.asyncio
 async def test_list_projects_sets_viewer_has_voted_for_authenticated_user(db_session):
     now = datetime.now(timezone.utc)
-    owner = await _seed_user(db_session, "owner-vote-list@ufl.edu", "Owner")
-    voter = await _seed_user(db_session, "voter-vote-list@ufl.edu", "Voter")
+    owner = await _seed_user(db_session, f"owner-vote-list-{uuid4().hex[:8]}@ufl.edu", "Owner")
+    voter = await _seed_user(db_session, f"voter-vote-list-{uuid4().hex[:8]}@ufl.edu", "Voter")
 
     voted_project = await _seed_project(
         db_session,
         created_by_id=owner.id,
-        title="Voted Project",
+        title=f"Voted Project {uuid4().hex[:8]}",
         vote_count=1,
         is_published=True,
         created_at=now,
@@ -316,7 +320,7 @@ async def test_list_projects_sets_viewer_has_voted_for_authenticated_user(db_ses
     unvoted_project = await _seed_project(
         db_session,
         created_by_id=owner.id,
-        title="Unvoted Project",
+        title=f"Unvoted Project {uuid4().hex[:8]}",
         vote_count=0,
         is_published=True,
         created_at=now - timedelta(minutes=1),
@@ -333,6 +337,7 @@ async def test_list_projects_sets_viewer_has_voted_for_authenticated_user(db_ses
         sort="new",
         limit=10,
         current_user_id=voter.id,
+        created_by_id=owner.id,
     )
 
     by_id = {item.id: item for item in result.items}
@@ -343,9 +348,9 @@ async def test_list_projects_sets_viewer_has_voted_for_authenticated_user(db_ses
 @pytest.mark.asyncio
 async def test_members_included_and_ordered_for_list_and_detail(db_session):
     now = datetime.now(timezone.utc)
-    owner = await _seed_user(db_session, "owner5@ufl.edu", "Owner5")
-    member_a = await _seed_user(db_session, "membera@ufl.edu", "Member A")
-    member_b = await _seed_user(db_session, "memberb@ufl.edu", "Member B")
+    owner = await _seed_user(db_session, f"owner5-{uuid4().hex[:8]}@ufl.edu", "Owner5")
+    member_a = await _seed_user(db_session, f"membera-{uuid4().hex[:8]}@ufl.edu", "Member A")
+    member_b = await _seed_user(db_session, f"memberb-{uuid4().hex[:8]}@ufl.edu", "Member B")
 
     project = await _seed_project(
         db_session,
@@ -389,7 +394,7 @@ async def test_members_included_and_ordered_for_list_and_detail(db_session):
 async def test_create_project_creates_draft_and_owner_membership_and_returns_detail(
     db_session,
 ):
-    creator = await _seed_user(db_session, "creator@ufl.edu", "Creator")
+    creator = await _seed_user(db_session, f"creator-{uuid4().hex[:8]}@ufl.edu", "Creator")
     service = ProjectService(db_session)
     payload = ProjectCreateRequest(
         title="  Build GatorRank  ",
@@ -433,7 +438,7 @@ async def test_create_project_creates_draft_and_owner_membership_and_returns_det
 async def test_create_project_generates_transliterated_slug_and_collision_suffix(
     db_session,
 ):
-    creator = await _seed_user(db_session, "slug-creator@ufl.edu", "Slug Creator")
+    creator = await _seed_user(db_session, f"slug-creator-{uuid4().hex[:8]}@ufl.edu", "Slug Creator")
     service = ProjectService(db_session)
 
     first = await service.create_project(
@@ -487,7 +492,7 @@ async def test_create_project_slug_fallback_for_empty_normalized_base(db_session
 
 @pytest.mark.asyncio
 async def test_get_project_detail_by_slug_resolves_existing_project(db_session):
-    creator = await _seed_user(db_session, "slug-detail-owner@ufl.edu", "Slug Owner")
+    creator = await _seed_user(db_session, f"slug-detail-owner-{uuid4().hex[:8]}@ufl.edu", "Slug Owner")
     service = ProjectService(db_session)
     created = await service.create_project(
         created_by_id=creator.id,
@@ -508,7 +513,7 @@ async def test_get_project_detail_by_slug_resolves_existing_project(db_session):
 async def test_create_project_defaults_group_flag_and_persists_optional_urls(
     db_session,
 ):
-    creator = await _seed_user(db_session, "creator2@ufl.edu", "Creator Two")
+    creator = await _seed_user(db_session, f"creator2-{uuid4().hex[:8]}@ufl.edu", "Creator Two")
     service = ProjectService(db_session)
     payload = ProjectCreateRequest(
         title="Project URLs",
@@ -536,7 +541,7 @@ async def test_create_project_defaults_group_flag_and_persists_optional_urls(
 
 @pytest.mark.asyncio
 async def test_create_project_normalizes_empty_optional_urls_to_none(db_session):
-    creator = await _seed_user(db_session, "creator3@ufl.edu", "Creator Three")
+    creator = await _seed_user(db_session, f"creator3-{uuid4().hex[:8]}@ufl.edu", "Creator Three")
     service = ProjectService(db_session)
     payload = ProjectCreateRequest(
         title="Project Normalize",
@@ -563,7 +568,7 @@ async def test_create_project_normalizes_empty_optional_urls_to_none(db_session)
 
 @pytest.mark.asyncio
 async def test_create_project_rolls_back_when_commit_fails(db_session, monkeypatch):
-    creator = await _seed_user(db_session, "creator4@ufl.edu", "Creator Four")
+    creator = await _seed_user(db_session, f"creator4-{uuid4().hex[:8]}@ufl.edu", "Creator Four")
     service = ProjectService(db_session)
     payload = ProjectCreateRequest(
         title="Rollback Project",
@@ -646,7 +651,7 @@ async def test_create_project_rolls_back_taxonomy_term_when_assignment_fails(
 @pytest.mark.asyncio
 async def test_update_project_owner_can_edit_published_project(db_session):
     now = datetime.now(timezone.utc)
-    owner = await _seed_user(db_session, "owner-update@ufl.edu", "Owner Update")
+    owner = await _seed_user(db_session, f"owner-update-{uuid4().hex[:8]}@ufl.edu", "Owner Update")
     project = await _seed_project(
         db_session,
         created_by_id=owner.id,
@@ -692,7 +697,7 @@ async def test_update_project_owner_can_edit_published_project(db_session):
 @pytest.mark.asyncio
 async def test_update_project_rejects_non_owner(db_session):
     now = datetime.now(timezone.utc)
-    owner = await _seed_user(db_session, "owner-update-2@ufl.edu", "Owner Update 2")
+    owner = await _seed_user(db_session, f"owner-update-2-{uuid4().hex[:8]}@ufl.edu", "Owner Update 2")
     maintainer = await _seed_user(
         db_session, "maintainer-update@ufl.edu", "Maintainer Update"
     )
@@ -726,7 +731,7 @@ async def test_update_project_rejects_non_owner(db_session):
 @pytest.mark.asyncio
 async def test_update_project_requires_at_least_one_resulting_url(db_session):
     now = datetime.now(timezone.utc)
-    owner = await _seed_user(db_session, "owner-update-3@ufl.edu", "Owner Update 3")
+    owner = await _seed_user(db_session, f"owner-update-3-{uuid4().hex[:8]}@ufl.edu", "Owner Update 3")
     project = await _seed_project(
         db_session,
         created_by_id=owner.id,
@@ -827,7 +832,7 @@ async def test_update_project_allows_clearing_timeline_end_for_in_progress(db_se
 @pytest.mark.asyncio
 async def test_update_project_returns_none_when_project_missing(db_session):
     service = ProjectService(db_session)
-    owner = await _seed_user(db_session, "owner-update-4@ufl.edu", "Owner Update 4")
+    owner = await _seed_user(db_session, f"owner-update-4-{uuid4().hex[:8]}@ufl.edu", "Owner Update 4")
     payload = ProjectUpdateRequest(title="No Project")
 
     updated = await service.update_project(
@@ -880,7 +885,7 @@ async def test_update_project_rolls_back_when_commit_fails(db_session, monkeypat
 @pytest.mark.asyncio
 async def test_publish_project_owner_can_publish_and_is_idempotent(db_session):
     now = datetime.now(timezone.utc)
-    owner = await _seed_user(db_session, "owner-publish@ufl.edu", "Owner Publish")
+    owner = await _seed_user(db_session, f"owner-publish-{uuid4().hex[:8]}@ufl.edu", "Owner Publish")
     project = await _seed_project(
         db_session,
         created_by_id=owner.id,
@@ -918,7 +923,7 @@ async def test_publish_project_owner_can_publish_and_is_idempotent(db_session):
 @pytest.mark.asyncio
 async def test_publish_project_rejects_non_owner(db_session):
     now = datetime.now(timezone.utc)
-    owner = await _seed_user(db_session, "owner-publish-2@ufl.edu", "Owner Publish 2")
+    owner = await _seed_user(db_session, f"owner-publish-2-{uuid4().hex[:8]}@ufl.edu", "Owner Publish 2")
     maintainer = await _seed_user(
         db_session, "maintainer-publish@ufl.edu", "Maintainer Publish"
     )
@@ -948,7 +953,7 @@ async def test_publish_project_rejects_non_owner(db_session):
 @pytest.mark.asyncio
 async def test_unpublish_project_owner_can_unpublish_and_is_idempotent(db_session):
     now = datetime.now(timezone.utc)
-    owner = await _seed_user(db_session, "owner-unpublish@ufl.edu", "Owner Unpublish")
+    owner = await _seed_user(db_session, f"owner-unpublish-{uuid4().hex[:8]}@ufl.edu", "Owner Unpublish")
     project = await _seed_project(
         db_session,
         created_by_id=owner.id,
@@ -1176,7 +1181,7 @@ async def test_soft_delete_project_marks_deleted_and_hides_detail_and_listings(
     db_session,
 ):
     now = datetime.now(timezone.utc)
-    owner = await _seed_user(db_session, "owner-soft-delete@ufl.edu", "Owner Delete")
+    owner = await _seed_user(db_session, f"owner-soft-delete-{uuid4().hex[:8]}@ufl.edu", "Owner Delete")
     project = await _seed_project(
         db_session,
         created_by_id=owner.id,
@@ -1201,7 +1206,9 @@ async def test_soft_delete_project_marks_deleted_and_hides_detail_and_listings(
 
     assert await service.get_project_detail(project.id, None) is None
 
-    listing = await service.list_projects(sort="new", limit=10)
+    listing = await service.list_projects(
+        sort="new", limit=10, created_by_id=owner.id
+    )
     assert [item.id for item in listing.items] == []
 
 
