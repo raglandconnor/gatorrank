@@ -41,7 +41,7 @@ async def _seed_project(
     project = Project(
         created_by_id=created_by_id,
         title=title,
-        slug=title.lower().replace(" ", "-"),
+        slug=f"{title.lower().replace(' ', '-')}-{uuid4().hex[:8]}",
         short_description=f"{title} description",
         is_group_project=False,
         is_published=is_published,
