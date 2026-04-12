@@ -6,10 +6,8 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.api.deps.auth import get_current_user
 from app.api.deps.auth import get_current_user_optional
-from app.api.deps.policy import require_policy
 from app.db.database import get_db
 from app.models.user import User
-from app.policy.roles import require_comment_moderation
 from app.schemas.comment import (
     CommentCreateRequest,
     CommentModerationRequest,
@@ -209,16 +207,17 @@ async def moderate_comment(
     db: AsyncSession = Depends(get_db),
 ) -> Response:
     """Hide or restore a comment through the admin moderation policy."""
-    require_policy(
-        lambda: require_comment_moderation(current_user),
-        detail="Comment moderation forbidden",
-    )
     service = CommentService(db)
     try:
         await service.moderate_comment(
             comment_id=comment_id,
             moderation_state=payload.moderation_state,
+            principal=current_user,
         )
+    except CommentForbiddenError as exc:
+        raise HTTPException(
+            status_code=403, detail="Comment moderation forbidden"
+        ) from exc
     except CommentNotFoundError as exc:
         raise HTTPException(status_code=404, detail="Comment not found") from exc
     return Response(status_code=status.HTTP_204_NO_CONTENT)
@@ -244,13 +243,16 @@ async def moderator_delete_comment(
     db: AsyncSession = Depends(get_db),
 ) -> Response:
     """Soft-delete any comment through the admin moderation policy."""
-    require_policy(
-        lambda: require_comment_moderation(current_user),
-        detail="Comment moderation forbidden",
-    )
     service = CommentService(db)
     try:
-        await service.moderator_delete_comment(comment_id=comment_id)
+        await service.moderator_delete_comment(
+            comment_id=comment_id,
+            principal=current_user,
+        )
+    except CommentForbiddenError as exc:
+        raise HTTPException(
+            status_code=403, detail="Comment moderation forbidden"
+        ) from exc
     except CommentNotFoundError as exc:
         raise HTTPException(status_code=404, detail="Comment not found") from exc
     return Response(status_code=status.HTTP_204_NO_CONTENT)

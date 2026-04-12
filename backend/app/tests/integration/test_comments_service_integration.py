@@ -257,10 +257,11 @@ async def test_comment_mutations_reject_unpublished_project_comments(
         await service.moderate_comment(
             comment_id=comment.id,
             moderation_state="hidden",
+            principal=owner,
         )
 
     with pytest.raises(CommentNotFoundError, match="Comment not found"):
-        await service.moderator_delete_comment(comment_id=comment.id)
+        await service.moderator_delete_comment(comment_id=comment.id, principal=owner)
 
 
 @pytest.mark.asyncio
@@ -290,10 +291,55 @@ async def test_comment_mutations_reject_deleted_project_comments(
         await service.moderate_comment(
             comment_id=comment.id,
             moderation_state="hidden",
+            principal=owner,
         )
 
     with pytest.raises(CommentNotFoundError, match="Comment not found"):
-        await service.moderator_delete_comment(comment_id=comment.id)
+        await service.moderator_delete_comment(comment_id=comment.id, principal=owner)
+
+
+@pytest.mark.asyncio
+async def test_service_level_moderation_requires_admin_principal(
+    db_session: AsyncSession,
+):
+    unique = uuid4().hex[:8]
+    owner = await _seed_user(db_session, f"svc-mod-owner-{unique}@ufl.edu", "Owner")
+    student = await _seed_user(
+        db_session, f"svc-mod-student-{unique}@ufl.edu", "Student"
+    )
+    admin = await _seed_user(db_session, f"svc-mod-admin-{unique}@ufl.edu", "Admin")
+    admin.role = "admin"
+    project = await _seed_project(
+        db_session, created_by_id=owner.id, title="Svc Moderation Policy"
+    )
+    comment = await _seed_comment(
+        db_session,
+        project_id=project.id,
+        author_id=owner.id,
+        body="moderate me",
+    )
+    await db_session.commit()
+
+    service = CommentService(db_session)
+
+    with pytest.raises(CommentForbiddenError, match="Comment moderation forbidden"):
+        await service.moderate_comment(
+            comment_id=comment.id,
+            moderation_state="hidden",
+            principal=student,
+        )
+
+    await service.moderate_comment(
+        comment_id=comment.id,
+        moderation_state="hidden",
+        principal=admin,
+    )
+    await service.moderator_delete_comment(comment_id=comment.id, principal=admin)
+
+    refreshed_comment = await db_session.get(Comment, comment.id)
+    assert refreshed_comment is not None
+    assert refreshed_comment.moderation_state == "hidden"
+    assert refreshed_comment.deleted_at is not None
 
 
 @pytest.mark.asyncio

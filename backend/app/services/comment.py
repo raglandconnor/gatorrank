@@ -9,6 +9,7 @@ from app.models.comment import Comment
 from app.models.comment_like import CommentLike
 from app.models.project import Project
 from app.models.user import User
+from app.policy.roles import PolicyDeniedError, require_comment_moderation
 from app.schemas.comment import CommentCreateRequest, CommentResponse
 
 COMMENT_LIST_HARD_CAP = 100
@@ -174,7 +175,9 @@ class CommentService:
         *,
         comment_id: UUID,
         moderation_state: str,
+        principal: User | None,
     ) -> None:
+        self._require_moderation_principal(principal)
         comment = await get_public_comment_for_mutation(
             self.db,
             comment_id=comment_id,
@@ -189,7 +192,13 @@ class CommentService:
             await self.db.rollback()
             raise
 
-    async def moderator_delete_comment(self, *, comment_id: UUID) -> None:
+    async def moderator_delete_comment(
+        self,
+        *,
+        comment_id: UUID,
+        principal: User | None,
+    ) -> None:
+        self._require_moderation_principal(principal)
         comment = await get_public_comment_for_mutation(
             self.db,
             comment_id=comment_id,
@@ -216,6 +225,13 @@ class CommentService:
         result = await self.db.exec(statement)
         if result.one_or_none() is None:
             raise CommentProjectNotFoundError("Project not found")
+
+    @staticmethod
+    def _require_moderation_principal(principal: User | None) -> None:
+        try:
+            require_comment_moderation(principal)
+        except PolicyDeniedError as exc:
+            raise CommentForbiddenError("Comment moderation forbidden") from exc
 
 
 async def get_public_comment_for_mutation(
