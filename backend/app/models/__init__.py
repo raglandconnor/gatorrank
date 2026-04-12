@@ -1,4 +1,10 @@
 from app.models.auth import RefreshSession
+from app.models.comment import (
+    COMMENT_MODERATION_HIDDEN,
+    COMMENT_MODERATION_STATES,
+    COMMENT_MODERATION_VISIBLE,
+    Comment,
+)
 from app.models.user import User
 from app.models.user_roles import (
     USER_ROLE_ADMIN,
@@ -34,6 +40,10 @@ __all__ = [
     "is_user_role",
     "cast_user_role",
     "RefreshSession",
+    "Comment",
+    "COMMENT_MODERATION_VISIBLE",
+    "COMMENT_MODERATION_HIDDEN",
+    "COMMENT_MODERATION_STATES",
     "Project",
     "ProjectMember",
     "Vote",
