@@ -148,7 +148,7 @@ describe('ProjectSearchPage', () => {
     renderWithChakra(<ProjectSearchPage />);
 
     await screen.findByText('AI Helper');
-    fireEvent.click(screen.getByRole('button', { name: 'New' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Newest' }));
 
     expect(pushMock).toHaveBeenCalledWith('/projects/search?q=ai&sort=new');
   });
