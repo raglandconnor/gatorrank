@@ -5,12 +5,13 @@ from uuid import uuid4
 
 import pytest
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import StatementError
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.models.comment import (
-    COMMENT_MODERATION_HIDDEN,
     COMMENT_MODERATION_VISIBLE,
+    CommentModerationState,
     Comment,
 )
 from app.models.project import Project
@@ -108,13 +109,13 @@ async def test_moderation_state_persists(db_session: AsyncSession):
     db_session.add(comment)
     await db_session.commit()
 
-    comment.moderation_state = COMMENT_MODERATION_HIDDEN
+    comment.moderation_state = CommentModerationState.HIDDEN
     db_session.add(comment)
     await db_session.commit()
 
     fetched = await db_session.get(Comment, comment.id)
     assert fetched is not None
-    assert fetched.moderation_state == COMMENT_MODERATION_HIDDEN
+    assert fetched.moderation_state == CommentModerationState.HIDDEN
 
 
 @pytest.mark.asyncio
@@ -186,3 +187,23 @@ async def test_comments_can_be_filtered_by_project_id(db_session: AsyncSession):
     ids = [comment.id for comment in project_a_comments]
     assert comment_a.id in ids
     assert comment_b.id not in ids
+
+
+@pytest.mark.asyncio
+async def test_comment_moderation_state_rejects_invalid_values(
+    db_session: AsyncSession,
+):
+    user = await _seed_user(db_session)
+    project = await _seed_project(db_session, user.id)
+
+    comment = Comment(  # pyright: ignore[reportCallIssue]
+        project_id=project.id,
+        author_id=user.id,
+        body="Invalid moderation state",
+        moderation_state="shadow",  # pyright: ignore[reportArgumentType]
+    )
+    db_session.add(comment)
+
+    with pytest.raises((ValueError, StatementError)):
+        await db_session.commit()
+    await db_session.rollback()

@@ -3,10 +3,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from app.models.comment import (
-    COMMENT_MODERATION_HIDDEN,
-    COMMENT_MODERATION_VISIBLE,
-)
+from app.models.comment import COMMENT_MODERATION_HIDDEN, CommentModerationState
 
 COMMENT_PLACEHOLDER_DELETED = "[This comment was deleted by its author.]"
 COMMENT_PLACEHOLDER_HIDDEN = "[This comment was hidden by a moderator.]"
@@ -44,7 +41,7 @@ class CommentResponse(BaseModel):
     project_id: UUID
     author: CommentAuthorResponse
     body: str
-    moderation_state: str
+    moderation_state: CommentModerationState
     is_deleted: bool
     is_hidden: bool
     like_count: int = 0
@@ -99,18 +96,10 @@ class CommentResponse(BaseModel):
 class CommentModerationRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    moderation_state: str = Field(
+    moderation_state: CommentModerationState = Field(
         ...,
         description=(
             "Comment moderation state. `visible` restores normal rendering and "
             "`hidden` returns a moderator placeholder in comment lists."
         ),
     )
-
-    @field_validator("moderation_state")
-    @classmethod
-    def _validate_state(cls, value: str) -> str:
-        normalized = value.strip().lower()
-        if normalized not in {COMMENT_MODERATION_VISIBLE, COMMENT_MODERATION_HIDDEN}:
-            raise ValueError("moderation_state must be one of: visible, hidden")
-        return normalized

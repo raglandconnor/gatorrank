@@ -1,7 +1,9 @@
 from uuid import uuid4
 
 from app.models.comment import (
+    COMMENT_MODERATION_ENUM_NAME,
     COMMENT_MODERATION_VISIBLE,
+    CommentModerationState,
     Comment,
 )
 
@@ -32,7 +34,11 @@ def test_comment_schema_constraints_and_indexes():
     assert table.c.parent_comment_id.nullable is True
     assert table.c.body.nullable is False
     assert table.c.moderation_state.nullable is False
-    assert table.c.moderation_state.type.length == 32
+    assert table.c.moderation_state.type.name == COMMENT_MODERATION_ENUM_NAME
+    assert list(table.c.moderation_state.type.enums) == [
+        CommentModerationState.VISIBLE.value,
+        CommentModerationState.HIDDEN.value,
+    ]
     assert table.c.deleted_at.nullable is True
 
     index_names = {index.name for index in table.indexes}

@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 from uuid import uuid4
 
-from app.models.comment import COMMENT_MODERATION_HIDDEN, Comment
+from app.models.comment import Comment, CommentModerationState
 from app.schemas.comment import (
     COMMENT_PLACEHOLDER_DELETED,
     COMMENT_PLACEHOLDER_HIDDEN,
@@ -10,7 +10,9 @@ from app.schemas.comment import (
 
 
 def _build_comment(
-    *, moderation_state: str = "visible", deleted: bool = False
+    *,
+    moderation_state: CommentModerationState = CommentModerationState.VISIBLE,
+    deleted: bool = False,
 ) -> Comment:
     now = datetime.now(timezone.utc)
     return Comment(
@@ -41,7 +43,7 @@ def test_comment_response_masks_body_if_deleted():
 
 
 def test_comment_response_masks_body_if_hidden():
-    comment = _build_comment(moderation_state=COMMENT_MODERATION_HIDDEN)
+    comment = _build_comment(moderation_state=CommentModerationState.HIDDEN)
 
     response = CommentResponse.from_record(
         comment=comment,

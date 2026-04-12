@@ -1,11 +1,20 @@
 from datetime import datetime
+from enum import Enum
 from uuid import UUID, uuid4
 
 import sqlalchemy as sa
 from sqlmodel import Field, SQLModel
 
-COMMENT_MODERATION_VISIBLE = "visible"
-COMMENT_MODERATION_HIDDEN = "hidden"
+COMMENT_MODERATION_ENUM_NAME = "comment_moderation_state"
+
+
+class CommentModerationState(str, Enum):
+    VISIBLE = "visible"
+    HIDDEN = "hidden"
+
+
+COMMENT_MODERATION_VISIBLE = CommentModerationState.VISIBLE.value
+COMMENT_MODERATION_HIDDEN = CommentModerationState.HIDDEN.value
 COMMENT_MODERATION_STATES = {
     COMMENT_MODERATION_VISIBLE,
     COMMENT_MODERATION_HIDDEN,
@@ -30,10 +39,17 @@ class Comment(SQLModel, table=True):
         ),
     )
     body: str = Field(sa_column=sa.Column(sa.Text(), nullable=False))
-    moderation_state: str = Field(
-        default=COMMENT_MODERATION_VISIBLE,
+    moderation_state: CommentModerationState = Field(
+        default=CommentModerationState.VISIBLE,
         sa_column=sa.Column(
-            sa.String(length=32),
+            sa.Enum(
+                CommentModerationState,
+                name=COMMENT_MODERATION_ENUM_NAME,
+                native_enum=False,
+                create_constraint=True,
+                validate_strings=True,
+                values_callable=lambda enum_cls: [member.value for member in enum_cls],
+            ),
             nullable=False,
             server_default=COMMENT_MODERATION_VISIBLE,
         ),
