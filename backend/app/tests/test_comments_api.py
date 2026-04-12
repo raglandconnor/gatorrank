@@ -103,3 +103,25 @@ def test_comments_like_openapi_metadata_is_present():
     assert unlike_operation["summary"] == "Unlike a comment"
     assert unlike_operation["description"]
     assert {"204", "401", "404"}.issubset(unlike_operation["responses"].keys())
+
+    list_operation = paths["/api/v1/projects/{project_id}/comments"]["get"]
+    assert list_operation["summary"] == "List project comments"
+    assert list_operation["description"]
+    assert "404" in list_operation["responses"]
+
+    create_operation = paths["/api/v1/projects/{project_id}/comments"]["post"]
+    assert create_operation["summary"] == "Create project comment"
+    assert create_operation["description"]
+    assert {"201", "401", "404", "422"}.issubset(create_operation["responses"].keys())
+
+    delete_operation = paths["/api/v1/comments/{comment_id}"]["delete"]
+    assert delete_operation["summary"] == "Delete own comment"
+    assert delete_operation["description"]
+    assert {"204", "401", "403", "404"}.issubset(delete_operation["responses"].keys())
+
+    moderate_operation = paths["/api/v1/comments/{comment_id}/moderation"]["patch"]
+    assert moderate_operation["summary"] == "Update comment moderation state"
+    assert moderate_operation["description"]
+    assert {"204", "401", "403", "404", "422"}.issubset(
+        moderate_operation["responses"].keys()
+    )

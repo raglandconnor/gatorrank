@@ -7,10 +7,7 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.models.comment import Comment
 from app.models.comment_like import CommentLike
-
-
-class CommentNotFoundError(LookupError):
-    """Raised when the target comment does not exist or is unavailable."""
+from app.services.comment import CommentNotFoundError
 
 
 class CommentLikeService:

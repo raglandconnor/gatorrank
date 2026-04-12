@@ -4,7 +4,7 @@ from uuid import uuid4
 
 import pytest
 from sqlalchemy.ext.asyncio import AsyncEngine
-from sqlmodel import select
+from sqlmodel import delete, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.models.comment import Comment
@@ -78,7 +78,9 @@ async def test_add_like_creates_like(db_session):
     unique = uuid4().hex[:8]
     owner = await _seed_user(db_session, f"like-owner-{unique}@ufl.edu", "Owner")
     liker = await _seed_user(db_session, f"like-liker-{unique}@ufl.edu", "Liker")
-    project = await _seed_project(db_session, created_by_id=owner.id, title="Like Target")
+    project = await _seed_project(
+        db_session, created_by_id=owner.id, title="Like Target"
+    )
     comment = await _seed_comment(
         db_session, project_id=project.id, author_id=owner.id, body="test comment"
     )
@@ -141,7 +143,9 @@ async def test_remove_like_is_idempotent(db_session):
 
 @pytest.mark.asyncio
 async def test_add_like_missing_comment_raises_not_found(db_session):
-    user = await _seed_user(db_session, f"like-missing-{uuid4().hex[:8]}@ufl.edu", "Liker")
+    user = await _seed_user(
+        db_session, f"like-missing-{uuid4().hex[:8]}@ufl.edu", "Liker"
+    )
 
     service = CommentLikeService(db_session)
     with pytest.raises(CommentNotFoundError, match="Comment not found"):
@@ -151,81 +155,139 @@ async def test_add_like_missing_comment_raises_not_found(db_session):
 @pytest.mark.asyncio
 async def test_add_like_concurrent_duplicate_requests(async_engine: AsyncEngine):
     unique = uuid4().hex[:8]
-
-    async with AsyncSession(async_engine, expire_on_commit=False) as seed_session:
-        owner = await _seed_user(seed_session, f"like-owner-race-{unique}@ufl.edu", "Owner")
-        liker = await _seed_user(seed_session, f"like-liker-race-{unique}@ufl.edu", "Liker")
-        project = await _seed_project(
-            seed_session,
-            created_by_id=owner.id,
-            title=f"Like Race {unique}",
-        )
-        comment = await _seed_comment(
-            seed_session,
-            project_id=project.id,
-            author_id=owner.id,
-            body="race testing",
-        )
-        await seed_session.commit()
-
-    async def attempt_like() -> bool:
-        async with AsyncSession(async_engine, expire_on_commit=False) as session:
-            service = CommentLikeService(session)
-            return await service.add_like(comment_id=comment.id, user_id=liker.id)
-
-    first, second = await asyncio.gather(attempt_like(), attempt_like())
-    assert sorted([first, second]) == [False, True]
-
-    async with AsyncSession(async_engine, expire_on_commit=False) as verify_session:
-        likes_result = await verify_session.exec(
-            select(CommentLike).where(
-                CommentLike.comment_id == comment.id,
-                CommentLike.user_id == liker.id,
+    owner_id = None
+    liker_id = None
+    project_id = None
+    comment_id = None
+    try:
+        async with AsyncSession(async_engine, expire_on_commit=False) as seed_session:
+            owner = await _seed_user(
+                seed_session, f"like-owner-race-{unique}@ufl.edu", "Owner"
             )
-        )
-        all_likes = likes_result.all()
-        assert len(all_likes) == 1
+            liker = await _seed_user(
+                seed_session, f"like-liker-race-{unique}@ufl.edu", "Liker"
+            )
+            project = await _seed_project(
+                seed_session,
+                created_by_id=owner.id,
+                title=f"Like Race {unique}",
+            )
+            comment = await _seed_comment(
+                seed_session,
+                project_id=project.id,
+                author_id=owner.id,
+                body="race testing",
+            )
+            await seed_session.commit()
+            owner_id = owner.id
+            liker_id = liker.id
+            project_id = project.id
+            comment_id = comment.id
+
+        async def attempt_like() -> bool:
+            async with AsyncSession(async_engine, expire_on_commit=False) as session:
+                service = CommentLikeService(session)
+                return await service.add_like(comment_id=comment_id, user_id=liker_id)
+
+        first, second = await asyncio.gather(attempt_like(), attempt_like())
+        assert sorted([first, second]) == [False, True]
+
+        async with AsyncSession(async_engine, expire_on_commit=False) as verify_session:
+            likes_result = await verify_session.exec(
+                select(CommentLike).where(
+                    CommentLike.comment_id == comment_id,
+                    CommentLike.user_id == liker_id,
+                )
+            )
+            all_likes = likes_result.all()
+            assert len(all_likes) == 1
+    finally:
+        if None not in {owner_id, liker_id, project_id, comment_id}:
+            async with AsyncSession(async_engine, expire_on_commit=False) as cleanup:
+                comment_like_cols = getattr(CommentLike, "__table__").c
+                comment_cols = getattr(Comment, "__table__").c
+                project_cols = getattr(Project, "__table__").c
+                user_cols = getattr(User, "__table__").c
+                await cleanup.exec(
+                    delete(CommentLike).where(
+                        comment_like_cols.comment_id == comment_id
+                    )
+                )
+                await cleanup.exec(delete(Comment).where(comment_cols.id == comment_id))
+                await cleanup.exec(delete(Project).where(project_cols.id == project_id))
+                await cleanup.exec(
+                    delete(User).where(user_cols.id.in_([owner_id, liker_id]))
+                )
+                await cleanup.commit()
 
 
 @pytest.mark.asyncio
 async def test_remove_like_concurrent_duplicate_requests(async_engine: AsyncEngine):
     unique = uuid4().hex[:8]
-
-    async with AsyncSession(async_engine, expire_on_commit=False) as seed_session:
-        owner = await _seed_user(
-            seed_session, f"unlike-owner-race-{unique}@ufl.edu", "Owner"
-        )
-        liker = await _seed_user(
-            seed_session, f"unlike-liker-race-{unique}@ufl.edu", "Liker"
-        )
-        project = await _seed_project(
-            seed_session,
-            created_by_id=owner.id,
-            title=f"Unlike Race {unique}",
-        )
-        comment = await _seed_comment(
-            seed_session,
-            project_id=project.id,
-            author_id=owner.id,
-            body="race testing unlike",
-        )
-        seed_service = CommentLikeService(seed_session)
-        await seed_service.add_like(comment_id=comment.id, user_id=liker.id)
-        await seed_session.commit()
-
-    async def attempt_unlike() -> bool:
-        async with AsyncSession(async_engine, expire_on_commit=False) as session:
-            service = CommentLikeService(session)
-            return await service.remove_like(comment_id=comment.id, user_id=liker.id)
-
-    first, second = await asyncio.gather(attempt_unlike(), attempt_unlike())
-    assert sorted([first, second]) == [False, True]
-
-    async with AsyncSession(async_engine, expire_on_commit=False) as verify_session:
-        likes_result = await verify_session.exec(
-            select(CommentLike).where(
-                CommentLike.comment_id == comment.id,
-                CommentLike.user_id == liker.id,
+    owner_id = None
+    liker_id = None
+    project_id = None
+    comment_id = None
+    try:
+        async with AsyncSession(async_engine, expire_on_commit=False) as seed_session:
+            owner = await _seed_user(
+                seed_session, f"unlike-owner-race-{unique}@ufl.edu", "Owner"
             )
-        )
-        assert likes_result.one_or_none() is None
+            liker = await _seed_user(
+                seed_session, f"unlike-liker-race-{unique}@ufl.edu", "Liker"
+            )
+            project = await _seed_project(
+                seed_session,
+                created_by_id=owner.id,
+                title=f"Unlike Race {unique}",
+            )
+            comment = await _seed_comment(
+                seed_session,
+                project_id=project.id,
+                author_id=owner.id,
+                body="race testing unlike",
+            )
+            seed_service = CommentLikeService(seed_session)
+            await seed_service.add_like(comment_id=comment.id, user_id=liker.id)
+            await seed_session.commit()
+            owner_id = owner.id
+            liker_id = liker.id
+            project_id = project.id
+            comment_id = comment.id
+
+        async def attempt_unlike() -> bool:
+            async with AsyncSession(async_engine, expire_on_commit=False) as session:
+                service = CommentLikeService(session)
+                return await service.remove_like(
+                    comment_id=comment_id, user_id=liker_id
+                )
+
+        first, second = await asyncio.gather(attempt_unlike(), attempt_unlike())
+        assert sorted([first, second]) == [False, True]
+
+        async with AsyncSession(async_engine, expire_on_commit=False) as verify_session:
+            likes_result = await verify_session.exec(
+                select(CommentLike).where(
+                    CommentLike.comment_id == comment_id,
+                    CommentLike.user_id == liker_id,
+                )
+            )
+            assert likes_result.one_or_none() is None
+    finally:
+        if None not in {owner_id, liker_id, project_id, comment_id}:
+            async with AsyncSession(async_engine, expire_on_commit=False) as cleanup:
+                comment_like_cols = getattr(CommentLike, "__table__").c
+                comment_cols = getattr(Comment, "__table__").c
+                project_cols = getattr(Project, "__table__").c
+                user_cols = getattr(User, "__table__").c
+                await cleanup.exec(
+                    delete(CommentLike).where(
+                        comment_like_cols.comment_id == comment_id
+                    )
+                )
+                await cleanup.exec(delete(Comment).where(comment_cols.id == comment_id))
+                await cleanup.exec(delete(Project).where(project_cols.id == project_id))
+                await cleanup.exec(
+                    delete(User).where(user_cols.id.in_([owner_id, liker_id]))
+                )
+                await cleanup.commit()

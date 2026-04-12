@@ -9,7 +9,9 @@ from app.schemas.comment import (
 )
 
 
-def _build_comment(*, moderation_state: str = "visible", deleted: bool = False) -> Comment:
+def _build_comment(
+    *, moderation_state: str = "visible", deleted: bool = False
+) -> Comment:
     now = datetime.now(timezone.utc)
     return Comment(
         id=uuid4(),

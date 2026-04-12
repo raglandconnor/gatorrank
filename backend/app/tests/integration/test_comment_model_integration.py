@@ -54,7 +54,7 @@ async def test_comment_create_and_read_round_trip(db_session: AsyncSession):
     user = await _seed_user(db_session)
     project = await _seed_project(db_session, user.id)
 
-    comment = Comment(
+    comment = Comment(  # pyright: ignore[reportCallIssue]
         project_id=project.id,
         author_id=user.id,
         body="Hello from integration test",
@@ -77,7 +77,7 @@ async def test_soft_delete_marker_persists(db_session: AsyncSession):
     user = await _seed_user(db_session)
     project = await _seed_project(db_session, user.id)
 
-    comment = Comment(
+    comment = Comment(  # pyright: ignore[reportCallIssue]
         project_id=project.id,
         author_id=user.id,
         body="To be soft deleted",
@@ -100,7 +100,7 @@ async def test_moderation_state_persists(db_session: AsyncSession):
     user = await _seed_user(db_session)
     project = await _seed_project(db_session, user.id)
 
-    comment = Comment(
+    comment = Comment(  # pyright: ignore[reportCallIssue]
         project_id=project.id,
         author_id=user.id,
         body="Inappropriate content",
@@ -122,7 +122,7 @@ async def test_parent_comment_reference_persists(db_session: AsyncSession):
     user = await _seed_user(db_session)
     project = await _seed_project(db_session, user.id)
 
-    parent_comment = Comment(
+    parent_comment = Comment(  # pyright: ignore[reportCallIssue]
         project_id=project.id,
         author_id=user.id,
         body="Parent comment",
@@ -130,7 +130,7 @@ async def test_parent_comment_reference_persists(db_session: AsyncSession):
     db_session.add(parent_comment)
     await db_session.commit()
 
-    child_comment = Comment(
+    child_comment = Comment(  # pyright: ignore[reportCallIssue]
         project_id=project.id,
         author_id=user.id,
         parent_comment_id=parent_comment.id,
@@ -146,7 +146,7 @@ async def test_parent_comment_reference_persists(db_session: AsyncSession):
 
 @pytest.mark.asyncio
 async def test_comment_requires_existing_project_and_author(db_session: AsyncSession):
-    comment = Comment(
+    comment = Comment(  # pyright: ignore[reportCallIssue]
         project_id=uuid4(),
         author_id=uuid4(),
         body="This should fail",
@@ -164,8 +164,16 @@ async def test_comments_can_be_filtered_by_project_id(db_session: AsyncSession):
     project_a = await _seed_project(db_session, user.id)
     project_b = await _seed_project(db_session, user.id)
 
-    comment_a = Comment(project_id=project_a.id, author_id=user.id, body="Project A")
-    comment_b = Comment(project_id=project_b.id, author_id=user.id, body="Project B")
+    comment_a = Comment(  # pyright: ignore[reportCallIssue]
+        project_id=project_a.id,
+        author_id=user.id,
+        body="Project A",
+    )
+    comment_b = Comment(  # pyright: ignore[reportCallIssue]
+        project_id=project_b.id,
+        author_id=user.id,
+        body="Project B",
+    )
     db_session.add(comment_a)
     db_session.add(comment_b)
     await db_session.commit()

@@ -10,7 +10,7 @@ def test_comment_model_defaults():
     project_id = uuid4()
     author_id = uuid4()
 
-    comment = Comment(
+    comment = Comment(  # pyright: ignore[reportCallIssue]
         project_id=project_id,
         author_id=author_id,
         body="This is a test comment.",
