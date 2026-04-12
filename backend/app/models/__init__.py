@@ -5,6 +5,7 @@ from app.models.comment import (
     COMMENT_MODERATION_VISIBLE,
     Comment,
 )
+from app.models.comment_like import CommentLike
 from app.models.user import User
 from app.models.user_roles import (
     USER_ROLE_ADMIN,
@@ -41,6 +42,7 @@ __all__ = [
     "cast_user_role",
     "RefreshSession",
     "Comment",
+    "CommentLike",
     "COMMENT_MODERATION_VISIBLE",
     "COMMENT_MODERATION_HIDDEN",
     "COMMENT_MODERATION_STATES",

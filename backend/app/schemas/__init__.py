@@ -7,6 +7,12 @@ from app.schemas.auth import (
     AuthTokenResponse,
     AuthUserResponse,
 )
+from app.schemas.comment import (
+    CommentAuthorResponse,
+    CommentCreateRequest,
+    CommentModerationRequest,
+    CommentResponse,
+)
 from app.schemas.project import (
     ProjectDetailResponse,
     ProjectListItemResponse,
@@ -26,6 +32,10 @@ __all__ = [
     "AuthRefreshRequest",
     "AuthLogoutRequest",
     "AuthMeResponse",
+    "CommentAuthorResponse",
+    "CommentCreateRequest",
+    "CommentModerationRequest",
+    "CommentResponse",
     "ProjectMemberCreateRequest",
     "ProjectMemberInfo",
     "ProjectMemberUpdateRequest",
