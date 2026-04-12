@@ -2,12 +2,10 @@ from uuid import UUID
 
 from sqlalchemy import delete
 from sqlalchemy.dialects.postgresql import insert as pg_insert
-from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from app.models.comment import Comment
 from app.models.comment_like import CommentLike
-from app.services.comment import CommentNotFoundError, get_public_comment_for_mutation
+from app.services.comment import get_public_comment_for_mutation
 
 
 class CommentLikeService:

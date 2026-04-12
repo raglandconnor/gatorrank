@@ -1,10 +1,12 @@
 from app.services.auth import AuthService
 from app.services.comment import (
     COMMENT_LIST_HARD_CAP,
+    CommentService,
+)
+from app.services.comment_domain import (
     CommentForbiddenError,
     CommentNotFoundError,
     CommentProjectNotFoundError,
-    CommentService,
 )
 from app.services.comment_like import CommentLikeService
 from app.services.project import CursorError, ProjectService

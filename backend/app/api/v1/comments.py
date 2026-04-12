@@ -13,13 +13,16 @@ from app.schemas.comment import (
     CommentModerationRequest,
     CommentResponse,
 )
+from app.services.comment_domain import (
+    CommentForbiddenError,
+    CommentNotFoundError,
+    CommentProjectNotFoundError,
+)
 from app.services.comment import (
     COMMENT_LIST_HARD_CAP,
-    CommentForbiddenError,
-    CommentProjectNotFoundError,
     CommentService,
 )
-from app.services.comment_like import CommentLikeService, CommentNotFoundError
+from app.services.comment_like import CommentLikeService
 
 router = APIRouter()
 

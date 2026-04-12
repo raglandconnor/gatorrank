@@ -4,73 +4,18 @@ from uuid import uuid4
 
 import pytest
 from sqlalchemy.ext.asyncio import AsyncEngine
-from sqlmodel import delete, select
+from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from app.models.comment import Comment
 from app.models.comment_like import CommentLike
-from app.models.project import Project
-from app.models.user import User
-from app.services.comment_like import CommentLikeService, CommentNotFoundError
-
-
-async def _seed_user(db_session, email: str, name: str) -> User:
-    now = datetime.now(timezone.utc)
-    user = User(
-        email=email,
-        username=f"user_{uuid4().hex[:10]}",
-        password_hash="integration-password-hash",
-        full_name=name,
-        created_at=now,
-        updated_at=now,
-    )
-    db_session.add(user)
-    await db_session.flush()
-    return user
-
-
-async def _seed_project(
-    db_session,
-    *,
-    created_by_id,
-    title: str,
-    is_published: bool = True,
-) -> Project:
-    now = datetime.now(timezone.utc)
-    project = Project(
-        created_by_id=created_by_id,
-        title=title,
-        slug=f"{title.lower().replace(' ', '-')}-{uuid4().hex[:6]}",
-        short_description=f"{title} description",
-        is_group_project=False,
-        is_published=is_published,
-        published_at=now if is_published else None,
-        created_at=now,
-        updated_at=now,
-    )
-    db_session.add(project)
-    await db_session.flush()
-    return project
-
-
-async def _seed_comment(
-    db_session,
-    *,
-    project_id,
-    author_id,
-    body: str,
-) -> Comment:
-    now = datetime.now(timezone.utc)
-    comment = Comment(
-        project_id=project_id,
-        author_id=author_id,
-        body=body,
-        created_at=now,
-        updated_at=now,
-    )
-    db_session.add(comment)
-    await db_session.flush()
-    return comment
+from app.services.comment_domain import CommentNotFoundError
+from app.services.comment_like import CommentLikeService
+from app.tests.integration.comment_test_helpers import (
+    cleanup_committed_comment_graph,
+    seed_comment_project,
+    seed_comment_user,
+    seed_project_comment,
+)
 
 
 @pytest.mark.asyncio

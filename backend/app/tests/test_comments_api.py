@@ -8,7 +8,7 @@ from app.api.deps.auth import get_current_user
 from app.db.database import get_db
 from app.main import app
 from app.models.user import User
-from app.services.comment_like import CommentNotFoundError
+from app.services.comment_domain import CommentNotFoundError
 
 client = TestClient(app)
 

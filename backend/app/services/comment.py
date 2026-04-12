@@ -5,30 +5,19 @@ import sqlalchemy as sa
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from app.models.comment import Comment
+from app.models.comment import Comment, CommentModerationState
 from app.models.comment_like import CommentLike
 from app.models.project import Project
 from app.models.user import User
 from app.policy.roles import PolicyDeniedError, require_comment_moderation
 from app.schemas.comment import CommentCreateRequest, CommentResponse
+from app.services.comment_domain import (
+    CommentForbiddenError,
+    CommentNotFoundError,
+    CommentProjectNotFoundError,
+)
 
 COMMENT_LIST_HARD_CAP = 100
-
-
-class CommentServiceError(Exception):
-    """Base class for comment service failures."""
-
-
-class CommentNotFoundError(CommentServiceError):
-    """Raised when the requested comment does not exist."""
-
-
-class CommentProjectNotFoundError(CommentServiceError):
-    """Raised when the requested project cannot accept or expose comments."""
-
-
-class CommentForbiddenError(CommentServiceError):
-    """Raised when the actor cannot perform the requested comment action."""
 
 
 class CommentService:
@@ -174,7 +163,7 @@ class CommentService:
         self,
         *,
         comment_id: UUID,
-        moderation_state: str,
+        moderation_state: CommentModerationState,
         principal: User | None,
     ) -> None:
         self._require_moderation_principal(principal)
