@@ -27,6 +27,14 @@ from app.services.comment_like import CommentLikeService
 router = APIRouter()
 
 
+def _comment_not_found_exception() -> HTTPException:
+    return HTTPException(status_code=404, detail="Comment not found")
+
+
+def _comment_forbidden_exception(detail: str) -> HTTPException:
+    return HTTPException(status_code=403, detail=detail)
+
+
 @router.get(
     "/projects/{project_id}/comments",
     summary="List project comments",
@@ -120,9 +128,7 @@ async def like_comment(
     try:
         await service.add_like(comment_id=comment_id, user_id=current_user.id)
     except CommentNotFoundError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Comment not found"
-        ) from exc
+        raise _comment_not_found_exception() from exc
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
@@ -150,9 +156,7 @@ async def unlike_comment(
     try:
         await service.remove_like(comment_id=comment_id, user_id=current_user.id)
     except CommentNotFoundError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Comment not found"
-        ) from exc
+        raise _comment_not_found_exception() from exc
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
@@ -182,9 +186,9 @@ async def delete_comment(
             comment_id=comment_id, actor_id=current_user.id
         )
     except CommentNotFoundError as exc:
-        raise HTTPException(status_code=404, detail="Comment not found") from exc
+        raise _comment_not_found_exception() from exc
     except CommentForbiddenError as exc:
-        raise HTTPException(status_code=403, detail="Comment delete forbidden") from exc
+        raise _comment_forbidden_exception("Comment delete forbidden") from exc
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
@@ -218,11 +222,9 @@ async def moderate_comment(
             principal=current_user,
         )
     except CommentForbiddenError as exc:
-        raise HTTPException(
-            status_code=403, detail="Comment moderation forbidden"
-        ) from exc
+        raise _comment_forbidden_exception("Comment moderation forbidden") from exc
     except CommentNotFoundError as exc:
-        raise HTTPException(status_code=404, detail="Comment not found") from exc
+        raise _comment_not_found_exception() from exc
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
@@ -253,9 +255,7 @@ async def moderator_delete_comment(
             principal=current_user,
         )
     except CommentForbiddenError as exc:
-        raise HTTPException(
-            status_code=403, detail="Comment moderation forbidden"
-        ) from exc
+        raise _comment_forbidden_exception("Comment moderation forbidden") from exc
     except CommentNotFoundError as exc:
-        raise HTTPException(status_code=404, detail="Comment not found") from exc
+        raise _comment_not_found_exception() from exc
     return Response(status_code=status.HTTP_204_NO_CONTENT)

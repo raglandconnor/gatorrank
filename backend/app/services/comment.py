@@ -20,6 +20,13 @@ from app.services.comment_domain import (
 COMMENT_LIST_HARD_CAP = 100
 
 
+def _public_project_visibility_conditions(project_cols) -> list[sa.ColumnElement[bool]]:
+    return [
+        project_cols.deleted_at.is_(None),
+        project_cols.is_published.is_(True),
+    ]
+
+
 class CommentService:
     def __init__(self, db: AsyncSession):
         self.db = db
@@ -143,21 +150,12 @@ class CommentService:
         )
 
     async def delete_own_comment(self, *, comment_id: UUID, actor_id: UUID) -> None:
-        comment = await get_public_comment_for_mutation(
-            self.db,
-            comment_id=comment_id,
-            require_not_deleted=True,
-        )
+        comment = await get_public_comment_for_mutation(self.db, comment_id=comment_id)
         if comment.author_id != actor_id:
             raise CommentForbiddenError("Comment delete forbidden")
 
         comment.deleted_at = datetime.now(timezone.utc)
-        try:
-            self.db.add(comment)
-            await self.db.commit()
-        except Exception:
-            await self.db.rollback()
-            raise
+        await self._save_model(comment)
 
     async def moderate_comment(
         self,
@@ -166,20 +164,11 @@ class CommentService:
         moderation_state: CommentModerationState,
         principal: User | None,
     ) -> None:
-        comment = await get_public_comment_for_mutation(
-            self.db,
-            comment_id=comment_id,
-            require_not_deleted=True,
-        )
+        comment = await get_public_comment_for_mutation(self.db, comment_id=comment_id)
         self._require_moderation_principal(principal)
 
         comment.moderation_state = moderation_state
-        try:
-            self.db.add(comment)
-            await self.db.commit()
-        except Exception:
-            await self.db.rollback()
-            raise
+        await self._save_model(comment)
 
     async def moderator_delete_comment(
         self,
@@ -187,33 +176,34 @@ class CommentService:
         comment_id: UUID,
         principal: User | None,
     ) -> None:
-        comment = await get_public_comment_for_mutation(
+        comment = await get_public_comment_for_moderation(
             self.db,
             comment_id=comment_id,
-            require_not_deleted=False,
         )
         self._require_moderation_principal(principal)
         if comment.deleted_at is not None:
             return
 
         comment.deleted_at = datetime.now(timezone.utc)
-        try:
-            self.db.add(comment)
-            await self.db.commit()
-        except Exception:
-            await self.db.rollback()
-            raise
+        await self._save_model(comment)
 
     async def _require_public_comment_project(self, project_id: UUID) -> None:
         project_cols = getattr(Project, "__table__").c
         statement = select(Project.id).where(
             project_cols.id == project_id,
-            project_cols.deleted_at.is_(None),
-            project_cols.is_published.is_(True),
+            *_public_project_visibility_conditions(project_cols),
         )
         result = await self.db.exec(statement)
         if result.one_or_none() is None:
             raise CommentProjectNotFoundError("Project not found")
+
+    async def _save_model(self, model: object) -> None:
+        try:
+            self.db.add(model)
+            await self.db.commit()
+        except Exception:
+            await self.db.rollback()
+            raise
 
     @staticmethod
     def _require_moderation_principal(principal: User | None) -> None:
@@ -227,6 +217,32 @@ async def get_public_comment_for_mutation(
     db: AsyncSession,
     *,
     comment_id: UUID,
+) -> Comment:
+    """Return a comment only when both the comment and its parent project are visible."""
+    return await _get_public_comment(
+        db,
+        comment_id=comment_id,
+        require_not_deleted=True,
+    )
+
+
+async def get_public_comment_for_moderation(
+    db: AsyncSession,
+    *,
+    comment_id: UUID,
+) -> Comment:
+    """Return a visible-project comment even if already soft deleted."""
+    return await _get_public_comment(
+        db,
+        comment_id=comment_id,
+        require_not_deleted=False,
+    )
+
+
+async def _get_public_comment(
+    db: AsyncSession,
+    *,
+    comment_id: UUID,
     require_not_deleted: bool,
 ) -> Comment:
     """Return a comment only when both the comment and its parent project are visible."""
@@ -236,8 +252,7 @@ async def get_public_comment_for_mutation(
     conditions = [
         comment_cols.id == comment_id,
         project_cols.id == comment_cols.project_id,
-        project_cols.deleted_at.is_(None),
-        project_cols.is_published.is_(True),
+        *_public_project_visibility_conditions(project_cols),
     ]
     if require_not_deleted:
         conditions.append(comment_cols.deleted_at.is_(None))

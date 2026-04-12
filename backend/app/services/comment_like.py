@@ -14,11 +14,7 @@ class CommentLikeService:
 
     async def add_like(self, *, comment_id: UUID, user_id: UUID) -> bool:
         """Add a like if absent. Returns True when a new like is created."""
-        await get_public_comment_for_mutation(
-            self.db,
-            comment_id=comment_id,
-            require_not_deleted=True,
-        )
+        await get_public_comment_for_mutation(self.db, comment_id=comment_id)
 
         like_cols = getattr(CommentLike, "__table__").c
         insert_statement = (
@@ -37,11 +33,7 @@ class CommentLikeService:
 
     async def remove_like(self, *, comment_id: UUID, user_id: UUID) -> bool:
         """Remove a like if present. Returns True when an existing like is removed."""
-        await get_public_comment_for_mutation(
-            self.db,
-            comment_id=comment_id,
-            require_not_deleted=True,
-        )
+        await get_public_comment_for_mutation(self.db, comment_id=comment_id)
 
         like_cols = getattr(CommentLike, "__table__").c
         delete_stmt = (
