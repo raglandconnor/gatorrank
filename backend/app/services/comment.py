@@ -57,26 +57,32 @@ class CommentService:
             )
 
         statement = (
-            select(  # pyright: ignore[reportCallIssue]
-                Comment,
+            (
+                select(  # pyright: ignore[reportCallIssue]
+                    Comment,
+                    user_cols.username,
+                    user_cols.full_name,
+                    user_cols.profile_picture_url,
+                    like_count_expr.label("like_count"),
+                    viewer_liked_expr.label("viewer_has_liked"),
+                )
+            )
+            .join(User, user_cols.id == comment_cols.author_id)
+            .outerjoin(CommentLike, like_cols.comment_id == comment_cols.id)
+            .where(comment_cols.project_id == project_id)
+            .group_by(
+                comment_cols.id,
+                user_cols.id,
                 user_cols.username,
                 user_cols.full_name,
                 user_cols.profile_picture_url,
-                like_count_expr.label("like_count"),
-                viewer_liked_expr.label("viewer_has_liked"),
             )
-        ).join(User, user_cols.id == comment_cols.author_id).outerjoin(
-            CommentLike, like_cols.comment_id == comment_cols.id
-        ).where(comment_cols.project_id == project_id).group_by(
-            comment_cols.id,
-            user_cols.id,
-            user_cols.username,
-            user_cols.full_name,
-            user_cols.profile_picture_url,
         )
 
         if sort_by == "oldest":
-            statement = statement.order_by(comment_cols.created_at.asc(), comment_cols.id.asc())
+            statement = statement.order_by(
+                comment_cols.created_at.asc(), comment_cols.id.asc()
+            )
         elif sort_by == "newest":
             statement = statement.order_by(
                 comment_cols.created_at.desc(), comment_cols.id.desc()

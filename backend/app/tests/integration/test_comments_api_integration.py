@@ -105,11 +105,15 @@ def _override_get_db_factory(db_session):
 
 
 @pytest.mark.asyncio
-async def test_list_comments_is_public_and_includes_viewer_state(api_client, db_session):
+async def test_list_comments_is_public_and_includes_viewer_state(
+    api_client, db_session
+):
     unique = uuid4().hex[:8]
     owner = await _seed_user(db_session, f"api-owner-{unique}@ufl.edu", "Owner")
     viewer = await _seed_user(db_session, f"api-viewer-{unique}@ufl.edu", "Viewer")
-    project = await _seed_project(db_session, created_by_id=owner.id, title="API Visible")
+    project = await _seed_project(
+        db_session, created_by_id=owner.id, title="API Visible"
+    )
     comment = await _seed_comment(
         db_session,
         project_id=project.id,
@@ -126,7 +130,9 @@ async def test_list_comments_is_public_and_includes_viewer_state(api_client, db_
             f"/api/v1/projects/{project.id}/comments"
         )
         app.dependency_overrides[get_current_user_optional] = lambda: viewer
-        viewer_response = await api_client.get(f"/api/v1/projects/{project.id}/comments")
+        viewer_response = await api_client.get(
+            f"/api/v1/projects/{project.id}/comments"
+        )
     finally:
         app.dependency_overrides.clear()
 
@@ -147,7 +153,9 @@ async def test_create_comment_requires_auth_and_returns_created_payload(
 ):
     unique = uuid4().hex[:8]
     owner = await _seed_user(db_session, f"api-create-{unique}@ufl.edu", "Owner")
-    project = await _seed_project(db_session, created_by_id=owner.id, title="API Create")
+    project = await _seed_project(
+        db_session, created_by_id=owner.id, title="API Create"
+    )
     await db_session.commit()
 
     app.dependency_overrides[get_db] = _override_get_db_factory(db_session)
@@ -251,7 +259,9 @@ async def test_delete_comment_and_admin_moderation_endpoints(api_client, db_sess
     admin = await _seed_user(
         db_session, f"api-del-admin-{unique}@ufl.edu", "Admin", role="admin"
     )
-    project = await _seed_project(db_session, created_by_id=owner.id, title="API Delete")
+    project = await _seed_project(
+        db_session, created_by_id=owner.id, title="API Delete"
+    )
     own_comment = await _seed_comment(
         db_session,
         project_id=project.id,

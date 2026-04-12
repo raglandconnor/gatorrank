@@ -140,12 +140,20 @@ async def test_list_comments_supports_top_oldest_and_newest_sorting(
     oldest_comments = await service.list_comments(
         project_id=project.id, viewer_id=liker.id, sort_by="oldest"
     )
-    assert [comment.id for comment in oldest_comments] == [oldest.id, middle.id, newest.id]
+    assert [comment.id for comment in oldest_comments] == [
+        oldest.id,
+        middle.id,
+        newest.id,
+    ]
 
     newest_comments = await service.list_comments(
         project_id=project.id, viewer_id=liker.id, sort_by="newest"
     )
-    assert [comment.id for comment in newest_comments] == [newest.id, middle.id, oldest.id]
+    assert [comment.id for comment in newest_comments] == [
+        newest.id,
+        middle.id,
+        oldest.id,
+    ]
 
 
 @pytest.mark.asyncio
@@ -154,7 +162,9 @@ async def test_list_comments_enforces_hard_cap(db_session: AsyncSession):
     owner = await _seed_user(db_session, f"svc-cap-{unique}@ufl.edu", "Owner")
     project = await _seed_project(db_session, created_by_id=owner.id, title="Svc Cap")
 
-    base_time = datetime.now(timezone.utc) - timedelta(minutes=COMMENT_LIST_HARD_CAP + 5)
+    base_time = datetime.now(timezone.utc) - timedelta(
+        minutes=COMMENT_LIST_HARD_CAP + 5
+    )
     for index in range(COMMENT_LIST_HARD_CAP + 5):
         await _seed_comment(
             db_session,
