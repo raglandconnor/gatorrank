@@ -136,7 +136,7 @@ export function ProjectCard({ project, rank }: ProjectCardProps) {
             aria-label={`${project.comments} comments on ${project.name}`}
           >
             <Box color="gray.800">
-              <LuMessageSquare size={17} />
+              <LuMessageSquare size={18} />
             </Box>
             <Text
               fontSize="sm"

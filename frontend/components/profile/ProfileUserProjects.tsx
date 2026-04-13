@@ -148,18 +148,23 @@ function VotePill({
 
 function UserProjectCard({ project }: { project: ProjectListItem }) {
   const [isHovered, setIsHovered] = useState(false);
+  const [isPressed, setIsPressed] = useState(false);
   const { isVoted, voteCount, isPending, toggleVote } = useProjectVote({
     projectId: project.id,
     initialVoteCount: project.vote_count,
     initialViewerHasVoted: project.viewer_has_voted,
   });
   const backgroundColor = project.is_published
-    ? isHovered
-      ? '#efefef'
-      : 'gray.100'
-    : isHovered
-      ? '#fff0bf'
-      : '#fff7db';
+    ? isPressed
+      ? '#e6e6e6'
+      : isHovered
+        ? '#efefef'
+        : 'gray.100'
+    : isPressed
+      ? '#ffe8a3'
+      : isHovered
+        ? '#fff0bf'
+        : '#fff7db';
 
   return (
     <LinkBox
@@ -171,11 +176,19 @@ function UserProjectCard({ project }: { project: ProjectListItem }) {
       cursor="pointer"
       transition="background 0.15s"
       onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
-      _focusWithin={{
-        outline: '2px solid',
-        outlineColor: 'orange.400',
-        outlineOffset: '2px',
+      onMouseLeave={() => {
+        setIsHovered(false);
+        setIsPressed(false);
+      }}
+      onPointerDownCapture={(event) => {
+        const target = event.target as HTMLElement | null;
+        if (target?.closest('[data-project-card-action="true"]')) return;
+        setIsPressed(true);
+      }}
+      onPointerUpCapture={() => setIsPressed(false)}
+      onPointerCancel={() => setIsPressed(false)}
+      _focusVisible={{
+        boxShadow: '0 0 0 3px rgba(148,163,184,0.16)',
       }}
     >
       <VStack align="start" gap="12px" w="100%">
