@@ -13,6 +13,7 @@ interface ProjectInlineTagsProps {
 export function ProjectInlineTags({ tags, maxRows }: ProjectInlineTagsProps) {
   const measureRef = useRef<HTMLDivElement | null>(null);
   const [containerWidth, setContainerWidth] = useState(0);
+  const [containerFont, setContainerFont] = useState('');
 
   useLayoutEffect(() => {
     const node = measureRef.current;
@@ -21,6 +22,13 @@ export function ProjectInlineTags({ tags, maxRows }: ProjectInlineTagsProps) {
     const updateWidth = () => {
       const nextWidth = node.clientWidth || node.getBoundingClientRect().width;
       setContainerWidth(Math.floor(nextWidth));
+
+      const styles = window.getComputedStyle(node);
+      const font =
+        styles.font && styles.font !== 'normal'
+          ? styles.font
+          : `${styles.fontWeight} ${styles.fontSize} ${styles.fontFamily}`;
+      setContainerFont(font.trim());
     };
 
     updateWidth();
@@ -45,13 +53,18 @@ export function ProjectInlineTags({ tags, maxRows }: ProjectInlineTagsProps) {
 
   const visibleTags = useMemo(
     () =>
-      containerWidth > 0 ? fitInlineTags(tags, containerWidth, maxRows) : tags,
-    [tags, containerWidth, maxRows],
+      containerWidth > 0
+        ? fitInlineTags(tags, containerWidth, maxRows, containerFont)
+        : tags,
+    [tags, containerWidth, maxRows, containerFont],
   );
 
   if (!tags.length) {
     return <Box ref={measureRef} w="100%" minW={0} h="0" overflow="hidden" />;
   }
+
+  const rowHeight = 24;
+  const maxHeight = `${rowHeight * maxRows}px`;
 
   const content = visibleTags.map((tag, index) => (
     <Flex key={tag} align="center" minW={0} flexShrink={0}>
@@ -85,13 +98,32 @@ export function ProjectInlineTags({ tags, maxRows }: ProjectInlineTagsProps) {
       <Box color="gray.800" mt="5px" flexShrink={0}>
         <LuTag size={13} />
       </Box>
-      <Box ref={measureRef} minW={0} w="100%" overflow="hidden">
+      <Box
+        ref={measureRef}
+        minW={0}
+        w="100%"
+        overflow="hidden"
+        maxH={maxHeight}
+      >
         {maxRows === 1 ? (
-          <HStack gap={0} align="center" minW={0} overflow="hidden">
+          <HStack
+            gap={0}
+            align="center"
+            minW={0}
+            overflow="hidden"
+            h={maxHeight}
+          >
             {content}
           </HStack>
         ) : (
-          <Flex wrap="wrap" gapX="0px" gapY="0px" align="center">
+          <Flex
+            wrap="wrap"
+            gapX="0px"
+            gapY="0px"
+            align="center"
+            maxH={maxHeight}
+            overflow="hidden"
+          >
             {content}
           </Flex>
         )}

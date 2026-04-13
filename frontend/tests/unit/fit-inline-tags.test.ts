@@ -11,6 +11,17 @@ describe('fitInlineTags', () => {
     expect(tags).toEqual(['React']);
   });
 
+  test('accepts a caller-provided font string for more accurate fitting', () => {
+    const tags = fitInlineTags(
+      ['React', 'TypeScript', 'Chakra'],
+      120,
+      1,
+      '400 14px "Mona Sans"',
+    );
+
+    expect(tags).toEqual(['React']);
+  });
+
   test('fits tags across two rows without partial trailing items', () => {
     const tags = fitInlineTags(
       ['Open source', 'Community', 'Data viz', 'Campus safety'],

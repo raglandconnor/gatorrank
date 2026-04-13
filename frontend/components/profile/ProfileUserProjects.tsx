@@ -187,8 +187,8 @@ function UserProjectCard({ project }: { project: ProjectListItem }) {
       }}
       onPointerUpCapture={() => setIsPressed(false)}
       onPointerCancel={() => setIsPressed(false)}
-      _focusVisible={{
-        boxShadow: '0 0 0 3px rgba(148,163,184,0.16)',
+      _focusWithin={{
+        boxShadow: '0 0 0 3px rgba(148,163,184,0.12)',
       }}
     >
       <VStack align="start" gap="12px" w="100%">
@@ -207,6 +207,7 @@ function UserProjectCard({ project }: { project: ProjectListItem }) {
             <LinkOverlay
               as={NextLink}
               href={projectPath(project.slug)}
+              data-project-card-link="true"
               _hover={{ textDecoration: 'none' }}
               _focusVisible={{ textDecoration: 'none' }}
             >

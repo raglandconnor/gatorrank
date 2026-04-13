@@ -63,8 +63,8 @@ export function ProjectGridCard({ project, rank }: ProjectGridCardProps) {
       }}
       onPointerUpCapture={() => setIsPressed(false)}
       onPointerCancel={() => setIsPressed(false)}
-      _focusVisible={{
-        boxShadow: '0 0 0 3px rgba(148,163,184,0.16)',
+      _focusWithin={{
+        boxShadow: '0 0 0 3px rgba(148,163,184,0.12)',
       }}
     >
       <VStack align="stretch" gap="16px" flex="1">
@@ -89,6 +89,7 @@ export function ProjectGridCard({ project, rank }: ProjectGridCardProps) {
               <LinkOverlay
                 as={NextLink}
                 href={projectPath(project.slug)}
+                data-project-card-link="true"
                 _hover={{ textDecoration: 'none' }}
                 _focusVisible={{ textDecoration: 'none' }}
               >

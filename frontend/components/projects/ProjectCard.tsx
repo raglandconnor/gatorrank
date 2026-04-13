@@ -62,8 +62,8 @@ export function ProjectCard({ project, rank }: ProjectCardProps) {
       }}
       onPointerUpCapture={() => setIsPressed(false)}
       onPointerCancel={() => setIsPressed(false)}
-      _focusVisible={{
-        boxShadow: '0 0 0 3px rgba(148,163,184,0.16)',
+      _focusWithin={{
+        boxShadow: '0 0 0 3px rgba(148,163,184,0.12)',
       }}
     >
       <Box w="60px" h="60px" bg="gray.300" borderRadius="13px" flexShrink={0} />
@@ -74,6 +74,7 @@ export function ProjectCard({ project, rank }: ProjectCardProps) {
             <LinkOverlay
               as={NextLink}
               href={projectPath(project.slug)}
+              data-project-card-link="true"
               _hover={{ textDecoration: 'none' }}
               _focusVisible={{ textDecoration: 'none' }}
             >

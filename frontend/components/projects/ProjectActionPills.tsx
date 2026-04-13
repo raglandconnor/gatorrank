@@ -1,7 +1,7 @@
 'use client';
 
 import type { MouseEventHandler } from 'react';
-import { Box, Flex, Text } from '@chakra-ui/react';
+import { Box, Button, Flex, Text } from '@chakra-ui/react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { LuChevronUp, LuMessageSquare } from 'react-icons/lu';
 
@@ -11,31 +11,11 @@ export function CommentPill({
   ariaLabel,
 }: {
   count: number;
-  onClick?: MouseEventHandler<HTMLElement>;
+  onClick?: MouseEventHandler<HTMLButtonElement>;
   ariaLabel?: string;
 }) {
-  return (
-    <Box
-      data-project-card-action="true"
-      as="button"
-      display="flex"
-      alignItems="center"
-      justifyContent="center"
-      gap="7px"
-      bg="white"
-      border="1.6px solid"
-      borderColor="orange.200"
-      borderRadius="12px"
-      pl="13px"
-      pr="10px"
-      h="42px"
-      minW="76px"
-      cursor={onClick ? 'pointer' : 'default'}
-      _hover={onClick ? { bg: 'orange.50' } : undefined}
-      transition="background 0.15s, border-color 0.15s"
-      onClick={onClick}
-      aria-label={ariaLabel ?? `${count} comments`}
-    >
+  const content = (
+    <>
       <Flex
         w="15px"
         minW="15px"
@@ -43,6 +23,7 @@ export function CommentPill({
         align="center"
         justify="center"
         color="gray.700"
+        aria-hidden="true"
       >
         <LuMessageSquare size={15} />
       </Flex>
@@ -56,7 +37,56 @@ export function CommentPill({
           {count}
         </Text>
       </Flex>
-    </Box>
+    </>
+  );
+
+  if (!onClick) {
+    return (
+      <Box
+        data-project-card-action="true"
+        display="flex"
+        alignItems="center"
+        justifyContent="center"
+        gap="7px"
+        bg="white"
+        border="1.6px solid"
+        borderColor="orange.200"
+        borderRadius="12px"
+        pl="13px"
+        pr="10px"
+        h="42px"
+        minW="76px"
+      >
+        {content}
+      </Box>
+    );
+  }
+
+  return (
+    <Button
+      data-project-card-action="true"
+      type="button"
+      variant="plain"
+      display="flex"
+      alignItems="center"
+      justifyContent="center"
+      gap="7px"
+      bg="white"
+      border="1.6px solid"
+      borderColor="orange.200"
+      borderRadius="12px"
+      pl="13px"
+      pr="10px"
+      h="42px"
+      minW="76px"
+      cursor="pointer"
+      _hover={{ bg: 'orange.50' }}
+      transition="background 0.15s, border-color 0.15s"
+      onClick={onClick}
+      aria-label={ariaLabel ?? `${count} comments`}
+    >
+      {content}
+    </Button>
   );
 }
 
@@ -70,13 +100,14 @@ export function VotePill({
   count: number;
   active?: boolean;
   pending?: boolean;
-  onClick?: MouseEventHandler<HTMLElement>;
+  onClick?: MouseEventHandler<HTMLButtonElement>;
   ariaLabel?: string;
 }) {
   return (
-    <Box
+    <Button
       data-project-card-action="true"
-      as="button"
+      type="button"
+      variant="plain"
       display="flex"
       alignItems="center"
       justifyContent="center"
@@ -89,13 +120,13 @@ export function VotePill({
       pr="5px"
       h="42px"
       minW="76px"
-      cursor={pending ? 'wait' : 'pointer'}
+      cursor={pending ? 'not-allowed' : 'pointer'}
       opacity={pending ? 0.85 : 1}
-      _hover={{ bg: active ? 'orange.100' : 'orange.50' }}
+      _hover={pending ? undefined : { bg: active ? 'orange.100' : 'orange.50' }}
       transition="background 0.15s, border-color 0.15s, opacity 0.15s"
-      onClick={onClick}
+      onClick={pending ? undefined : onClick}
+      disabled={pending}
       aria-label={ariaLabel}
-      aria-disabled={pending}
       aria-pressed={active}
     >
       <Flex
@@ -105,6 +136,7 @@ export function VotePill({
         align="center"
         justify="center"
         color={active ? 'orange.500' : 'gray.700'}
+        aria-hidden="true"
       >
         <LuChevronUp size={15} />
       </Flex>
@@ -132,6 +164,6 @@ export function VotePill({
           </motion.span>
         </AnimatePresence>
       </Box>
-    </Box>
+    </Button>
   );
 }

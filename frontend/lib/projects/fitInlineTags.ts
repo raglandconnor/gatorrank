@@ -1,4 +1,4 @@
-const DEFAULT_FONT = '400 14px Arial';
+const DEFAULT_FONT = '400 14px sans-serif';
 const TAG_BUFFER_PX = 8;
 const SEPARATOR_WIDTH_PX = 22;
 
@@ -13,13 +13,13 @@ function getCanvasContext(): CanvasRenderingContext2D | null {
   return canvasContext;
 }
 
-function measureTagWidth(tag: string): number {
+function measureTagWidth(tag: string, font = DEFAULT_FONT): number {
   const context = getCanvasContext();
   if (!context) {
     return tag.length * 8 + TAG_BUFFER_PX;
   }
 
-  context.font = DEFAULT_FONT;
+  context.font = font;
   return Math.ceil(context.measureText(tag).width) + TAG_BUFFER_PX;
 }
 
@@ -27,6 +27,7 @@ export function fitInlineTags(
   tags: string[],
   containerWidth: number,
   maxRows: number,
+  font = DEFAULT_FONT,
 ): string[] {
   if (!tags.length || containerWidth <= 0 || maxRows <= 0) return [];
 
@@ -35,7 +36,7 @@ export function fitInlineTags(
   let rowWidth = 0;
 
   for (const tag of tags) {
-    const tagWidth = measureTagWidth(tag);
+    const tagWidth = measureTagWidth(tag, font);
     const additionalWidth =
       rowWidth === 0 ? tagWidth : SEPARATOR_WIDTH_PX + tagWidth;
 

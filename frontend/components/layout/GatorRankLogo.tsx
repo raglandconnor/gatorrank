@@ -6,11 +6,11 @@ import { Box, Link } from '@chakra-ui/react';
 import type { BoxProps } from '@chakra-ui/react';
 
 type GatorRankLogoProps = {
-  /** "sm" for navbar (60px), "md" for auth pages (responsive) */
+  /** "sm" for the navbar variant, "md" for auth pages (responsive) */
   size?: 'sm' | 'md';
-  /** Optional explicit width override for cases where the SVG needs a larger display box */
+  /** Optional explicit width override for cases where the logo needs a custom display box */
   width?: BoxProps['width'];
-  /** Optional explicit height override for cases where the SVG needs a larger display box */
+  /** Optional explicit height override for cases where the logo needs a custom display box */
   height?: BoxProps['height'];
   /** Optional sizes override for Next.js image optimization */
   imageSizes?: string;
@@ -24,6 +24,8 @@ export function GatorRankLogo({
 }: GatorRankLogoProps) {
   const isSm = size === 'sm';
 
+  // "sm" maps to the navbar treatment, which can still use a larger box than the
+  // older 60px asset sizing when the surrounding layout allows it.
   const resolvedWidth = width ?? (isSm ? '100px' : { base: '80px', sm: '96px', md: '120px' });
   const resolvedHeight =
     height ?? (isSm ? '100px' : { base: '80px', sm: '96px', md: '120px' });

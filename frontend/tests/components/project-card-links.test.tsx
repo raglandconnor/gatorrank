@@ -58,15 +58,13 @@ describe('project card navigation', () => {
     const link = screen.getByRole('link', { name: /2\. GatorRank/i });
     expect(link).toHaveAttribute('href', '/projects/gatorrank');
 
-    const commentButton = screen.getByRole('button', {
-      name: /3 comments on GatorRank/i,
-    });
     const upvoteButton = screen.getByRole('button', {
       name: /Upvote GatorRank/i,
     });
 
-    expect(commentButton.closest('a')).toBeNull();
     expect(upvoteButton.closest('a')).toBeNull();
+    expect(screen.queryByRole('button', { name: /3 comments on GatorRank/i })).toBeNull();
+    expect(screen.getByText('3').closest('a')).toBeNull();
   });
 
   test('cards with no tags do not render a fallback Project tag', () => {
