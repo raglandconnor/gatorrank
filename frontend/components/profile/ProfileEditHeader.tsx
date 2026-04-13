@@ -18,6 +18,7 @@ import {
   LuX,
 } from 'react-icons/lu';
 import { RoleBadge } from '@/components/ui/rolebadge';
+import { UserAvatar } from '@/components/ui/UserAvatar';
 
 interface ProfileEditHeaderProps {
   avatarPreview: string | null;
@@ -38,7 +39,6 @@ interface ProfileEditHeaderProps {
   onAvatarClick: () => void;
   onCancel: () => void;
   onSave: () => void;
-  getInitials: (name: string) => string;
 }
 
 export function ProfileEditHeader({
@@ -60,7 +60,6 @@ export function ProfileEditHeader({
   onAvatarClick,
   onCancel,
   onSave,
-  getInitials,
 }: ProfileEditHeaderProps) {
   return (
     <HStack gap="24px" mb="40px" align="flex-start">
@@ -72,35 +71,12 @@ export function ProfileEditHeader({
         cursor="pointer"
         onClick={onAvatarClick}
       >
-        {avatarPreview ? (
-          <img
-            src={avatarPreview}
-            alt={displayName}
-            style={{
-              width: '96px',
-              height: '96px',
-              borderRadius: '50%',
-              objectFit: 'cover',
-              display: 'block',
-            }}
-          />
-        ) : (
-          <Box
-            as="div"
-            w="96px"
-            h="96px"
-            borderRadius="full"
-            bg="orange.400"
-            color="white"
-            display="flex"
-            alignItems="center"
-            justifyContent="center"
-            fontSize="2xl"
-            fontWeight="bold"
-          >
-            {getInitials(displayName)}
-          </Box>
-        )}
+        <UserAvatar
+          name={displayName}
+          imageUrl={avatarPreview}
+          size="96px"
+          fontSize="2xl"
+        />
         <Box
           position="absolute"
           inset={0}

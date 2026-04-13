@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import { Flex, Image } from '@chakra-ui/react';
 import { getInitials } from '@/lib/profile/profileShared';
 
@@ -16,7 +17,9 @@ export function UserAvatar({
   size = '40px',
   fontSize = 'sm',
 }: UserAvatarProps) {
-  if (imageUrl) {
+  const [failedImageUrl, setFailedImageUrl] = useState<string | null>(null);
+
+  if (imageUrl && failedImageUrl !== imageUrl) {
     return (
       <Image
         src={imageUrl}
@@ -26,6 +29,7 @@ export function UserAvatar({
         objectFit="cover"
         flexShrink={0}
         display="block"
+        onError={() => setFailedImageUrl(imageUrl)}
       />
     );
   }
