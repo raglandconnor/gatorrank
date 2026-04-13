@@ -3,14 +3,16 @@ import { beforeEach, describe, expect, test, vi } from 'vitest';
 import { Navbar } from '@/components/layout/Navbar';
 import { renderWithChakra } from '@/tests/utils/render';
 
-const { pushMock, pathnameRef } = vi.hoisted(() => ({
+const { pushMock, pathnameRef, searchParamsRef } = vi.hoisted(() => ({
   pushMock: vi.fn(),
   pathnameRef: { value: '/' },
+  searchParamsRef: { value: new URLSearchParams() },
 }));
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: pushMock }),
   usePathname: () => pathnameRef.value,
+  useSearchParams: () => searchParamsRef.value,
 }));
 
 vi.mock('@/components/domain/AuthProvider', () => ({
@@ -25,6 +27,7 @@ describe('Navbar search', () => {
   beforeEach(() => {
     pushMock.mockReset();
     pathnameRef.value = '/';
+    searchParamsRef.value = new URLSearchParams();
     window.history.replaceState({}, '', '/');
   });
 
@@ -70,11 +73,7 @@ describe('Navbar search', () => {
 
   test('prefills query on search route', async () => {
     pathnameRef.value = '/projects/search';
-    window.history.replaceState(
-      {},
-      '',
-      '/projects/search?q=ml+ranking&sort=new',
-    );
+    searchParamsRef.value = new URLSearchParams('q=ml+ranking&sort=new');
 
     renderWithChakra(<Navbar />);
 
@@ -83,6 +82,30 @@ describe('Navbar search', () => {
     ) as HTMLInputElement;
     await waitFor(() => {
       expect(input.value).toBe('ml ranking');
+    });
+  });
+
+  test('updates prefill when query changes on same search pathname', async () => {
+    pathnameRef.value = '/projects/search';
+    searchParamsRef.value = new URLSearchParams('q=ml+ranking&sort=top');
+
+    const { rerender } = renderWithChakra(<Navbar />);
+
+    const input = screen.getByPlaceholderText(
+      'Search projects',
+    ) as HTMLInputElement;
+    await waitFor(() => {
+      expect(input.value).toBe('ml ranking');
+    });
+
+    searchParamsRef.value = new URLSearchParams('q=data+viz&sort=top');
+    rerender(<Navbar />);
+
+    const updatedInput = screen.getByPlaceholderText(
+      'Search projects',
+    ) as HTMLInputElement;
+    await waitFor(() => {
+      expect(updatedInput.value).toBe('data viz');
     });
   });
 });
