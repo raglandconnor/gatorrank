@@ -1,10 +1,8 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { Box, Container, Text, VStack } from '@chakra-ui/react';
-import { LuTrophy } from 'react-icons/lu';
 import { Navbar } from '@/components/layout/Navbar';
 import { ProjectSection } from '@/components/projects/ProjectSection';
-import { FeatureLoadingState } from '@/components/ui/FeatureLoadingState';
 import type { Project } from '@/types/project';
 import { listProjectsPublic } from '@/lib/api/projects';
 import { getAllTimeTopRange, getMonthRange } from '@/lib/projects/dateFilters';
@@ -87,13 +85,7 @@ export default function Home() {
     <Box minH="100vh" bg="transparent">
       <Navbar />
       <Container maxW="1280px" px="212px" py="50px">
-        {state.loading ? (
-          <FeatureLoadingState
-            title="Loading projects"
-            description="Pulling in the latest top and trending projects from the GatorRank community."
-            icon={<LuTrophy size={24} />}
-          />
-        ) : state.error ? (
+        {state.error ? (
           <VStack
             minH="40vh"
             justify="center"
@@ -113,18 +105,21 @@ export default function Home() {
             <ProjectSection
               title="Top Overall UF Projects"
               projects={state.topOverall}
+              loading={state.loading}
               ctaLabel="See all top UF projects"
               ctaHref="/projects/top/top-overall"
             />
             <ProjectSection
               title="Trending UF Projects This Month"
               projects={state.trendingThisMonth}
+              loading={state.loading}
               ctaLabel="See all trending UF projects this month"
               ctaHref="/projects/top/trending-this-month"
             />
             <ProjectSection
               title="Trending UF Projects Last Month"
               projects={state.trendingLastMonth}
+              loading={state.loading}
               ctaLabel="See all trending UF projects last month"
               ctaHref="/projects/top/trending-last-month"
             />

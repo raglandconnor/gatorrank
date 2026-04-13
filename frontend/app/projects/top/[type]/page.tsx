@@ -3,9 +3,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { Box, SimpleGrid, Spinner, VStack, Text } from '@chakra-ui/react';
+import { Box, SimpleGrid, VStack, Text } from '@chakra-ui/react';
 import { Navbar } from '@/components/layout/Navbar';
 import { ProjectGridCard } from '@/components/projects/ProjectGridCard';
+import { ProjectCollectionLoading } from '@/components/projects/ProjectCollectionLoading';
 import type { Project } from '@/types/project';
 import { listProjectsPublic } from '@/lib/api/projects';
 import type { ProjectListQuery } from '@/lib/api/types/project';
@@ -148,18 +149,7 @@ export default function TopProjectsPage() {
           </Text>
 
           {loading ? (
-            <VStack
-              minH="40vh"
-              justify="center"
-              align="center"
-              w="100%"
-              gap="12px"
-            >
-              <Spinner size="lg" color="orange.400" />
-              <Text fontSize="sm" color="gray.600">
-                Loading projects...
-              </Text>
-            </VStack>
+            <ProjectCollectionLoading variant="grid" count={6} />
           ) : error ? (
             <Box
               bg="white"

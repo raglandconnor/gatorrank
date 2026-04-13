@@ -2,6 +2,7 @@
 import { motion } from 'framer-motion';
 import { VStack, Text, Button, Link as ChakraLink } from '@chakra-ui/react';
 import { ProjectCard } from '@/components/projects/ProjectCard';
+import { ProjectCollectionLoading } from '@/components/projects/ProjectCollectionLoading';
 import type { Project } from '@/types/project';
 import NextLink from 'next/link';
 
@@ -10,6 +11,7 @@ interface ProjectSectionProps {
   projects: Project[];
   ctaLabel: string;
   ctaHref?: string;
+  loading?: boolean;
 }
 
 export function ProjectSection({
@@ -17,6 +19,7 @@ export function ProjectSection({
   projects,
   ctaLabel,
   ctaHref,
+  loading = false,
 }: ProjectSectionProps) {
   return (
     <VStack gap="30px" align="center" w="100%">
@@ -42,18 +45,26 @@ export function ProjectSection({
 
       {/* Project cards */}
       <VStack gap="20px" align="start" w="100%">
-        {projects.map((project, index) => (
-          <motion.div
-            key={project.id}
-            initial={{ opacity: 0, y: 16 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.35, delay: index * 0.07 }}
-            style={{ width: '100%' }}
-          >
-            <ProjectCard project={project} rank={index + 1} />
-          </motion.div>
-        ))}
+        {loading ? (
+          <ProjectCollectionLoading
+            variant="row"
+            count={3}
+            showMessage={false}
+          />
+        ) : (
+          projects.map((project, index) => (
+            <motion.div
+              key={project.id}
+              initial={{ opacity: 0, y: 16 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.35, delay: index * 0.07 }}
+              style={{ width: '100%' }}
+            >
+              <ProjectCard project={project} rank={index + 1} />
+            </motion.div>
+          ))
+        )}
       </VStack>
 
       {/* CTA button */}
