@@ -20,9 +20,22 @@ vi.mock('@/lib/api/projects', () => ({
 
 vi.mock('framer-motion', () => ({
   motion: {
-    div: ({ children, ...props }: { children?: ReactNode }) => (
-      <div {...props}>{children}</div>
-    ),
+    div: ({
+      children,
+      whileInView: _whileInView,
+      initial: _initial,
+      animate: _animate,
+      transition: _transition,
+      viewport: _viewport,
+      ...props
+    }: {
+      children?: ReactNode;
+      whileInView?: unknown;
+      initial?: unknown;
+      animate?: unknown;
+      transition?: unknown;
+      viewport?: unknown;
+    }) => <div {...props}>{children}</div>,
   },
 }));
 

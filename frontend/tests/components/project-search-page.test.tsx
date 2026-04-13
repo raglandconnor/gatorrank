@@ -1,4 +1,4 @@
-import { fireEvent, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 import ProjectSearchPage from '@/app/projects/search/page';
 import { renderWithChakra } from '@/tests/utils/render';
@@ -188,7 +188,9 @@ describe('ProjectSearchPage', () => {
 
     expect(await screen.findByText('First Page Project')).toBeInTheDocument();
 
-    triggerIntersection(0);
+    await act(async () => {
+      triggerIntersection(0);
+    });
 
     expect(await screen.findByText('Second Page Project')).toBeInTheDocument();
     expect(searchProjectsMock).toHaveBeenNthCalledWith(
