@@ -15,7 +15,7 @@ import {
   Button,
 } from '@chakra-ui/react';
 import NextLink from 'next/link';
-import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import {
   LuChevronDown,
   LuUser,
@@ -30,9 +30,10 @@ export function Navbar() {
   const { user, isReady, logout } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
-  const searchParams = useSearchParams();
   const navSearchDefault =
-    pathname === '/projects/search' ? (searchParams.get('q') ?? '') : '';
+    pathname === '/projects/search' && typeof window !== 'undefined'
+      ? (new URLSearchParams(window.location.search).get('q') ?? '')
+      : '';
 
   const showSearch = useMemo(() => {
     if (!pathname) return true;

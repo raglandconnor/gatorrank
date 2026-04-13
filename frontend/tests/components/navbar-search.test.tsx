@@ -1,18 +1,16 @@
-import { fireEvent, screen } from '@testing-library/react';
+import { fireEvent, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 import { Navbar } from '@/components/layout/Navbar';
 import { renderWithChakra } from '@/tests/utils/render';
 
-const { pushMock, pathnameRef, searchParamsRef } = vi.hoisted(() => ({
+const { pushMock, pathnameRef } = vi.hoisted(() => ({
   pushMock: vi.fn(),
   pathnameRef: { value: '/' },
-  searchParamsRef: { value: new URLSearchParams() },
 }));
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: pushMock }),
   usePathname: () => pathnameRef.value,
-  useSearchParams: () => searchParamsRef.value,
 }));
 
 vi.mock('@/components/domain/AuthProvider', () => ({
@@ -27,7 +25,7 @@ describe('Navbar search', () => {
   beforeEach(() => {
     pushMock.mockReset();
     pathnameRef.value = '/';
-    searchParamsRef.value = new URLSearchParams();
+    window.history.replaceState({}, '', '/');
   });
 
   test('submits trimmed query and routes to search page', () => {
@@ -70,15 +68,21 @@ describe('Navbar search', () => {
     ).not.toBeInTheDocument();
   });
 
-  test('prefills query on search route', () => {
+  test('prefills query on search route', async () => {
     pathnameRef.value = '/projects/search';
-    searchParamsRef.value = new URLSearchParams('q=ml+ranking&sort=new');
+    window.history.replaceState(
+      {},
+      '',
+      '/projects/search?q=ml+ranking&sort=new',
+    );
 
     renderWithChakra(<Navbar />);
 
     const input = screen.getByPlaceholderText(
       'Search projects',
     ) as HTMLInputElement;
-    expect(input.value).toBe('ml ranking');
+    await waitFor(() => {
+      expect(input.value).toBe('ml ranking');
+    });
   });
 });
