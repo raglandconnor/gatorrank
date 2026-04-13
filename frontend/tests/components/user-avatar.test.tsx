@@ -64,4 +64,32 @@ describe('UserAvatar', () => {
       screen.getByRole('img', { name: 'Avery Hernandez' }),
     ).toHaveAttribute('src', 'https://avatar.gatorrank.mock/user-14.png');
   });
+
+  test('retries rendering the same image URL after it is cleared and restored', () => {
+    const { rerender } = renderWithChakra(
+      <UserAvatar
+        name="Avery Hernandez"
+        imageUrl="https://avatar.gatorrank.mock/user-13.png"
+      />,
+    );
+
+    fireEvent.error(screen.getByRole('img', { name: 'Avery Hernandez' }));
+    expect(screen.getByText('AH')).toBeInTheDocument();
+
+    rerender(<UserAvatar name="Avery Hernandez" imageUrl={null} />);
+    expect(
+      screen.getByRole('img', { name: 'Avery Hernandez' }),
+    ).toBeInTheDocument();
+
+    rerender(
+      <UserAvatar
+        name="Avery Hernandez"
+        imageUrl="https://avatar.gatorrank.mock/user-13.png"
+      />,
+    );
+
+    expect(
+      screen.getByRole('img', { name: 'Avery Hernandez' }),
+    ).toHaveAttribute('src', 'https://avatar.gatorrank.mock/user-13.png');
+  });
 });
