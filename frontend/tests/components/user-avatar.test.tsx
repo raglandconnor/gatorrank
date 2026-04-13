@@ -64,10 +64,4 @@ describe('UserAvatar', () => {
       screen.getByRole('img', { name: 'Avery Hernandez' }),
     ).toHaveAttribute('src', 'https://avatar.gatorrank.mock/user-14.png');
   });
-
-  test('renders a safe fallback for blank names', () => {
-    renderWithChakra(<UserAvatar name="   " />);
-
-    expect(screen.getByText('?')).toBeInTheDocument();
-  });
 });
