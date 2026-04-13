@@ -1,6 +1,6 @@
 'use client';
 
-import { FormEvent, useMemo } from 'react';
+import { FormEvent, Suspense, useMemo } from 'react';
 import { GatorRankLogo } from '@/components/layout/GatorRankLogo';
 import { useAuth } from '@/components/domain/AuthProvider';
 import {
@@ -26,13 +26,55 @@ import {
 import { profilePath } from '@/lib/routes';
 import { UserAvatar } from '@/components/ui/UserAvatar';
 
+function NavbarSearch({
+  pathname,
+  onSubmit,
+}: {
+  pathname: string | null;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+}) {
+  const searchParams = useSearchParams();
+  const navSearchDefault =
+    pathname === '/projects/search' ? (searchParams.get('q') ?? '') : '';
+
+  return (
+    <Box flex="1" maxW="520px" key={`${pathname}-${navSearchDefault}`}>
+      <form onSubmit={onSubmit}>
+        <HStack gap="8px" align="center">
+          <Input
+            name="q"
+            defaultValue={navSearchDefault}
+            placeholder="Search projects"
+            bg="white"
+            border="1px solid"
+            borderColor="gray.300"
+            borderRadius="12px"
+            h="42px"
+            minW="0"
+          />
+          <Button
+            type="submit"
+            aria-label="Search projects"
+            h="42px"
+            minW="42px"
+            px="12px"
+            borderRadius="12px"
+            bg="gray.900"
+            color="white"
+            _hover={{ bg: 'gray.700' }}
+          >
+            <LuSearch size={16} />
+          </Button>
+        </HStack>
+      </form>
+    </Box>
+  );
+}
+
 export function Navbar() {
   const { user, isReady, logout } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
-  const searchParams = useSearchParams();
-  const navSearchDefault =
-    pathname === '/projects/search' ? (searchParams.get('q') ?? '') : '';
 
   const showSearch = useMemo(() => {
     if (!pathname) return true;
@@ -76,36 +118,9 @@ export function Navbar() {
           </HStack>
 
           {showSearch ? (
-            <Box flex="1" maxW="520px" key={`${pathname}-${navSearchDefault}`}>
-              <form onSubmit={handleSearchSubmit}>
-                <HStack gap="8px" align="center">
-                  <Input
-                    name="q"
-                    defaultValue={navSearchDefault}
-                    placeholder="Search projects"
-                    bg="white"
-                    border="1px solid"
-                    borderColor="gray.300"
-                    borderRadius="12px"
-                    h="42px"
-                    minW="0"
-                  />
-                  <Button
-                    type="submit"
-                    aria-label="Search projects"
-                    h="42px"
-                    minW="42px"
-                    px="12px"
-                    borderRadius="12px"
-                    bg="gray.900"
-                    color="white"
-                    _hover={{ bg: 'gray.700' }}
-                  >
-                    <LuSearch size={16} />
-                  </Button>
-                </HStack>
-              </form>
-            </Box>
+            <Suspense fallback={<Box flex="1" maxW="520px" />}>
+              <NavbarSearch pathname={pathname} onSubmit={handleSearchSubmit} />
+            </Suspense>
           ) : (
             <Box flex="1" />
           )}

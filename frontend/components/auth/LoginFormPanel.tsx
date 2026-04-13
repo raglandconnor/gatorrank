@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { useAuth } from '@/components/domain/AuthProvider';
 import { toast } from '@/lib/ui/toast';
 import { loginErrorToast } from '@/lib/auth/toastMessages';
@@ -21,9 +21,12 @@ import { HiEye, HiEyeSlash } from 'react-icons/hi2';
 import NextLink from 'next/link';
 import { isValidEduEmail } from '@/lib/validation';
 
-export function LoginFormPanel() {
+type LoginFormPanelProps = {
+  returnTo?: string | null;
+};
+
+export function LoginFormPanel({ returnTo }: LoginFormPanelProps) {
   const router = useRouter();
-  const searchParams = useSearchParams();
   const { login, isReady } = useAuth();
 
   const [showPassword, setShowPassword] = useState(false);
@@ -56,12 +59,12 @@ export function LoginFormPanel() {
     setIsSubmitting(true);
     try {
       await login(email.trim(), password, rememberMe);
-      const returnTo = resolveSafeReturnTo(searchParams.get('returnTo'));
+      const safeReturnTo = resolveSafeReturnTo(returnTo ?? null);
       toast.success({
         title: 'Signed in',
         description: 'Welcome back. Taking you back…',
       });
-      router.push(returnTo);
+      router.push(safeReturnTo);
     } catch (err) {
       toast.error(loginErrorToast(err));
     } finally {

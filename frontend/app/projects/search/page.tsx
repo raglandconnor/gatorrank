@@ -1,6 +1,13 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
   Box,
@@ -25,6 +32,14 @@ function normalizeSort(value: string | null): SearchSort {
 }
 
 export default function ProjectSearchPage() {
+  return (
+    <Suspense fallback={<Box minH="100vh" bg="transparent" />}>
+      <ProjectSearchPageContent />
+    </Suspense>
+  );
+}
+
+function ProjectSearchPageContent() {
   const router = useRouter();
   const params = useSearchParams();
   const { accessToken } = useAuth();
