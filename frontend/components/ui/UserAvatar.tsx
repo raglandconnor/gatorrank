@@ -36,6 +36,8 @@ export function UserAvatar({
 
   return (
     <Flex
+      role="img"
+      aria-label={name}
       boxSize={size}
       borderRadius="full"
       bg="orange.400"

@@ -4,13 +4,13 @@ import { UserAvatar } from '@/components/ui/UserAvatar';
 import { renderWithChakra } from '@/tests/utils/render';
 
 describe('UserAvatar', () => {
-  test('renders initials fallback when no image URL is provided', () => {
+  test('renders an accessible initials fallback when no image URL is provided', () => {
     renderWithChakra(<UserAvatar name="Avery Hernandez" />);
 
-    expect(screen.getByText('AH')).toBeInTheDocument();
     expect(
-      screen.queryByRole('img', { name: 'Avery Hernandez' }),
-    ).not.toBeInTheDocument();
+      screen.getByRole('img', { name: 'Avery Hernandez' }),
+    ).toBeInTheDocument();
+    expect(screen.getByText('AH')).toBeInTheDocument();
   });
 
   test('renders the image when an image URL is provided', () => {
@@ -26,7 +26,7 @@ describe('UserAvatar', () => {
     ).toHaveAttribute('src', 'https://avatar.gatorrank.mock/user-13.png');
   });
 
-  test('falls back to initials when the image fails to load', () => {
+  test('falls back to an accessible initials avatar when the image fails to load', () => {
     renderWithChakra(
       <UserAvatar
         name="Avery Hernandez"
@@ -36,10 +36,10 @@ describe('UserAvatar', () => {
 
     fireEvent.error(screen.getByRole('img', { name: 'Avery Hernandez' }));
 
-    expect(screen.getByText('AH')).toBeInTheDocument();
     expect(
-      screen.queryByRole('img', { name: 'Avery Hernandez' }),
-    ).not.toBeInTheDocument();
+      screen.getByRole('img', { name: 'Avery Hernandez' }),
+    ).toBeInTheDocument();
+    expect(screen.getByText('AH')).toBeInTheDocument();
   });
 
   test('retries rendering when the image URL changes after a failure', () => {
