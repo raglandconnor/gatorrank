@@ -8,9 +8,8 @@ import {
 import { renderWithChakra } from '@/tests/utils/render';
 
 vi.mock('framer-motion', async () => {
-  const actual = await vi.importActual<typeof import('framer-motion')>(
-    'framer-motion',
-  );
+  const actual =
+    await vi.importActual<typeof import('framer-motion')>('framer-motion');
 
   return {
     ...actual,
@@ -25,7 +24,9 @@ vi.mock('framer-motion', async () => {
 
 describe('ProjectActionPills', () => {
   test('renders a non-interactive comment pill without exposing a button', () => {
-    renderWithChakra(<CommentPill count={3} ariaLabel="3 comments on GatorRank" />);
+    renderWithChakra(
+      <CommentPill count={3} ariaLabel="3 comments on GatorRank" />,
+    );
 
     expect(
       screen.queryByRole('button', { name: /3 comments on GatorRank/i }),

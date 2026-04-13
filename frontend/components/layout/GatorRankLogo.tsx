@@ -26,12 +26,15 @@ export function GatorRankLogo({
 
   // "sm" maps to the navbar treatment, which can still use a larger box than the
   // older 60px asset sizing when the surrounding layout allows it.
-  const resolvedWidth = width ?? (isSm ? '100px' : { base: '80px', sm: '96px', md: '120px' });
+  const resolvedWidth =
+    width ?? (isSm ? '100px' : { base: '80px', sm: '96px', md: '120px' });
   const resolvedHeight =
     height ?? (isSm ? '100px' : { base: '80px', sm: '96px', md: '120px' });
   const resolvedSizes =
     imageSizes ??
-    (isSm ? '100px' : '(max-width: 640px) 80px, (max-width: 768px) 100px, 120px');
+    (isSm
+      ? '100px'
+      : '(max-width: 640px) 80px, (max-width: 768px) 100px, 120px');
 
   return (
     <Link

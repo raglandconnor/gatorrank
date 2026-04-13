@@ -63,7 +63,9 @@ describe('project card navigation', () => {
     });
 
     expect(upvoteButton.closest('a')).toBeNull();
-    expect(screen.queryByRole('button', { name: /3 comments on GatorRank/i })).toBeNull();
+    expect(
+      screen.queryByRole('button', { name: /3 comments on GatorRank/i }),
+    ).toBeNull();
     expect(screen.getByText('3').closest('a')).toBeNull();
   });
 
