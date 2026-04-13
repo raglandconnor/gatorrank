@@ -78,9 +78,9 @@ test('navbar search routes to results, supports sort, and opens a result', async
     });
   });
 
-  await page.route('**/api/v1/projects/*', async (route) => {
+  await page.route('**/api/v1/projects/**', async (route) => {
     const url = new URL(route.request().url());
-    if (!url.pathname.endsWith('/api/v1/projects/p-new-1')) {
+    if (!url.pathname.endsWith('/api/v1/projects/slug/new-q')) {
       await route.fallback();
       return;
     }
@@ -92,7 +92,7 @@ test('navbar search routes to results, supports sort, and opens a result', async
         id: 'p-new-1',
         created_by_id: 'u1',
         title: 'New ranking',
-        slug: 'new-ranking',
+        slug: 'new-q',
         short_description: 'New sorted result',
         long_description: 'Project details loaded from backend endpoint.',
         demo_url: null,
@@ -138,7 +138,7 @@ test('navbar search routes to results, supports sort, and opens a result', async
   await expect(page.getByText('New ranking')).toBeVisible();
 
   await page.getByRole('link', { name: /New ranking/ }).click();
-  await expect(page).toHaveURL(/\/projects\/p-new-1/);
+  await expect(page).toHaveURL(/\/projects\/new-q/);
   await expect(page.getByText('About This Project')).toBeVisible();
   await expect(
     page.getByText('Project details loaded from backend endpoint.'),
