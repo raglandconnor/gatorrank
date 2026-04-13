@@ -7,6 +7,7 @@ export function mapProjectListItemToCardProject(
   return {
     id: item.id,
     name: item.title,
+    slug: item.slug,
     description: item.short_description,
     tags: item.tags.map((tag) => tag.name),
     votes: item.vote_count,
