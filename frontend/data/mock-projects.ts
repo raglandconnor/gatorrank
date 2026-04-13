@@ -4,6 +4,7 @@ export const topOverallProjects: Project[] = [
   {
     id: 1,
     name: 'Minara',
+    slug: 'minara',
     description:
       'A mobile app that helps UF students find study groups and tutors on campus.',
     tags: ['iOS', 'Education', 'Social'],
@@ -13,6 +14,7 @@ export const topOverallProjects: Project[] = [
   {
     id: 2,
     name: 'GatorMap',
+    slug: 'gatormap',
     description:
       'An interactive campus navigation tool with real-time crowd density overlays.',
     tags: ['Web', 'Maps', 'Productivity'],
@@ -22,6 +24,7 @@ export const topOverallProjects: Project[] = [
   {
     id: 3,
     name: 'SwampByte',
+    slug: 'swampbyte',
     description:
       'A competitive coding platform specifically designed for UF CS students.',
     tags: ['Web', 'Education', 'Open Source'],
@@ -31,6 +34,7 @@ export const topOverallProjects: Project[] = [
   {
     id: 4,
     name: 'HealthGator',
+    slug: 'healthgator',
     description:
       'Tracks personal health metrics and syncs with UF Student Health Center records.',
     tags: ['iOS', 'Health & Fitness', 'AI'],
@@ -40,6 +44,7 @@ export const topOverallProjects: Project[] = [
   {
     id: 5,
     name: 'ChompAI',
+    slug: 'chompai',
     description:
       'An AI-powered course selection assistant that recommends schedules based on your major.',
     tags: ['Web', 'AI', 'Education'],
@@ -52,6 +57,7 @@ export const trendingThisMonthProjects: Project[] = [
   {
     id: 6,
     name: 'GatorEats',
+    slug: 'gatoreats',
     description:
       'Discover the best food spots near UF with ratings from fellow students.',
     tags: ['iOS', 'Food & Drink', 'Social'],
@@ -61,6 +67,7 @@ export const trendingThisMonthProjects: Project[] = [
   {
     id: 7,
     name: 'RentGator',
+    slug: 'rentgator',
     description:
       'Find and compare off-campus housing options near the University of Florida.',
     tags: ['Web', 'Real Estate', 'Productivity'],
@@ -70,6 +77,7 @@ export const trendingThisMonthProjects: Project[] = [
   {
     id: 8,
     name: 'Swampfolio',
+    slug: 'swampfolio',
     description:
       'A portfolio builder and showcase platform tailored for UF engineering students.',
     tags: ['Web', 'Career', 'Open Source'],
@@ -79,6 +87,7 @@ export const trendingThisMonthProjects: Project[] = [
   {
     id: 9,
     name: 'GatorBudget',
+    slug: 'gatorbudget',
     description:
       'Personal finance tracker built for college students living on a tight budget.',
     tags: ['iOS', 'Finance', 'Productivity'],
@@ -88,6 +97,7 @@ export const trendingThisMonthProjects: Project[] = [
   {
     id: 10,
     name: 'ClubHub',
+    slug: 'clubhub',
     description:
       'A centralized directory and event calendar for all UF student organizations.',
     tags: ['Web', 'Social', 'Events'],
@@ -100,6 +110,7 @@ export const trendingLastMonthProjects: Project[] = [
   {
     id: 11,
     name: 'PawPrint',
+    slug: 'pawprint',
     description:
       'Help reunite lost UF campus pets with their owners using photo recognition.',
     tags: ['iOS', 'AI', 'Social'],
@@ -109,6 +120,7 @@ export const trendingLastMonthProjects: Project[] = [
   {
     id: 12,
     name: 'SchedSync',
+    slug: 'schedsync',
     description:
       'Syncs your UF class schedule with friends to find shared free time instantly.',
     tags: ['Web', 'Productivity', 'Social'],
@@ -118,6 +130,7 @@ export const trendingLastMonthProjects: Project[] = [
   {
     id: 13,
     name: 'Noteswap',
+    slug: 'noteswap',
     description:
       'A peer-to-peer note sharing platform for UF courses with quality ratings.',
     tags: ['Web', 'Education', 'Open Source'],
@@ -127,6 +140,7 @@ export const trendingLastMonthProjects: Project[] = [
   {
     id: 14,
     name: 'GatorRide',
+    slug: 'gatorride',
     description:
       'Carpool and rideshare matching for UF students commuting from Gainesville suburbs.',
     tags: ['iOS', 'Transportation', 'Social'],
@@ -136,6 +150,7 @@ export const trendingLastMonthProjects: Project[] = [
   {
     id: 15,
     name: 'ResearchLink',
+    slug: 'researchlink',
     description:
       'Connects undergraduate students with UF faculty research opportunities.',
     tags: ['Web', 'Education', 'Career'],

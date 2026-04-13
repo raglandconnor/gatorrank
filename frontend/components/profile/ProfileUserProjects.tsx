@@ -10,7 +10,6 @@ import {
   Text,
   Flex,
   SimpleGrid,
-  Spinner,
   LinkBox,
   LinkOverlay,
 } from '@chakra-ui/react';
@@ -21,57 +20,7 @@ import type { ProjectListItem } from '@/lib/api/types/project';
 import { useProjectVote } from '@/hooks/useProjectVote';
 import { projectPath } from '@/lib/routes';
 import { ProjectLogoPlaceholder } from '@/components/projects/ProjectLogoPlaceholder';
-
-function ProjectCardPlaceholder({ titleWidth }: { titleWidth: string }) {
-  return (
-    <Box bg="gray.100" borderRadius="13px" p="16px" w="100%" opacity={0.84}>
-      <VStack align="start" gap="12px" w="100%">
-        <Box w="100%" h="144px" borderRadius="10px" overflow="hidden">
-          <ProjectLogoPlaceholder compact />
-        </Box>
-        <VStack align="start" gap="10px" w="100%">
-          <Box h="18px" w={titleWidth} bg="gray.300" borderRadius="full" />
-          <HStack gap="8px">
-            <Box
-              h="24px"
-              w="70px"
-              bg="white"
-              borderRadius="8px"
-              border="1px solid"
-              borderColor="orange.100"
-            />
-            <Box
-              h="24px"
-              w="82px"
-              bg="white"
-              borderRadius="8px"
-              border="1px solid"
-              borderColor="orange.100"
-            />
-          </HStack>
-          <HStack gap="8px" mt="2px">
-            <Box
-              h="36px"
-              w="60px"
-              bg="white"
-              borderRadius="10px"
-              border="1px solid"
-              borderColor="orange.100"
-            />
-            <Box
-              h="36px"
-              w="60px"
-              bg="white"
-              borderRadius="10px"
-              border="1px solid"
-              borderColor="orange.100"
-            />
-          </HStack>
-        </VStack>
-      </VStack>
-    </Box>
-  );
-}
+import { ProjectCollectionLoading } from '@/components/projects/ProjectCollectionLoading';
 
 function CommentPill({
   count,
@@ -199,18 +148,23 @@ function VotePill({
 
 function UserProjectCard({ project }: { project: ProjectListItem }) {
   const [isHovered, setIsHovered] = useState(false);
+  const [isPressed, setIsPressed] = useState(false);
   const { isVoted, voteCount, isPending, toggleVote } = useProjectVote({
     projectId: project.id,
     initialVoteCount: project.vote_count,
     initialViewerHasVoted: project.viewer_has_voted,
   });
   const backgroundColor = project.is_published
-    ? isHovered
-      ? '#efefef'
-      : 'gray.100'
-    : isHovered
-      ? '#fff0bf'
-      : '#fff7db';
+    ? isPressed
+      ? '#e6e6e6'
+      : isHovered
+        ? '#efefef'
+        : 'gray.100'
+    : isPressed
+      ? '#ffe8a3'
+      : isHovered
+        ? '#fff0bf'
+        : '#fff7db';
 
   return (
     <LinkBox
@@ -222,11 +176,19 @@ function UserProjectCard({ project }: { project: ProjectListItem }) {
       cursor="pointer"
       transition="background 0.15s"
       onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
+      onMouseLeave={() => {
+        setIsHovered(false);
+        setIsPressed(false);
+      }}
+      onPointerDownCapture={(event) => {
+        const target = event.target as HTMLElement | null;
+        if (target?.closest('[data-project-card-action="true"]')) return;
+        setIsPressed(true);
+      }}
+      onPointerUpCapture={() => setIsPressed(false)}
+      onPointerCancel={() => setIsPressed(false)}
       _focusWithin={{
-        outline: '2px solid',
-        outlineColor: 'orange.400',
-        outlineOffset: '2px',
+        boxShadow: '0 0 0 3px rgba(148,163,184,0.12)',
       }}
     >
       <VStack align="start" gap="12px" w="100%">
@@ -245,6 +207,7 @@ function UserProjectCard({ project }: { project: ProjectListItem }) {
             <LinkOverlay
               as={NextLink}
               href={projectPath(project.slug)}
+              data-project-card-link="true"
               _hover={{ textDecoration: 'none' }}
               _focusVisible={{ textDecoration: 'none' }}
             >
@@ -372,24 +335,7 @@ export function ProfileUserProjects({
         Projects
       </Text>
 
-      {loading && (
-        <VStack align="stretch" gap="14px" w="100%">
-          <Flex align="center" gap="10px">
-            <Spinner size="sm" color="orange.400" />
-            <Text fontSize="sm" color="gray.500">
-              Loading projects...
-            </Text>
-          </Flex>
-          <SimpleGrid columns={{ base: 1, md: 2, xl: 3 }} gap="16px" w="100%">
-            {[0, 1, 2].map((index) => (
-              <ProjectCardPlaceholder
-                key={index}
-                titleWidth={index === 1 ? '70%' : '58%'}
-              />
-            ))}
-          </SimpleGrid>
-        </VStack>
-      )}
+      {loading && <ProjectCollectionLoading variant="grid" count={3} />}
 
       {!loading && error && (
         <Text fontSize="sm" color="red.500">
@@ -403,14 +349,11 @@ export function ProfileUserProjects({
             Your projects will show up here once you publish or save your first
             draft.
           </Text>
-          <SimpleGrid columns={{ base: 1, md: 2, xl: 3 }} gap="16px" w="100%">
-            {[0, 1, 2].map((index) => (
-              <ProjectCardPlaceholder
-                key={`empty-${index}`}
-                titleWidth={index === 1 ? '68%' : '56%'}
-              />
-            ))}
-          </SimpleGrid>
+          <ProjectCollectionLoading
+            variant="grid"
+            count={3}
+            showMessage={false}
+          />
         </VStack>
       )}
 

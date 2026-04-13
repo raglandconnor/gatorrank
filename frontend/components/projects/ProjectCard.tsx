@@ -1,15 +1,22 @@
 'use client';
+
+import NextLink from 'next/link';
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Box, HStack, VStack, Text, Flex, Button } from '@chakra-ui/react';
 import {
-  LuMessageSquare,
-  LuChevronUp,
-  LuTag,
-  LuArrowRight,
-} from 'react-icons/lu';
+  Box,
+  HStack,
+  VStack,
+  Text,
+  LinkBox,
+  LinkOverlay,
+  Button,
+} from '@chakra-ui/react';
+import { LuMessageSquare, LuChevronUp, LuArrowRight } from 'react-icons/lu';
 import type { Project } from '@/types/project';
 import { useProjectVote } from '@/hooks/useProjectVote';
+import { projectPath } from '@/lib/routes';
+import { ProjectInlineTags } from '@/components/projects/ProjectInlineTags';
 
 interface ProjectCardProps {
   project: Project;
@@ -18,129 +25,138 @@ interface ProjectCardProps {
 
 export function ProjectCard({ project, rank }: ProjectCardProps) {
   const [isHovered, setIsHovered] = useState(false);
+  const [isPressed, setIsPressed] = useState(false);
   const { isVoted, voteCount, toggleVote } = useProjectVote({
     projectId: String(project.id),
     initialVoteCount: project.votes,
     initialViewerHasVoted: project.viewerHasVoted ?? false,
   });
 
+  const backgroundColor = isPressed
+    ? '#e6e6e6'
+    : isHovered
+      ? '#efefef'
+      : 'gray.100';
+
   return (
-    <HStack
-      bg={isHovered ? '#efefef' : 'gray.100'}
+    <LinkBox
+      bg={backgroundColor}
       borderRadius="13px"
       px="20px"
       py="9px"
       gap="20px"
-      align="center"
+      alignItems="flex-start"
+      display="flex"
       w="100%"
       cursor="pointer"
       transition="background 0.15s"
       onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
+      onMouseLeave={() => {
+        setIsHovered(false);
+        setIsPressed(false);
+      }}
+      onPointerDownCapture={(event) => {
+        const target = event.target as HTMLElement | null;
+        if (target?.closest('[data-project-card-action="true"]')) return;
+        setIsPressed(true);
+      }}
+      onPointerUpCapture={() => setIsPressed(false)}
+      onPointerCancel={() => setIsPressed(false)}
+      _focusWithin={{
+        boxShadow: '0 0 0 3px rgba(148,163,184,0.12)',
+      }}
     >
-      {/* Icon placeholder */}
-      <Box w="42px" h="40px" bg="gray.300" borderRadius="13px" flexShrink={0} />
+      <Box w="60px" h="60px" bg="gray.300" borderRadius="13px" flexShrink={0} />
 
-      {/* Name, description, tags */}
-      <VStack align="start" gap="6px" flex={1} justify="center">
-        {/* Hoverable title with nav icon */}
-        <HStack gap="6px" align="center" display="inline-flex">
-          <Text
-            fontSize="md"
-            fontWeight="bold"
-            color={isHovered ? 'orange.600' : 'gray.900'}
-            lineHeight="30px"
-            transition="color 0.15s"
-          >
-            {rank}. {project.name}
-          </Text>
-          <Box
-            color="orange.600"
-            opacity={isHovered ? 1 : 0}
-            transition="opacity 0.15s"
-            flexShrink={0}
-          >
-            <LuArrowRight size={13} />
-          </Box>
-        </HStack>
-
-        <Text fontSize="sm" color="gray.800" lineHeight="24px">
-          {project.description}
-        </Text>
-
-        {/* Tags with hover underline */}
-        <HStack gap={0} align="center" flexWrap="wrap">
-          <Box color="gray.800" mr="8px">
-            <LuTag size={13} />
-          </Box>
-          {project.tags.map((tag, i) => (
-            <HStack key={tag} gap={0} align="center">
+      <VStack align="start" gap="6px" flex={1} minW={0}>
+        <VStack align="start" gap="6px" minH="60px" justify="center" w="100%">
+          <HStack gap="6px" align="center" display="inline-flex" minW={0}>
+            <LinkOverlay
+              as={NextLink}
+              href={projectPath(project.slug)}
+              data-project-card-link="true"
+              _hover={{ textDecoration: 'none' }}
+              _focusVisible={{ textDecoration: 'none' }}
+            >
               <Text
-                fontSize="sm"
-                color="gray.800"
-                lineHeight="24px"
-                cursor="pointer"
-                _hover={{
-                  textDecoration: 'underline',
-                  textUnderlineOffset: '2px',
-                }}
+                fontSize="md"
+                fontWeight="bold"
+                color={isHovered ? 'orange.600' : 'gray.900'}
+                lineHeight="30px"
+                transition="color 0.15s"
+                lineClamp={1}
               >
-                {tag}
+                {rank}. {project.name}
               </Text>
-              {i < project.tags.length - 1 && (
-                <Box
-                  w="4px"
-                  h="4px"
-                  borderRadius="full"
-                  bg="gray.500"
-                  mx="9px"
-                />
-              )}
-            </HStack>
-          ))}
-        </HStack>
+            </LinkOverlay>
+            <Box
+              color="orange.600"
+              opacity={isHovered ? 1 : 0}
+              transition="opacity 0.15s"
+              flexShrink={0}
+            >
+              <LuArrowRight size={13} />
+            </Box>
+          </HStack>
+
+          <Text
+            fontSize="sm"
+            color="gray.800"
+            lineHeight="24px"
+            lineClamp={1}
+            w="100%"
+          >
+            {project.description}
+          </Text>
+        </VStack>
+
+        <ProjectInlineTags tags={project.tags} maxRows={1} />
       </VStack>
 
-      {/* Action buttons — equal height */}
-      <HStack gap="20px" py="17px" flexShrink={0}>
-        {/* Comments */}
+      <HStack gap="18px" pt="6px" flexShrink={0}>
         <motion.div whileTap={{ scale: 1.1 }} style={{ display: 'contents' }}>
-          <Flex
-            direction="column"
-            align="center"
-            justify="center"
-            w="44px"
-            h="52px"
+          <Button
+            data-project-card-action="true"
+            type="button"
+            variant="plain"
+            display="flex"
+            flexDirection="column"
+            alignItems="center"
+            justifyContent="center"
+            w="42px"
+            h="48px"
             bg="white"
             border="2px solid"
             borderColor="orange.200"
             borderRadius="10px"
             px="4px"
-            cursor="pointer"
+            cursor="default"
             _hover={{ bg: 'orange.50' }}
             transition="background 0.15s"
             gap="2px"
+            aria-label={`${project.comments} comments on ${project.name}`}
           >
             <Box color="gray.800">
               <LuMessageSquare size={18} />
             </Box>
             <Text
               fontSize="sm"
+              fontWeight="normal"
               color="gray.800"
               lineHeight="20px"
               textAlign="center"
             >
               {project.comments}
             </Text>
-          </Flex>
+          </Button>
         </motion.div>
 
-        {/* Votes */}
         <motion.div
           whileTap={{ scale: 1.2, y: -3 }}
           style={{ display: 'contents' }}
         >
           <Button
+            data-project-card-action="true"
             type="button"
             variant="plain"
             display="flex"
@@ -180,6 +196,7 @@ export function ProjectCard({ project, rank }: ProjectCardProps) {
                     alignItems: 'center',
                     justifyContent: 'center',
                     fontSize: '0.875rem',
+                    fontWeight: 400,
                     lineHeight: '20px',
                     color: 'inherit',
                   }}
@@ -191,6 +208,6 @@ export function ProjectCard({ project, rank }: ProjectCardProps) {
           </Button>
         </motion.div>
       </HStack>
-    </HStack>
+    </LinkBox>
   );
 }
