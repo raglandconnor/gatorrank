@@ -121,10 +121,14 @@ describe('EditProjectPage delete flow', () => {
     renderWithChakra(<EditProjectPage />);
 
     await screen.findByText('Delete project');
+    fireEvent.click(screen.getByRole('button', { name: 'Delete Project' }));
+
     const input = screen.getByLabelText(
       'Type project title to confirm deletion',
     );
-    const deleteButton = screen.getByRole('button', { name: 'Delete Project' });
+    const deleteButton = screen.getAllByRole('button', {
+      name: 'Delete Project',
+    })[1];
 
     expect(deleteButton).toBeDisabled();
 
@@ -137,11 +141,14 @@ describe('EditProjectPage delete flow', () => {
     renderWithChakra(<EditProjectPage />);
 
     await screen.findByText('Delete project');
+    fireEvent.click(screen.getByRole('button', { name: 'Delete Project' }));
     fireEvent.change(
       screen.getByLabelText('Type project title to confirm deletion'),
       { target: { value: 'demo project' } },
     );
-    fireEvent.click(screen.getByRole('button', { name: 'Delete Project' }));
+    fireEvent.click(
+      screen.getAllByRole('button', { name: 'Delete Project' })[1],
+    );
 
     await waitFor(() => {
       expect(deleteProjectMock).toHaveBeenCalledWith('project-1');
@@ -158,11 +165,14 @@ describe('EditProjectPage delete flow', () => {
     renderWithChakra(<EditProjectPage />);
 
     await screen.findByText('Delete project');
+    fireEvent.click(screen.getByRole('button', { name: 'Delete Project' }));
     fireEvent.change(
       screen.getByLabelText('Type project title to confirm deletion'),
       { target: { value: 'demo project' } },
     );
-    fireEvent.click(screen.getByRole('button', { name: 'Delete Project' }));
+    fireEvent.click(
+      screen.getAllByRole('button', { name: 'Delete Project' })[1],
+    );
 
     await waitFor(() => {
       expect(toastErrorMock).toHaveBeenCalledWith({
