@@ -10,7 +10,6 @@ import {
   Text,
   Button,
   Input,
-  Textarea,
   Spinner,
 } from '@chakra-ui/react';
 import {
@@ -134,7 +133,6 @@ export default function EditProfilePage() {
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
   const [profilePictureUrl, setProfilePictureUrl] = useState('');
 
-  const [bio, setBio] = useState('');
   const [github, setGithub] = useState('');
   const [linkedin, setLinkedin] = useState('');
   const [website, setWebsite] = useState('');
@@ -168,7 +166,6 @@ export default function EditProfilePage() {
         setAvatarPreview(user.profile_picture_url ?? null);
 
         const ext = loadExtended(user.id);
-        setBio(ext.bio);
         setGithub(ext.socials.github ?? '');
         setLinkedin(ext.socials.linkedin ?? '');
         setWebsite(ext.socials.website ?? '');
@@ -410,22 +407,6 @@ export default function EditProfilePage() {
               />
               <RoleBadge role={apiUser.role as 'student' | 'faculty'} />
             </HStack>
-
-            <ComingSoonBlock mb="2px">
-              <FieldLabelWithComingSoon>Bio</FieldLabelWithComingSoon>
-              <Textarea
-                value={bio}
-                placeholder="Tell the community about yourself…"
-                {...inputBase}
-                h="80px"
-                py="10px"
-                resize="none"
-                maxW="640px"
-                lineHeight="24px"
-                disabled
-                opacity={0.7}
-              />
-            </ComingSoonBlock>
 
             <ComingSoonBlock>
               <FieldLabelWithComingSoon>Social Links</FieldLabelWithComingSoon>
