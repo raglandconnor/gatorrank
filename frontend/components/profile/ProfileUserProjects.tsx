@@ -21,6 +21,7 @@ import { useProjectVote } from '@/hooks/useProjectVote';
 import { projectPath } from '@/lib/routes';
 import { ProjectLogoPlaceholder } from '@/components/projects/ProjectLogoPlaceholder';
 import { ProjectCollectionLoading } from '@/components/projects/ProjectCollectionLoading';
+import { ProjectTaxonomyBadges } from '@/components/projects/ProjectTaxonomyBadges';
 
 function CommentPill({
   count,
@@ -260,6 +261,12 @@ export function UserProjectCard({ project }: { project: ProjectListItem }) {
           >
             {project.short_description}
           </Text>
+
+          <ProjectTaxonomyBadges
+            categories={project.categories.map((c) => c.name)}
+            tags={project.tags.map((t) => t.name)}
+            techStack={project.tech_stack.map((t) => t.name)}
+          />
 
           <HStack gap="8px" mt="2px" position="relative" zIndex={1}>
             <motion.div
