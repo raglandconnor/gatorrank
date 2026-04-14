@@ -102,6 +102,54 @@ export default function CreateProjectPage() {
     }
   };
 
+  const actionButtons = (
+    <HStack gap="12px" flexShrink={0}>
+      <Button
+        type="button"
+        variant="outline"
+        border="1px solid"
+        borderColor="orange.400"
+        borderRadius="14px"
+        h="44px"
+        px="20px"
+        fontSize="sm"
+        color="gray.900"
+        bg="white"
+        _hover={{ bg: 'orange.50' }}
+        transition="background 0.15s"
+        onClick={() => router.push('/profile')}
+        disabled={isSubmitting}
+      >
+        <HStack gap="6px">
+          <LuX size={16} />
+          <Text>Cancel</Text>
+        </HStack>
+      </Button>
+      <Button
+        type="submit"
+        form="project-form"
+        bg={isSubmitDisabled || isSubmitting ? 'gray.300' : 'orange.400'}
+        color="white"
+        borderRadius="14px"
+        h="44px"
+        px="20px"
+        fontSize="sm"
+        fontWeight="normal"
+        _hover={{
+          bg: isSubmitDisabled || isSubmitting ? 'gray.300' : 'orange.500',
+        }}
+        transition="background 0.15s"
+        disabled={isSubmitDisabled || isSubmitting}
+        cursor={isSubmitDisabled || isSubmitting ? 'not-allowed' : 'pointer'}
+      >
+        <HStack gap="6px">
+          <LuImage size={16} />
+          <Text>{isSubmitting ? 'Creating...' : 'Submit Project'}</Text>
+        </HStack>
+      </Button>
+    </HStack>
+  );
+
   return (
     <Box minH="100vh" bg="transparent">
       <Navbar />
@@ -121,54 +169,7 @@ export default function CreateProjectPage() {
             </Text>
           </VStack>
 
-          <HStack gap="12px" flexShrink={0}>
-            <Button
-              type="button"
-              variant="outline"
-              border="1px solid"
-              borderColor="orange.400"
-              borderRadius="14px"
-              h="44px"
-              px="20px"
-              fontSize="sm"
-              color="gray.900"
-              bg="white"
-              _hover={{ bg: 'orange.50' }}
-              transition="background 0.15s"
-              onClick={() => router.push('/profile')}
-              disabled={isSubmitting}
-            >
-              <HStack gap="6px">
-                <LuX size={16} />
-                <Text>Cancel</Text>
-              </HStack>
-            </Button>
-            <Button
-              type="submit"
-              form="project-form"
-              bg={isSubmitDisabled || isSubmitting ? 'gray.300' : 'orange.400'}
-              color="white"
-              borderRadius="14px"
-              h="44px"
-              px="20px"
-              fontSize="sm"
-              fontWeight="normal"
-              _hover={{
-                bg:
-                  isSubmitDisabled || isSubmitting ? 'gray.300' : 'orange.500',
-              }}
-              transition="background 0.15s"
-              disabled={isSubmitDisabled || isSubmitting}
-              cursor={
-                isSubmitDisabled || isSubmitting ? 'not-allowed' : 'pointer'
-              }
-            >
-              <HStack gap="6px">
-                <LuImage size={16} />
-                <Text>{isSubmitting ? 'Creating...' : 'Submit Project'}</Text>
-              </HStack>
-            </Button>
-          </HStack>
+          {actionButtons}
         </Flex>
 
         <ProjectForm
@@ -195,6 +196,10 @@ export default function CreateProjectPage() {
             return { ok: true as const };
           }}
         />
+
+        <Flex justify="flex-end" mt="32px">
+          {actionButtons}
+        </Flex>
       </Box>
     </Box>
   );
