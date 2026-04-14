@@ -1,6 +1,5 @@
 import { apiUrl } from '@/lib/api/client';
 import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
-import { getStoredAccessToken } from '@/lib/auth/storage';
 import {
   buildHttpError,
   buildQueryString,
@@ -96,7 +95,7 @@ async function executeRequest(
     return fetchWithAuth(requestPath, init);
   }
 
-  if (auth === 'optional' && getStoredAccessToken()) {
+  if (auth === 'optional') {
     const authedRes = await fetchWithAuth(requestPath, init);
     if (authedRes.status !== 401) {
       return authedRes;

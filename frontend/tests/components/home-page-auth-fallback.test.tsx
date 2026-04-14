@@ -3,17 +3,12 @@ import { beforeEach, describe, expect, test, vi } from 'vitest';
 import Home from '@/app/page';
 import { renderWithChakra } from '@/tests/utils/render';
 
-const { fetchWithAuthMock, getStoredAccessTokenMock } = vi.hoisted(() => ({
+const { fetchWithAuthMock } = vi.hoisted(() => ({
   fetchWithAuthMock: vi.fn(),
-  getStoredAccessTokenMock: vi.fn(),
 }));
 
 vi.mock('@/lib/api/fetchWithAuth', () => ({
   fetchWithAuth: fetchWithAuthMock,
-}));
-
-vi.mock('@/lib/auth/storage', () => ({
-  getStoredAccessToken: getStoredAccessTokenMock,
 }));
 
 vi.mock('@/components/layout/Navbar', () => ({
@@ -76,8 +71,6 @@ describe('Home optional-auth fallback behavior', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
     fetchWithAuthMock.mockReset();
-    getStoredAccessTokenMock.mockReset();
-    getStoredAccessTokenMock.mockReturnValue('stale-token');
 
     process.env.NEXT_PUBLIC_API_BASE_URL = 'http://localhost:8000';
   });

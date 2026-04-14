@@ -11,8 +11,12 @@ class Settings(BaseSettings):
     DATABASE_URL: str
     DATABASE_SSL: bool = False
     DATABASE_SSL_VERIFY: bool = True
-    DATABASE_JWT_SECRET: str
+    DATABASE_JWT_SECRET: str | None = None
     DATABASE_CONNECT_TIMEOUT: int = 10
+    SUPABASE_URL: str
+    SUPABASE_ISSUER: str
+    SUPABASE_JWKS_URL: str
+    SUPABASE_SECRET_KEY: str
     # CORS
     CORS_ORIGINS: str = "http://localhost:3000"
 
@@ -20,6 +24,7 @@ class Settings(BaseSettings):
         env_file=".env",
         env_file_encoding="utf-8",
         case_sensitive=False,
+        extra="ignore",
     )
 
     @property

@@ -8,23 +8,9 @@ import {
   useMemo,
   useState,
 } from 'react';
-import {
-  authLogin,
-  authLogout,
-  authMe,
-  authRefresh,
-  authSignup,
-} from '@/lib/api/auth';
 import type { AuthUser } from '@/lib/api/types/auth';
-import {
-  clearAuthSession,
-  getStoredAccessToken,
-  getStoredRefreshToken,
-  getStoredUser,
-  setAuthSession,
-  setStoredUser,
-  updateTokens,
-} from '@/lib/auth/storage';
+import { getMe } from '@/lib/api/users';
+import { getSupabaseBrowserClient } from '@/lib/supabase/browser';
 
 export interface AuthContextValue {
   user: AuthUser | null;
@@ -43,8 +29,7 @@ export interface AuthContextValue {
     rememberMe?: boolean;
   }) => Promise<void>;
   logout: () => Promise<void>;
-  refreshSession: () => Promise<boolean>;
-  /** Updates in-memory user + localStorage (e.g. after PATCH /users/me). */
+  /** Updates in-memory user cache (e.g. after PATCH /users/me). */
   updateCachedUser: (next: AuthUser) => void;
 }
 
@@ -54,48 +39,53 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [isReady, setIsReady] = useState(false);
+  const supabase = useMemo(() => getSupabaseBrowserClient(), []);
+
+  const syncUserFromBackend = useCallback(async () => {
+    const me = await getMe();
+    const authUser: AuthUser = {
+      id: me.id,
+      email: me.email,
+      username: me.username,
+      role: me.role,
+      full_name: me.full_name,
+      profile_picture_url: me.profile_picture_url,
+    };
+    setUser(authUser);
+  }, []);
+
+  const handleSessionChange = useCallback(
+    async (nextAccessToken: string | null) => {
+      setAccessToken(nextAccessToken);
+      if (!nextAccessToken) {
+        setUser(null);
+        return;
+      }
+
+      try {
+        await syncUserFromBackend();
+      } catch {
+        setUser(null);
+      }
+    },
+    [syncUserFromBackend],
+  );
 
   useEffect(() => {
     let cancelled = false;
 
     async function hydrate() {
-      const access = getStoredAccessToken();
-      const refresh = getStoredRefreshToken();
-      const u = getStoredUser();
-
-      if (access && refresh && u) {
-        if (!cancelled) {
-          setAccessToken(access);
-          setUser(u);
-        }
-        return;
-      }
-
-      if (access && refresh && !u) {
-        try {
-          const me = await authMe(access);
-          if (cancelled) return;
-          const authUser: AuthUser = {
-            id: me.id,
-            email: me.email,
-            username: me.username,
-            role: me.role,
-            full_name: me.full_name,
-            profile_picture_url: me.profile_picture_url,
-          };
-          setStoredUser(authUser);
-          setUser(authUser);
-          setAccessToken(access);
-        } catch {
-          clearAuthSession();
-        }
-        return;
-      }
-
-      if ((access && !refresh) || (!access && refresh)) {
-        clearAuthSession();
+      const { data } = await supabase.auth.getSession();
+      if (!cancelled) {
+        await handleSessionChange(data.session?.access_token ?? null);
       }
     }
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      void handleSessionChange(session?.access_token ?? null);
+    });
 
     void hydrate().finally(() => {
       if (!cancelled) setIsReady(true);
@@ -103,21 +93,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     return () => {
       cancelled = true;
+      subscription.unsubscribe();
     };
-  }, []);
+  }, [handleSessionChange, supabase.auth]);
 
   const login = useCallback(
     async (email: string, password: string, rememberMe = false) => {
-      const data = await authLogin({
-        email: email.trim(),
+      void rememberMe;
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: email.trim().toLowerCase(),
         password,
-        remember_me: rememberMe,
       });
-      setAuthSession(data.access_token, data.refresh_token, data.user);
-      setAccessToken(data.access_token);
-      setUser(data.user);
+      if (error) {
+        throw error;
+      }
+      await handleSessionChange(data.session?.access_token ?? null);
     },
-    [],
+    [handleSessionChange, supabase.auth],
   );
 
   const signup = useCallback(
@@ -128,54 +120,40 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       fullName?: string;
       rememberMe?: boolean;
     }) => {
-      const data = await authSignup({
-        email: args.email.trim(),
-        username: args.username.trim().toLowerCase(),
+      void args.rememberMe;
+      const emailRedirectTo =
+        typeof window === 'undefined'
+          ? undefined
+          : `${window.location.origin}/auth/callback?next=/login`;
+      const { data, error } = await supabase.auth.signUp({
+        email: args.email.trim().toLowerCase(),
         password: args.password,
-        full_name: args.fullName?.trim() || undefined,
-        remember_me: args.rememberMe ?? false,
+        options: {
+          emailRedirectTo,
+          data: {
+            username: args.username.trim().toLowerCase(),
+            full_name: args.fullName?.trim() || null,
+          },
+        },
       });
-      setAuthSession(data.access_token, data.refresh_token, data.user);
-      setAccessToken(data.access_token);
-      setUser(data.user);
+      if (error) {
+        throw error;
+      }
+      await handleSessionChange(data.session?.access_token ?? null);
     },
-    [],
+    [handleSessionChange, supabase.auth],
   );
 
   const logout = useCallback(async () => {
-    const refresh = getStoredRefreshToken();
-    if (refresh) {
-      try {
-        await authLogout({ refresh_token: refresh });
-      } catch {
-        // Idempotent on server; still clear client session
-      }
+    const { error } = await supabase.auth.signOut();
+    if (error) {
+      throw error;
     }
-    clearAuthSession();
-    setUser(null);
     setAccessToken(null);
-  }, []);
-
-  const refreshSession = useCallback(async () => {
-    const refresh = getStoredRefreshToken();
-    if (!refresh) return false;
-    try {
-      const tokens = await authRefresh({ refresh_token: refresh });
-      updateTokens(tokens.access_token, tokens.refresh_token);
-      setAccessToken(tokens.access_token);
-      setUser(tokens.user);
-      setStoredUser(tokens.user);
-      return true;
-    } catch {
-      clearAuthSession();
-      setUser(null);
-      setAccessToken(null);
-      return false;
-    }
-  }, []);
+    setUser(null);
+  }, [supabase.auth]);
 
   const updateCachedUser = useCallback((next: AuthUser) => {
-    setStoredUser(next);
     setUser(next);
   }, []);
 
@@ -187,19 +165,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       login,
       signup,
       logout,
-      refreshSession,
       updateCachedUser,
     }),
-    [
-      user,
-      accessToken,
-      isReady,
-      login,
-      signup,
-      logout,
-      refreshSession,
-      updateCachedUser,
-    ],
+    [user, accessToken, isReady, login, signup, logout, updateCachedUser],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

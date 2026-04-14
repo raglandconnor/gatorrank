@@ -1,17 +1,12 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { requestJson, requestVoid } from '@/lib/api/request';
 
-const { fetchWithAuthMock, getStoredAccessTokenMock } = vi.hoisted(() => ({
+const { fetchWithAuthMock } = vi.hoisted(() => ({
   fetchWithAuthMock: vi.fn(),
-  getStoredAccessTokenMock: vi.fn(),
 }));
 
 vi.mock('@/lib/api/fetchWithAuth', () => ({
   fetchWithAuth: fetchWithAuthMock,
-}));
-
-vi.mock('@/lib/auth/storage', () => ({
-  getStoredAccessToken: getStoredAccessTokenMock,
 }));
 
 const originalEnv = process.env.NEXT_PUBLIC_API_BASE_URL;
@@ -21,8 +16,6 @@ describe('request api core', () => {
     process.env.NEXT_PUBLIC_API_BASE_URL = 'http://localhost:8000';
     vi.restoreAllMocks();
     fetchWithAuthMock.mockReset();
-    getStoredAccessTokenMock.mockReset();
-    getStoredAccessTokenMock.mockReturnValue(null);
   });
 
   afterEach(() => {
@@ -104,15 +97,14 @@ describe('request api core', () => {
     expect(headers.get('Content-Type')).toBe('application/json');
   });
 
-  test('routes auth=optional to authenticated path only when token exists', async () => {
-    fetchWithAuthMock.mockResolvedValue(
+  test('routes auth=optional through authenticated transport first', async () => {
+    fetchWithAuthMock.mockResolvedValueOnce(
       new Response(JSON.stringify({ value: 1 }), {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
       }),
     );
 
-    getStoredAccessTokenMock.mockReturnValueOnce('token-123');
     await requestJson<{ value: number }>('/api/v1/with-token', {
       auth: 'optional',
     });
@@ -122,9 +114,16 @@ describe('request api core', () => {
       expect.any(Object),
     );
 
-    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
       new Response(JSON.stringify({ value: 2 }), {
         status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+
+    fetchWithAuthMock.mockResolvedValueOnce(
+      new Response(JSON.stringify({ detail: 'Not authenticated' }), {
+        status: 401,
         headers: { 'Content-Type': 'application/json' },
       }),
     );
@@ -139,7 +138,6 @@ describe('request api core', () => {
   });
 
   test('retries auth=optional anonymously when authenticated attempt returns 401', async () => {
-    getStoredAccessTokenMock.mockReturnValueOnce('stale-token');
     fetchWithAuthMock.mockResolvedValueOnce(
       new Response(
         JSON.stringify({
@@ -181,7 +179,6 @@ describe('request api core', () => {
   });
 
   test('does not retry auth=optional anonymously for non-401 failures', async () => {
-    getStoredAccessTokenMock.mockReturnValueOnce('token-123');
     fetchWithAuthMock.mockResolvedValueOnce(
       new Response(JSON.stringify({ detail: 'Rate limited' }), {
         status: 429,
@@ -211,7 +208,6 @@ describe('request api core', () => {
   });
 
   test('requestVoid retries auth=optional anonymously on 401', async () => {
-    getStoredAccessTokenMock.mockReturnValueOnce('stale-token');
     fetchWithAuthMock.mockResolvedValueOnce(
       new Response(JSON.stringify({ detail: 'Invalid token' }), {
         status: 401,

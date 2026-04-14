@@ -1,4 +1,3 @@
-from app.models.auth import RefreshSession
 from app.models.user import User
 from app.models.user_roles import (
     USER_ROLE_ADMIN,
@@ -33,7 +32,6 @@ __all__ = [
     "USER_ROLE_ADMIN",
     "is_user_role",
     "cast_user_role",
-    "RefreshSession",
     "Project",
     "ProjectMember",
     "Vote",

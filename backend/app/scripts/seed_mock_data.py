@@ -19,7 +19,6 @@ from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.db.database import AsyncSessionLocal
-from app.models.auth import RefreshSession
 from app.models.project_roles import (
     PROJECT_ROLE_CONTRIBUTOR,
     PROJECT_ROLE_MAINTAINER,
@@ -36,13 +35,11 @@ from app.models.taxonomy import (
 )
 from app.models.user import User
 from app.models.user_roles import USER_ROLE_ADMIN, USER_ROLE_FACULTY, USER_ROLE_STUDENT
-from app.services.auth import AuthService
 
 
 @dataclass
 class SeedConfig:
     email_domain: str
-    mock_password: str
     total_users: int
     total_projects: int
     published_projects: int
@@ -52,7 +49,6 @@ class SeedConfig:
     reset_mock: bool
     with_taxonomy: bool
     with_edge_cases: bool
-    with_auth_sessions: bool
 
 
 MOCK_CATEGORIES = [
@@ -161,7 +157,6 @@ def parse_args() -> SeedConfig:
         description="Seed mock database data for local frontend/dev workflows."
     )
     parser.add_argument("--email-domain", default="ufl.edu")
-    parser.add_argument("--mock-password", default="mock-password-12345")
     parser.add_argument("--total-users", type=int, default=24)
     parser.add_argument("--total-projects", type=int, default=36)
     parser.add_argument("--published-projects", type=int, default=30)
@@ -185,12 +180,6 @@ def parse_args() -> SeedConfig:
         default=True,
         help="Seed soft-delete/date-window/member-size edge cases (default: on).",
     )
-    parser.add_argument(
-        "--with-auth-sessions",
-        action=argparse.BooleanOptionalAction,
-        default=False,
-        help="Seed deterministic refresh session fixtures (default: off).",
-    )
     args = parser.parse_args()
 
     if args.total_users <= 0:
@@ -210,7 +199,6 @@ def parse_args() -> SeedConfig:
 
     return SeedConfig(
         email_domain=args.email_domain,
-        mock_password=args.mock_password,
         total_users=args.total_users,
         total_projects=args.total_projects,
         published_projects=args.published_projects,
@@ -220,7 +208,6 @@ def parse_args() -> SeedConfig:
         reset_mock=args.reset_mock,
         with_taxonomy=args.with_taxonomy,
         with_edge_cases=args.with_edge_cases,
-        with_auth_sessions=args.with_auth_sessions,
     )
 
 
@@ -637,68 +624,11 @@ async def apply_edge_case_states(
     return deleted_ids
 
 
-def _deterministic_refresh_token(index: int, variant: str) -> str:
-    return f"mock-refresh-token-{variant}-{index:03d}"
-
-
-async def seed_refresh_sessions(
-    session: AsyncSession,
-    *,
-    users: list[User],
-    auth_service: AuthService,
-    now: datetime,
-) -> None:
-    refresh_session_cols = getattr(RefreshSession, "__table__").c
-    user_ids = [user.id for user in users]
-    if not user_ids:
-        return
-    await session.exec(
-        delete(RefreshSession).where(refresh_session_cols.user_id.in_(user_ids))
-    )
-    for idx, user in enumerate(users, start=1):
-        active_hash = auth_service.hash_refresh_token(
-            _deterministic_refresh_token(idx, "active")
-        )
-        session.add(
-            RefreshSession(  # pyright: ignore[reportCallIssue]
-                user_id=user.id,
-                token_hash=active_hash,
-                expires_at=now + timedelta(days=14 + (idx % 30)),
-                revoked_at=None,
-            )
-        )
-        if idx % 4 == 0:
-            revoked_hash = auth_service.hash_refresh_token(
-                _deterministic_refresh_token(idx, "revoked")
-            )
-            session.add(
-                RefreshSession(  # pyright: ignore[reportCallIssue]
-                    user_id=user.id,
-                    token_hash=revoked_hash,
-                    expires_at=now + timedelta(days=30),
-                    revoked_at=now - timedelta(days=1 + (idx % 5)),
-                )
-            )
-        if idx % 5 == 0:
-            expired_hash = auth_service.hash_refresh_token(
-                _deterministic_refresh_token(idx, "expired")
-            )
-            session.add(
-                RefreshSession(  # pyright: ignore[reportCallIssue]
-                    user_id=user.id,
-                    token_hash=expired_hash,
-                    expires_at=now - timedelta(days=2 + (idx % 10)),
-                    revoked_at=None,
-                )
-            )
-
-
 async def reset_mock_data(session: AsyncSession, *, email_domain: str) -> None:
     user_cols = getattr(User, "__table__").c
     project_cols = getattr(Project, "__table__").c
     vote_cols = getattr(Vote, "__table__").c
     member_cols = getattr(ProjectMember, "__table__").c
-    refresh_session_cols = getattr(RefreshSession, "__table__").c
     project_category_cols = getattr(ProjectCategory, "__table__").c
     project_tag_cols = getattr(ProjectTag, "__table__").c
     project_tech_stack_cols = getattr(ProjectTechStack, "__table__").c
@@ -753,9 +683,6 @@ async def reset_mock_data(session: AsyncSession, *, email_domain: str) -> None:
         if project_ids:
             await session.exec(delete(Project).where(project_cols.id.in_(project_ids)))
         if user_ids:
-            await session.exec(
-                delete(RefreshSession).where(refresh_session_cols.user_id.in_(user_ids))
-            )
             await session.exec(delete(User).where(user_cols.id.in_(user_ids)))
 
 
@@ -764,7 +691,6 @@ async def get_or_create_mock_user(
     *,
     index: int,
     email_domain: str,
-    password_hash: str,
     role: str,
     rng: random.Random,
 ) -> User:
@@ -786,7 +712,6 @@ async def get_or_create_mock_user(
     user = User(  # pyright: ignore[reportCallIssue]
         email=email,
         username=username_for_index(index),
-        password_hash=password_hash,
         role=role,
         full_name=full_name_for_index(index, rng),
         profile_picture_url=f"https://avatar.gatorrank.mock/user-{index}.png",
@@ -1046,9 +971,6 @@ async def seed_mock_data(cfg: SeedConfig) -> None:
             await reset_mock_data(session, email_domain=cfg.email_domain)
             await session.commit()
 
-        auth_service = AuthService(session)
-        password_hash = auth_service.hash_password(cfg.mock_password)
-
         log(f"Seeding {cfg.total_users} users...")
         users: list[User] = []
         for i in range(1, cfg.total_users + 1):
@@ -1056,7 +978,6 @@ async def seed_mock_data(cfg: SeedConfig) -> None:
                 session,
                 index=i,
                 email_domain=cfg.email_domain,
-                password_hash=password_hash,
                 role=role_for_user_index(i),
                 rng=rng,
             )
@@ -1133,15 +1054,6 @@ async def seed_mock_data(cfg: SeedConfig) -> None:
         for i in range(1, cfg.total_votes + 1):
             log(f"  votes: {i}/{cfg.total_votes}")
 
-        if cfg.with_auth_sessions:
-            log("Seeding refresh session fixtures...")
-            await seed_refresh_sessions(
-                session,
-                users=users,
-                auth_service=auth_service,
-                now=now,
-            )
-
         await session.commit()
 
     log("Seed complete")
@@ -1154,9 +1066,6 @@ async def seed_mock_data(cfg: SeedConfig) -> None:
     log(f"- Votes targeted: {cfg.total_votes}")
     log(f"- Taxonomy assignments: {'enabled' if cfg.with_taxonomy else 'disabled'}")
     log(f"- Edge cases: {'enabled' if cfg.with_edge_cases else 'disabled'}")
-    log(
-        f"- Auth session fixtures: {'enabled' if cfg.with_auth_sessions else 'disabled'}"
-    )
 
 
 def main() -> None:
