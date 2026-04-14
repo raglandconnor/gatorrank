@@ -5,7 +5,7 @@ Thumbs.db
 # Ruff
 .ruff_cache/
 
-# Supabase
-supabase/
+# Supabase (CLI local project directory at repo root)
+/supabase/
 checkpoints/*
 !checkpoints/report_2026-03-26_soft_delete.md

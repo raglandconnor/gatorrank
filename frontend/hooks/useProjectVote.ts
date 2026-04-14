@@ -2,8 +2,8 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { useAuth } from '@/components/domain/AuthProvider';
 import { addProjectVote, removeProjectVote } from '@/lib/api/projects';
-import { getStoredAccessToken } from '@/lib/auth/storage';
 import { buildReturnToFromWindow } from '@/lib/auth/returnTo';
 import { toast } from '@/lib/ui/toast';
 
@@ -28,6 +28,7 @@ export function useProjectVote({
   initialVoteCount,
   initialViewerHasVoted,
 }: UseProjectVoteOptions) {
+  const { accessToken } = useAuth();
   const router = useRouter();
   const [isVoted, setIsVoted] = useState(initialViewerHasVoted);
   const [voteCount, setVoteCount] = useState(initialVoteCount);
@@ -56,7 +57,7 @@ export function useProjectVote({
     if (isPending) return;
     if (!projectId.trim()) return;
 
-    if (!getStoredAccessToken()) {
+    if (!accessToken) {
       redirectToLogin();
       return;
     }
@@ -91,7 +92,7 @@ export function useProjectVote({
     } finally {
       setIsPending(false);
     }
-  }, [isPending, isVoted, projectId, redirectToLogin, voteCount]);
+  }, [accessToken, isPending, isVoted, projectId, redirectToLogin, voteCount]);
 
   return {
     isVoted,

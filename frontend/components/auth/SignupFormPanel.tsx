@@ -102,10 +102,11 @@ export function SignupFormPanel() {
         rememberMe,
       });
       toast.success({
-        title: 'Account created',
-        description: 'Welcome to GatorRank. Taking you to your profile...',
+        title: 'Check your email',
+        description: 'Confirm your email to finish creating your account.',
       });
-      router.push('/profile');
+      const params = new URLSearchParams({ email: email.trim().toLowerCase() });
+      router.push(`/signup/check-email?${params.toString()}`);
     } catch (err) {
       toast.error(signupErrorToast(err));
     } finally {
