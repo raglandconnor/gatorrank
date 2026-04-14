@@ -4,7 +4,9 @@ export interface Project {
   name: string;
   slug: string;
   description: string;
+  categories: string[];
   tags: string[];
+  tech_stack: string[];
   votes: number;
   viewerHasVoted?: boolean;
   comments: number;

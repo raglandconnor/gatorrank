@@ -19,7 +19,9 @@ function projectFixture() {
     name: 'GatorRank',
     slug: 'gatorrank',
     description: 'Project ranking platform.',
+    categories: ['Web App'],
     tags: ['React', 'TypeScript'],
+    tech_stack: ['Next.js'],
     votes: 12,
     viewerHasVoted: false,
     comments: 3,
@@ -31,7 +33,9 @@ function projectWithoutTagsFixture() {
     ...projectFixture(),
     name: 'Campus Compass',
     slug: 'campus-compass',
+    categories: [],
     tags: [],
+    tech_stack: [],
   };
 }
 
@@ -67,6 +71,24 @@ describe('project card navigation', () => {
       screen.queryByRole('button', { name: /3 comments on GatorRank/i }),
     ).toBeNull();
     expect(screen.getByText('3').closest('a')).toBeNull();
+  });
+
+  test('ProjectCard renders category, tag, and tech stack badges', () => {
+    renderWithChakra(<ProjectCard project={projectFixture()} rank={1} />);
+
+    expect(screen.getAllByText('Web App').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('React').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('TypeScript').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Next.js').length).toBeGreaterThan(0);
+  });
+
+  test('ProjectGridCard renders category, tag, and tech stack badges', () => {
+    renderWithChakra(<ProjectGridCard project={projectFixture()} rank={1} />);
+
+    expect(screen.getAllByText('Web App').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('React').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('TypeScript').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Next.js').length).toBeGreaterThan(0);
   });
 
   test('cards with no tags do not render a fallback Project tag', () => {

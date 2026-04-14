@@ -8,12 +8,12 @@ import {
   Text,
   VStack,
   Link as ChakraLink,
-  Badge,
 } from '@chakra-ui/react';
 import { LuArrowRight, LuChevronUp, LuUsers } from 'react-icons/lu';
 import type { SearchProjectListItem } from '@/lib/api/types/search';
 import { useProjectVote } from '@/hooks/useProjectVote';
 import { projectPath } from '@/lib/routes';
+import { ProjectTaxonomyBadges } from '@/components/projects/ProjectTaxonomyBadges';
 
 interface SearchResultRowProps {
   project: SearchProjectListItem;
@@ -36,8 +36,6 @@ export function SearchResultRow({ project }: SearchResultRowProps) {
     initialVoteCount: project.vote_count,
     initialViewerHasVoted: project.viewer_has_voted,
   });
-
-  const taxonomy = project.tags.length > 0 ? project.tags : project.categories;
 
   return (
     <ChakraLink
@@ -77,24 +75,11 @@ export function SearchResultRow({ project }: SearchResultRowProps) {
             {project.short_description}
           </Text>
 
-          <HStack gap="8px" flexWrap="wrap">
-            {taxonomy.slice(0, 4).map((term) => (
-              <Badge
-                key={term.id}
-                bg="white"
-                border="1px solid"
-                borderColor="orange.200"
-                color="gray.700"
-                borderRadius="8px"
-                px="8px"
-                py="3px"
-                fontSize="xs"
-                fontWeight="medium"
-              >
-                {term.name}
-              </Badge>
-            ))}
-          </HStack>
+          <ProjectTaxonomyBadges
+            categories={project.categories.map((c) => c.name)}
+            tags={project.tags.map((t) => t.name)}
+            techStack={project.tech_stack.map((t) => t.name)}
+          />
         </VStack>
 
         <VStack align="end" justify="space-between" minW="124px" flexShrink={0}>
