@@ -1,6 +1,6 @@
 'use client';
 
-import { Badge, Box, HStack, Wrap } from '@chakra-ui/react';
+import { Badge, Box, HStack } from '@chakra-ui/react';
 import { LuLayoutGrid, LuHash, LuCodeXml } from 'react-icons/lu';
 import type { IconType } from 'react-icons';
 
@@ -25,17 +25,15 @@ function TaxonomyRow({
 }: TaxonomyRowProps) {
   if (!names.length) return null;
   return (
-    <HStack gap="6px" align="center" w="100%">
+    <HStack gap="6px" align="center" flexShrink={0}>
       <Box color={iconColor} flexShrink={0}>
         <Icon size={12} />
       </Box>
-      <Wrap gap="6px">
-        {names.map((name) => (
-          <Badge key={name} {...badgeProps}>
-            {name}
-          </Badge>
-        ))}
-      </Wrap>
+      {names.map((name) => (
+        <Badge key={name} {...badgeProps}>
+          {name}
+        </Badge>
+      ))}
     </HStack>
   );
 }
