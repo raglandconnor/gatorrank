@@ -108,6 +108,54 @@ export default function CreateProjectPage() {
     }
   };
 
+  const actionButtons = (
+    <HStack gap={{ base: '8px', md: '12px' }} flexShrink={0} flexWrap="wrap">
+      <Button
+        type="button"
+        variant="outline"
+        border="1px solid"
+        borderColor="orange.400"
+        borderRadius={{ base: '10px', md: '14px' }}
+        h={{ base: '36px', md: '44px' }}
+        px={{ base: '14px', md: '20px' }}
+        fontSize={{ base: 'xs', md: 'sm' }}
+        color="gray.900"
+        bg="white"
+        _hover={{ bg: 'orange.50' }}
+        transition="background 0.15s"
+        onClick={() => router.push('/profile')}
+        disabled={isSubmitting}
+      >
+        <HStack gap="6px">
+          <LuX size={14} />
+          <Text>Cancel</Text>
+        </HStack>
+      </Button>
+      <Button
+        type="submit"
+        form="project-form"
+        bg={isSubmitDisabled || isSubmitting ? 'gray.300' : 'orange.400'}
+        color="white"
+        borderRadius={{ base: '10px', md: '14px' }}
+        h={{ base: '36px', md: '44px' }}
+        px={{ base: '14px', md: '20px' }}
+        fontSize={{ base: 'xs', md: 'sm' }}
+        fontWeight="normal"
+        _hover={{
+          bg: isSubmitDisabled || isSubmitting ? 'gray.300' : 'orange.500',
+        }}
+        transition="background 0.15s"
+        disabled={isSubmitDisabled || isSubmitting}
+        cursor={isSubmitDisabled || isSubmitting ? 'not-allowed' : 'pointer'}
+      >
+        <HStack gap="6px">
+          <LuImage size={14} />
+          <Text>{isSubmitting ? 'Creating...' : 'Submit Project'}</Text>
+        </HStack>
+      </Button>
+    </HStack>
+  );
+
   return (
     <Box minH="100vh" bg="transparent">
       <Navbar />
@@ -139,58 +187,7 @@ export default function CreateProjectPage() {
             </Text>
           </VStack>
 
-          <HStack
-            gap={{ base: '8px', md: '12px' }}
-            flexShrink={0}
-            flexWrap="wrap"
-          >
-            <Button
-              type="button"
-              variant="outline"
-              border="1px solid"
-              borderColor="orange.400"
-              borderRadius={{ base: '10px', md: '14px' }}
-              h={{ base: '36px', md: '44px' }}
-              px={{ base: '14px', md: '20px' }}
-              fontSize={{ base: 'xs', md: 'sm' }}
-              color="gray.900"
-              bg="white"
-              _hover={{ bg: 'orange.50' }}
-              transition="background 0.15s"
-              onClick={() => router.push('/profile')}
-              disabled={isSubmitting}
-            >
-              <HStack gap="6px">
-                <LuX size={14} />
-                <Text>Cancel</Text>
-              </HStack>
-            </Button>
-            <Button
-              type="submit"
-              form="project-form"
-              bg={isSubmitDisabled || isSubmitting ? 'gray.300' : 'orange.400'}
-              color="white"
-              borderRadius={{ base: '10px', md: '14px' }}
-              h={{ base: '36px', md: '44px' }}
-              px={{ base: '14px', md: '20px' }}
-              fontSize={{ base: 'xs', md: 'sm' }}
-              fontWeight="normal"
-              _hover={{
-                bg:
-                  isSubmitDisabled || isSubmitting ? 'gray.300' : 'orange.500',
-              }}
-              transition="background 0.15s"
-              disabled={isSubmitDisabled || isSubmitting}
-              cursor={
-                isSubmitDisabled || isSubmitting ? 'not-allowed' : 'pointer'
-              }
-            >
-              <HStack gap="6px">
-                <LuImage size={14} />
-                <Text>{isSubmitting ? 'Creating...' : 'Submit Project'}</Text>
-              </HStack>
-            </Button>
-          </HStack>
+          {actionButtons}
         </Flex>
 
         <ProjectForm
@@ -230,6 +227,10 @@ export default function CreateProjectPage() {
             );
           }}
         />
+
+        <Flex justify="flex-end" mt="32px">
+          {actionButtons}
+        </Flex>
       </Box>
     </Box>
   );
