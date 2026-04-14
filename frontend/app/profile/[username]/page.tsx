@@ -12,6 +12,7 @@ import {
   Wrap,
   Link as ChakraLink,
   Spinner,
+  Tabs,
 } from '@chakra-ui/react';
 import {
   LuPencil,
@@ -21,9 +22,9 @@ import {
   LuGlobe,
 } from 'react-icons/lu';
 import { Navbar } from '@/components/layout/Navbar';
-import { AcademicInfoCard } from '@/components/profile/AcademicInfoCard';
 import { RoleBadge } from '@/components/ui/rolebadge';
 import { ProfileUserProjects } from '@/components/profile/ProfileUserProjects';
+import { ProfileVotedProjects } from '@/components/profile/ProfileVotedProjects';
 import { useAuth } from '@/components/domain/AuthProvider';
 import { getUserPublic, getUserPublicByUsername } from '@/lib/api/users';
 import type { ExtendedProfile } from '@/lib/profile/profileShared';
@@ -188,24 +189,7 @@ export default function ProfileUserPage() {
     publicUser.full_name ??
     (isOwn && authUser?.email ? authUser.email : 'GatorRank User');
 
-  const academicProfile = {
-    name: displayName,
-    role: publicUser.role as 'student' | 'faculty',
-    avatarUrl: publicUser.profile_picture_url ?? undefined,
-    bio: extended.bio,
-    socials: extended.socials,
-    major: extended.major,
-    graduationYear: extended.graduationYear,
-    courses: extended.courses,
-    skills: extended.skills,
-  };
-
-  const extendedIsEmpty =
-    !extended.bio &&
-    extended.skills.length === 0 &&
-    !extended.major &&
-    extended.graduationYear <= 0 &&
-    extended.courses.length === 0;
+  const extendedIsEmpty = !extended.bio && extended.skills.length === 0;
 
   // Projects have finished loading with zero items (not an error)
   const projectsLoadedEmpty = projectCount !== null && projectCount === 0;
@@ -381,61 +365,101 @@ export default function ProfileUserPage() {
           </Box>
         )}
 
-        <Flex
-          gap="24px"
-          align="start"
-          direction={{ base: 'column', md: 'row' }}
-        >
-          <Box w={{ base: '100%', md: '344px' }} flexShrink={0}>
-            <AcademicInfoCard profile={academicProfile} />
-          </Box>
-
-          <VStack flex={1} align="start" gap="32px" minW={0}>
-            {/* Skills: always shown */}
-            <VStack align="start" gap="16px" w="100%">
-              <Text
-                fontSize="md"
-                fontWeight="bold"
-                color="gray.900"
-                lineHeight="30px"
-              >
-                Skills
+        <VStack align="start" gap="32px" w="100%">
+          {/* Skills: always shown */}
+          <VStack align="start" gap="16px" w="100%">
+            <Text
+              fontSize="md"
+              fontWeight="bold"
+              color="gray.900"
+              lineHeight="30px"
+            >
+              Skills
+            </Text>
+            {extended.skills.length > 0 ? (
+              <Wrap gap="8px">
+                {extended.skills.map((skill: string) => (
+                  <Box
+                    key={skill}
+                    bg="rgba(251,146,60,0.1)"
+                    border="1.6px solid"
+                    borderColor="orange.400"
+                    borderRadius="10px"
+                    px="16px"
+                    py="8px"
+                  >
+                    <Text fontSize="sm" color="orange.400" lineHeight="24px">
+                      {skill}
+                    </Text>
+                  </Box>
+                ))}
+              </Wrap>
+            ) : (
+              <Text fontSize="sm" color="gray.400" lineHeight="24px">
+                {isOwn
+                  ? 'No skills added yet — edit your profile to add skills.'
+                  : 'No skills added yet.'}
               </Text>
-              {extended.skills.length > 0 ? (
-                <Wrap gap="8px">
-                  {extended.skills.map((skill: string) => (
-                    <Box
-                      key={skill}
-                      bg="rgba(251,146,60,0.1)"
-                      border="1.6px solid"
-                      borderColor="orange.400"
-                      borderRadius="10px"
-                      px="16px"
-                      py="8px"
-                    >
-                      <Text fontSize="sm" color="orange.400" lineHeight="24px">
-                        {skill}
-                      </Text>
-                    </Box>
-                  ))}
-                </Wrap>
-              ) : (
-                <Text fontSize="sm" color="gray.400" lineHeight="24px">
-                  {isOwn
-                    ? 'No skills added yet — edit your profile to add skills.'
-                    : 'No skills added yet.'}
-                </Text>
-              )}
-            </VStack>
-
-            {/* Projects — always mounted to ensure onLoadComplete fires */}
-            <ProfileUserProjects
-              username={publicUser.username}
-              isOwn={isOwn}
-              onLoadComplete={handleProjectsLoaded}
-            />
+            )}
           </VStack>
-        </Flex>
+
+          {/* Tabs: Projects (default) + Voted (own profile only) */}
+          <Tabs.Root defaultValue="projects" variant="line" w="100%">
+            <Tabs.List
+              borderBottomWidth="1px"
+              borderColor="gray.200"
+              mb="24px"
+              gap="0"
+            >
+              <Tabs.Trigger
+                value="projects"
+                fontSize="sm"
+                fontWeight="medium"
+                color="gray.500"
+                px="4px"
+                pb="12px"
+                mr="24px"
+                _selected={{ color: 'orange.500', fontWeight: 'semibold' }}
+              >
+                Projects
+              </Tabs.Trigger>
+              {isOwn && (
+                <Tabs.Trigger
+                  value="voted"
+                  fontSize="sm"
+                  fontWeight="medium"
+                  color="gray.500"
+                  px="4px"
+                  pb="12px"
+                  _selected={{ color: 'orange.500', fontWeight: 'semibold' }}
+                >
+                  Voted
+                </Tabs.Trigger>
+              )}
+              <Tabs.Indicator
+                bottom="0"
+                height="2px"
+                bg="orange.400"
+                borderRadius="full"
+              />
+            </Tabs.List>
+
+            {/* Always mounted — ensures onLoadComplete fires for the banner logic */}
+            <Tabs.Content value="projects" pt="0">
+              <ProfileUserProjects
+                username={publicUser.username}
+                isOwn={isOwn}
+                onLoadComplete={handleProjectsLoaded}
+              />
+            </Tabs.Content>
+
+            {isOwn && (
+              <Tabs.Content value="voted" pt="0">
+                <ProfileVotedProjects />
+              </Tabs.Content>
+            )}
+          </Tabs.Root>
+        </VStack>
       </Box>
     </Box>
   );
