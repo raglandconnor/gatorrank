@@ -99,7 +99,19 @@ function ComingSoonBlock({
   mb?: string;
 }) {
   return (
-    <VStack align="start" gap="6px" w="100%" mb={mb}>
+    <VStack
+      align="start"
+      gap="6px"
+      w="100%"
+      mb={mb}
+      opacity={0.5}
+      filter="grayscale(20%)"
+      bg="gray.50"
+      border="1px dashed"
+      borderColor="gray.300"
+      borderRadius="10px"
+      p="10px"
+    >
       {children}
       <DisabledFieldHint />
     </VStack>
@@ -120,13 +132,12 @@ export default function EditProfilePage() {
 
   const [name, setName] = useState('');
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
+  const [profilePictureUrl, setProfilePictureUrl] = useState('');
 
   const [bio, setBio] = useState('');
   const [github, setGithub] = useState('');
   const [linkedin, setLinkedin] = useState('');
   const [website, setWebsite] = useState('');
-  const [major, setMajor] = useState('');
-  const [gradYear, setGradYear] = useState('');
 
   useEffect(() => {
     if (!isReady) return;
@@ -153,16 +164,14 @@ export default function EditProfilePage() {
         setApiUser(user);
         setName(user.full_name ?? '');
         avatarObjectUrlRef.current = null;
-        if (user.profile_picture_url)
-          setAvatarPreview(user.profile_picture_url);
+        setProfilePictureUrl(user.profile_picture_url ?? '');
+        setAvatarPreview(user.profile_picture_url ?? null);
 
         const ext = loadExtended(user.id);
         setBio(ext.bio);
         setGithub(ext.socials.github ?? '');
         setLinkedin(ext.socials.linkedin ?? '');
         setWebsite(ext.socials.website ?? '');
-        setMajor(ext.major);
-        setGradYear(ext.graduationYear > 0 ? String(ext.graduationYear) : '');
       } catch {
         toast.error({
           title: 'Could not load profile',
@@ -214,9 +223,29 @@ export default function EditProfilePage() {
 
   const handleSave = async () => {
     if (!apiUser) return;
+    const trimmedName = name.trim();
+    const normalizedProfilePictureUrl = profilePictureUrl.trim();
+    const originalName = apiUser.full_name ?? '';
+    const originalProfilePictureUrl = apiUser.profile_picture_url ?? '';
+
+    const payload: { full_name?: string; profile_picture_url?: string | null } =
+      {};
+    if (trimmedName && trimmedName !== originalName) {
+      payload.full_name = trimmedName;
+    }
+    if (normalizedProfilePictureUrl !== originalProfilePictureUrl) {
+      payload.profile_picture_url = normalizedProfilePictureUrl || null;
+    }
+    if (Object.keys(payload).length === 0) {
+      toast.info({
+        title: 'No changes to save',
+      });
+      return;
+    }
+
     setSaving(true);
     try {
-      const updated = await patchMe({ full_name: name.trim() || undefined });
+      const updated = await patchMe(payload);
 
       const nextAuth: AuthUser = {
         id: updated.id,
@@ -446,129 +475,69 @@ export default function EditProfilePage() {
           </HStack>
         </Flex>
 
-        <Flex
-          gap="24px"
-          align="start"
-          direction={{ base: 'column', md: 'row' }}
+        {/* Account Settings */}
+        <Box
+          mt="8px"
+          bg="gray.100"
+          borderRadius="13px"
+          p={{ base: '16px', md: '24px' }}
+          w="100%"
+          maxW="640px"
         >
-          <VStack
-            w={{ base: '100%', md: '344px' }}
-            flexShrink={0}
-            gap="16px"
-            align="start"
-          >
-            {/* Academic Information */}
-            <Box
-              bg="gray.100"
-              borderRadius="13px"
-              p={{ base: '16px', md: '24px' }}
-              w="100%"
+          <VStack align="start" gap="16px" w="100%">
+            <Text
+              fontSize="md"
+              fontWeight="bold"
+              color="gray.900"
+              lineHeight="30px"
             >
-              <VStack align="start" gap="16px" w="100%">
-                <Text
-                  fontSize="md"
-                  fontWeight="bold"
-                  color="gray.900"
-                  lineHeight="30px"
+              Account Settings
+            </Text>
+
+            <VStack align="start" gap="4px" w="100%">
+              <FieldLabel>Profile Picture URL</FieldLabel>
+              <Input
+                type="url"
+                value={profilePictureUrl}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                  const nextUrl = e.target.value;
+                  setProfilePictureUrl(nextUrl);
+                  setAvatarPreview(nextUrl.trim() || null);
+                }}
+                placeholder="https://example.com/avatar.jpg"
+                {...inputBase}
+                h="43px"
+              />
+            </VStack>
+
+            <VStack align="start" gap="4px" w="100%">
+              <FieldLabel>Email Address</FieldLabel>
+              <Box position="relative" w="100%">
+                <Box
+                  position="absolute"
+                  left="12px"
+                  top="50%"
+                  transform="translateY(-50%)"
+                  color="gray.400"
+                  pointerEvents="none"
                 >
-                  Academic Information
-                </Text>
-
-                <ComingSoonBlock>
-                  <FieldLabelWithComingSoon>Major</FieldLabelWithComingSoon>
-                  <Input
-                    value={major}
-                    placeholder="e.g., Computer Engineering"
-                    {...inputBase}
-                    h="43px"
-                    disabled
-                    opacity={0.7}
-                  />
-                </ComingSoonBlock>
-
-                <ComingSoonBlock>
-                  <FieldLabelWithComingSoon>
-                    Graduation Year
-                  </FieldLabelWithComingSoon>
-                  <Input
-                    type="number"
-                    value={gradYear}
-                    placeholder="e.g., 2026"
-                    {...inputBase}
-                    h="43px"
-                    disabled
-                    opacity={0.7}
-                  />
-                </ComingSoonBlock>
-              </VStack>
-            </Box>
-
-            {/* Account Settings */}
-            <Box
-              bg="gray.100"
-              borderRadius="13px"
-              p={{ base: '16px', md: '24px' }}
-              w="100%"
-            >
-              <VStack align="start" gap="16px" w="100%">
-                <Text
-                  fontSize="md"
-                  fontWeight="bold"
-                  color="gray.900"
-                  lineHeight="30px"
-                >
-                  Account Settings
-                </Text>
-
-                <VStack align="start" gap="4px" w="100%">
-                  <FieldLabel>Email Address</FieldLabel>
-                  <Box position="relative" w="100%">
-                    <Box
-                      position="absolute"
-                      left="12px"
-                      top="50%"
-                      transform="translateY(-50%)"
-                      color="gray.400"
-                      pointerEvents="none"
-                    >
-                      <LuMail size={16} />
-                    </Box>
-                    <Input
-                      type="email"
-                      value={apiUser.email}
-                      readOnly
-                      disabled
-                      {...inputBase}
-                      h="43px"
-                      pl="38px"
-                      opacity={0.6}
-                      cursor="not-allowed"
-                    />
-                  </Box>
-                </VStack>
-              </VStack>
-            </Box>
-          </VStack>
-
-          {/* Right column */}
-          <VStack flex={1} align="start" gap="32px" minW={0}>
-            {/* Projects (read-only — edit from individual project pages) */}
-            <VStack align="start" gap="8px" w="100%">
-              <Text
-                fontSize="md"
-                fontWeight="bold"
-                color="gray.900"
-                lineHeight="30px"
-              >
-                Projects
-              </Text>
-              <Text fontSize="sm" color="gray.400" lineHeight="24px">
-                Manage your projects from the profile view or individual project
-                pages.
-              </Text>
+                  <LuMail size={16} />
+                </Box>
+                <Input
+                  type="email"
+                  value={apiUser.email}
+                  readOnly
+                  disabled
+                  {...inputBase}
+                  h="43px"
+                  pl="38px"
+                  opacity={0.6}
+                  cursor="not-allowed"
+                />
+              </Box>
             </VStack>
           </VStack>
-        </Flex>
+        </Box>
       </Box>
     </Box>
   );
