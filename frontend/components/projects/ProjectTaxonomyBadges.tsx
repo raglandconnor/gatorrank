@@ -25,7 +25,7 @@ function TaxonomyRow({
 }: TaxonomyRowProps) {
   if (!names.length) return null;
   return (
-    <HStack gap="6px" align="center" flexShrink={0}>
+    <HStack gap="6px" align="center" flexWrap="wrap">
       <Box color={iconColor} flexShrink={0}>
         <Icon size={12} />
       </Box>
