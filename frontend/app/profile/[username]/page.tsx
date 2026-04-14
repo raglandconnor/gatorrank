@@ -9,7 +9,6 @@ import {
   VStack,
   Text,
   Button,
-  Wrap,
   Link as ChakraLink,
   Spinner,
   Tabs,
@@ -189,13 +188,11 @@ export default function ProfileUserPage() {
     publicUser.full_name ??
     (isOwn && authUser?.email ? authUser.email : 'GatorRank User');
 
-  const extendedIsEmpty = !extended.bio && extended.skills.length === 0;
-
   // Projects have finished loading with zero items (not an error)
   const projectsLoadedEmpty = projectCount !== null && projectCount === 0;
 
-  // Owner: show complete-your-profile banner when everything is empty
-  const showOwnerBanner = isOwn && extendedIsEmpty && projectsLoadedEmpty;
+  // Owner: show complete-your-profile banner when profile has no projects
+  const showOwnerBanner = isOwn && projectsLoadedEmpty;
 
   return (
     <Box minH="100vh" bg="transparent">
@@ -234,29 +231,6 @@ export default function ProfileUserPage() {
               </Text>
               <RoleBadge role={publicUser.role as 'student' | 'faculty'} />
             </HStack>
-
-            {/* Bio: filled content shown for everyone; empty hint shown for everyone */}
-            {extended.bio ? (
-              <Text
-                fontSize="sm"
-                color="gray.600"
-                lineHeight="24px"
-                maxW="640px"
-              >
-                {extended.bio}
-              </Text>
-            ) : (
-              <Text
-                fontSize="sm"
-                color="gray.400"
-                lineHeight="24px"
-                maxW="640px"
-              >
-                {isOwn
-                  ? 'No bio yet — edit your profile to add one.'
-                  : 'No bio added yet.'}
-              </Text>
-            )}
 
             {/* Social links */}
             <HStack gap="8px" mt="4px">
@@ -346,8 +320,8 @@ export default function ProfileUserPage() {
           >
             <VStack align="start" gap="12px">
               <Text fontSize="sm" fontWeight="medium" color="gray.700">
-                Your profile is looking sparse — fill in your bio, skills, and
-                academic info so others can learn about you.
+                Your profile is looking sparse — add a project so others can see
+                what you&apos;ve been working on.
               </Text>
               <Button
                 size="sm"
@@ -366,43 +340,6 @@ export default function ProfileUserPage() {
         )}
 
         <VStack align="start" gap="32px" w="100%">
-          {/* Skills: always shown */}
-          <VStack align="start" gap="16px" w="100%">
-            <Text
-              fontSize="md"
-              fontWeight="bold"
-              color="gray.900"
-              lineHeight="30px"
-            >
-              Skills
-            </Text>
-            {extended.skills.length > 0 ? (
-              <Wrap gap="8px">
-                {extended.skills.map((skill: string) => (
-                  <Box
-                    key={skill}
-                    bg="rgba(251,146,60,0.1)"
-                    border="1.6px solid"
-                    borderColor="orange.400"
-                    borderRadius="10px"
-                    px="16px"
-                    py="8px"
-                  >
-                    <Text fontSize="sm" color="orange.400" lineHeight="24px">
-                      {skill}
-                    </Text>
-                  </Box>
-                ))}
-              </Wrap>
-            ) : (
-              <Text fontSize="sm" color="gray.400" lineHeight="24px">
-                {isOwn
-                  ? 'No skills added yet — edit your profile to add skills.'
-                  : 'No skills added yet.'}
-              </Text>
-            )}
-          </VStack>
-
           {/* Tabs: Projects (default) + Voted (own profile only) */}
           <Tabs.Root defaultValue="projects" variant="line" w="100%">
             <Tabs.List
