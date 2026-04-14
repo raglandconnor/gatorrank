@@ -15,7 +15,11 @@ import {
 } from '@chakra-ui/react';
 import { LuPlus, LuX, LuGlobe, LuGithub, LuPlay, LuTag } from 'react-icons/lu';
 import { listTags } from '@/lib/api/taxonomy';
-import type { ProjectMemberInfo, TaxonomyTerm } from '@/lib/api/types/project';
+import type {
+  ProjectMemberInfo,
+  ProjectMemberWritableRole,
+  TaxonomyTerm,
+} from '@/lib/api/types/project';
 import { toast } from '@/lib/ui/toast';
 
 const PROJECT_NAME_MAX = 50;
@@ -76,16 +80,25 @@ function FieldLabel({ children }: { children: React.ReactNode }) {
 
 function MemberPills({
   members,
-  pendingEmails,
+  pendingMembers,
   onRemoveMember,
+  onUpdateMemberRole,
+  onUpdatePendingMemberRole,
+  pendingRoleUpdates,
   isBusy,
 }: {
   members: ProjectMemberInfo[];
-  pendingEmails: string[];
+  pendingMembers: PendingProjectMember[];
   onRemoveMember: (idOrEmail: string) => void;
+  onUpdateMemberRole: (userId: string, role: ProjectMemberWritableRole) => void;
+  onUpdatePendingMemberRole: (
+    email: string,
+    role: ProjectMemberWritableRole,
+  ) => void;
+  pendingRoleUpdates: Set<string>;
   isBusy: boolean;
 }) {
-  if (members.length === 0 && pendingEmails.length === 0) return null;
+  if (members.length === 0 && pendingMembers.length === 0) return null;
 
   return (
     <Wrap gap="8px">
@@ -103,6 +116,40 @@ function MemberPills({
           <Text fontSize="sm" color="gray.700" lineHeight="20px">
             {member.full_name ?? member.username}
           </Text>
+          {member.role === 'owner' ? (
+            <Text
+              fontSize="xs"
+              color="gray.500"
+              lineHeight="16px"
+              textTransform="capitalize"
+            >
+              owner
+            </Text>
+          ) : (
+            <select
+              aria-label={`Role for ${member.full_name ?? member.username}`}
+              value={member.role}
+              disabled={isBusy || pendingRoleUpdates.has(member.user_id)}
+              onChange={(e: React.ChangeEvent<HTMLSelectElement>) =>
+                onUpdateMemberRole(
+                  member.user_id,
+                  e.target.value as ProjectMemberWritableRole,
+                )
+              }
+              style={{
+                width: '132px',
+                height: '26px',
+                fontSize: '12px',
+                background: 'white',
+                border: '1px solid var(--chakra-colors-gray-300)',
+                borderRadius: '8px',
+                paddingInline: '8px',
+              }}
+            >
+              <option value="contributor">Contributor</option>
+              <option value="maintainer">Maintainer</option>
+            </select>
+          )}
           {member.role !== 'owner' && (
             <Button
               type="button"
@@ -121,9 +168,9 @@ function MemberPills({
         </HStack>
       ))}
 
-      {pendingEmails.map((email) => (
+      {pendingMembers.map((pendingMember) => (
         <HStack
-          key={email}
+          key={pendingMember.email}
           gap="4px"
           px="10px"
           py="4px"
@@ -133,18 +180,41 @@ function MemberPills({
           borderColor="gray.300"
         >
           <Text fontSize="sm" color="gray.700" lineHeight="20px">
-            {email}
+            {pendingMember.email}
           </Text>
+          <select
+            aria-label={`Role for ${pendingMember.email}`}
+            value={pendingMember.role}
+            disabled={isBusy}
+            onChange={(e: React.ChangeEvent<HTMLSelectElement>) =>
+              onUpdatePendingMemberRole(
+                pendingMember.email,
+                e.target.value as ProjectMemberWritableRole,
+              )
+            }
+            style={{
+              width: '132px',
+              height: '26px',
+              fontSize: '12px',
+              background: 'white',
+              border: '1px solid var(--chakra-colors-gray-300)',
+              borderRadius: '8px',
+              paddingInline: '8px',
+            }}
+          >
+            <option value="contributor">Contributor</option>
+            <option value="maintainer">Maintainer</option>
+          </select>
           <Button
             type="button"
-            aria-label={`Remove ${email}`}
+            aria-label={`Remove ${pendingMember.email}`}
             variant="ghost"
             size="xs"
             minW="auto"
             h="auto"
             p={0}
             disabled={isBusy}
-            onClick={() => onRemoveMember(email)}
+            onClick={() => onRemoveMember(pendingMember.email)}
           >
             <LuX size={12} />
           </Button>
@@ -177,6 +247,11 @@ export interface ProjectPayload {
   tags?: string[];
 }
 
+export interface PendingProjectMember {
+  email: string;
+  role: ProjectMemberWritableRole;
+}
+
 interface ProjectFormProps {
   mode: ProjectFormMode;
   initialValues: ProjectFormValues;
@@ -185,13 +260,23 @@ interface ProjectFormProps {
   publishChecked: boolean;
   onPublishCheckedChange: (checked: boolean) => void;
   members?: ProjectMemberInfo[];
+  pendingMembers?: PendingProjectMember[];
   pendingMemberEmails?: string[];
   onAddMember: (
     email: string,
+    role?: ProjectMemberWritableRole,
   ) => Promise<{ ok: true } | { ok: false; message: string }>;
   onRemoveMember: (
     idOrEmail: string,
   ) => Promise<{ ok: true } | { ok: false; message: string }>;
+  onUpdateMemberRole?: (
+    userId: string,
+    role: ProjectMemberWritableRole,
+  ) => Promise<{ ok: true } | { ok: false; message: string }>;
+  onUpdatePendingMemberRole?: (
+    email: string,
+    role: ProjectMemberWritableRole,
+  ) => void;
   isBusy?: boolean;
 }
 
@@ -203,9 +288,12 @@ export function ProjectForm({
   publishChecked,
   onPublishCheckedChange,
   members = [],
+  pendingMembers = [],
   pendingMemberEmails = [],
   onAddMember,
   onRemoveMember,
+  onUpdateMemberRole,
+  onUpdatePendingMemberRole,
   isBusy = false,
 }: ProjectFormProps) {
   const [projectName, setProjectName] = useState(initialValues.title);
@@ -223,6 +311,9 @@ export function ProjectForm({
 
   const [memberInput, setMemberInput] = useState('');
   const [memberSubmitting, setMemberSubmitting] = useState(false);
+  const [pendingRoleUpdates, setPendingRoleUpdates] = useState<Set<string>>(
+    () => new Set(),
+  );
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [websiteUrl, setWebsiteUrl] = useState(initialValues.websiteUrl);
@@ -286,6 +377,17 @@ export function ProjectForm({
     setGithubUrl(initialValues.githubUrl);
     setDemoVideoUrl(initialValues.demoVideoUrl);
   }, [initialValues]);
+
+  const normalizedPendingMembers = useMemo<PendingProjectMember[]>(
+    () =>
+      pendingMembers.length > 0
+        ? pendingMembers
+        : pendingMemberEmails.map((email) => ({
+            email,
+            role: 'contributor',
+          })),
+    [pendingMemberEmails, pendingMembers],
+  );
 
   const trimmedWebsite = websiteUrl.trim();
   const trimmedGithub = githubUrl.trim();
@@ -391,7 +493,7 @@ export function ProjectForm({
 
     setMemberSubmitting(true);
     try {
-      const result = await onAddMember(normalized);
+      const result = await onAddMember(normalized, 'contributor');
 
       if (!result.ok) {
         toast.error({
@@ -410,6 +512,50 @@ export function ProjectForm({
     } finally {
       setMemberSubmitting(false);
     }
+  };
+
+  const handleUpdateMemberRole = async (
+    userId: string,
+    role: ProjectMemberWritableRole,
+  ) => {
+    const currentMember = members.find((member) => member.user_id === userId);
+    if (!currentMember || currentMember.role === role) return;
+
+    if (!onUpdateMemberRole) return;
+
+    setPendingRoleUpdates((prev) => {
+      const next = new Set(prev);
+      next.add(userId);
+      return next;
+    });
+
+    try {
+      const result = await onUpdateMemberRole(userId, role);
+      if (!result.ok) {
+        toast.error({
+          title: 'Could not update member role',
+          description: result.message,
+        });
+      }
+    } catch {
+      toast.error({
+        title: 'Could not update member role',
+        description: 'Please try again.',
+      });
+    } finally {
+      setPendingRoleUpdates((prev) => {
+        const next = new Set(prev);
+        next.delete(userId);
+        return next;
+      });
+    }
+  };
+
+  const handleUpdatePendingMemberRole = (
+    email: string,
+    role: ProjectMemberWritableRole,
+  ) => {
+    onUpdatePendingMemberRole?.(email, role);
   };
 
   const handleRemoveMember = async (idOrEmail: string) => {
@@ -954,10 +1100,15 @@ export function ProjectForm({
               </HStack>
               <MemberPills
                 members={members}
-                pendingEmails={pendingMemberEmails}
+                pendingMembers={normalizedPendingMembers}
                 onRemoveMember={(idOrEmail) => {
                   void handleRemoveMember(idOrEmail);
                 }}
+                onUpdateMemberRole={(userId, role) => {
+                  void handleUpdateMemberRole(userId, role);
+                }}
+                onUpdatePendingMemberRole={handleUpdatePendingMemberRole}
+                pendingRoleUpdates={pendingRoleUpdates}
                 isBusy={isBusy || memberSubmitting}
               />
             </VStack>
