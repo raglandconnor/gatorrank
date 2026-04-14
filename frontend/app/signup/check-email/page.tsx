@@ -79,14 +79,15 @@ export default async function CheckEmailPage({
               <NextLink href="/login">Go to Login</NextLink>
             </Button>
             <Link
-              as={NextLink}
-              href="/signup"
+              asChild
               color="#FF8C38"
               fontSize={{ base: 'sm', sm: 'md' }}
               fontWeight="500"
               _hover={{ color: '#E67A2E', textDecoration: 'underline' }}
             >
-              Didn&apos;t get the email? Try signing up again
+              <NextLink href="/signup">
+                Didn&apos;t get the email? Try signing up again
+              </NextLink>
             </Link>
           </Stack>
         </Box>
