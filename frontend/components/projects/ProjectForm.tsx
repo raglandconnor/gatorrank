@@ -244,6 +244,43 @@ function ProjectTermField({
         </Text>
         <FieldLabel>{helperText}</FieldLabel>
 
+        {values.length > 0 && (
+          <Wrap gap="8px">
+            {values.map((value, index) => (
+              <HStack
+                key={`${value}-${index}`}
+                gap="4px"
+                bg="white"
+                border="1px solid"
+                borderColor="orange.200"
+                borderRadius="10px"
+                px="10px"
+                py="4px"
+              >
+                <Text fontSize="sm" color="gray.700" lineHeight="20px">
+                  {value}
+                </Text>
+                <Button
+                  type="button"
+                  aria-label={`Remove ${value}`}
+                  variant="ghost"
+                  size="xs"
+                  minW="auto"
+                  h="auto"
+                  p={0}
+                  onClick={() =>
+                    onChange(
+                      values.filter((_, valueIndex) => valueIndex !== index),
+                    )
+                  }
+                >
+                  <LuX size={12} />
+                </Button>
+              </HStack>
+            ))}
+          </Wrap>
+        )}
+
         <HStack gap="8px" w="100%">
           <Input
             value={inputValue}
@@ -342,43 +379,6 @@ function ProjectTermField({
             ) : null}
           </VStack>
         ) : null}
-
-        {values.length > 0 && (
-          <Wrap gap="8px">
-            {values.map((value, index) => (
-              <HStack
-                key={`${value}-${index}`}
-                gap="4px"
-                bg="white"
-                border="1px solid"
-                borderColor="orange.200"
-                borderRadius="10px"
-                px="10px"
-                py="4px"
-              >
-                <Text fontSize="sm" color="gray.700" lineHeight="20px">
-                  {value}
-                </Text>
-                <Button
-                  type="button"
-                  aria-label={`Remove ${value}`}
-                  variant="ghost"
-                  size="xs"
-                  minW="auto"
-                  h="auto"
-                  p={0}
-                  onClick={() =>
-                    onChange(
-                      values.filter((_, valueIndex) => valueIndex !== index),
-                    )
-                  }
-                >
-                  <LuX size={12} />
-                </Button>
-              </HStack>
-            ))}
-          </Wrap>
-        )}
       </VStack>
     </Box>
   );
