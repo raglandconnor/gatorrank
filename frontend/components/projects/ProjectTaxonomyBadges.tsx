@@ -1,6 +1,6 @@
 'use client';
 
-import { Badge, Box, HStack, VStack, Wrap } from '@chakra-ui/react';
+import { Badge, Box, HStack, Wrap } from '@chakra-ui/react';
 import { LuLayoutGrid, LuHash, LuCodeXml } from 'react-icons/lu';
 import type { IconType } from 'react-icons';
 
@@ -51,7 +51,7 @@ export function ProjectTaxonomyBadges({
   if (!hasAny) return null;
 
   return (
-    <VStack align="start" gap="6px" w="100%">
+    <HStack align="center" gap="10px" w="100%" flexWrap="wrap">
       <TaxonomyRow
         icon={LuLayoutGrid}
         iconColor="orange.600"
@@ -104,6 +104,6 @@ export function ProjectTaxonomyBadges({
           fontFamily: 'mono',
         }}
       />
-    </VStack>
+    </HStack>
   );
 }
