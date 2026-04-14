@@ -217,7 +217,13 @@ export default function ProfileUserPage() {
     <Box minH="100vh" bg="transparent">
       <Navbar />
 
-      <Box px="36px" pt="32px" pb="64px" maxW="1280px" mx="auto">
+      <Box
+        px={{ base: '16px', md: '24px', lg: '36px' }}
+        pt="32px"
+        pb="64px"
+        maxW="1280px"
+        mx="auto"
+      >
         {/* Profile hero */}
         <HStack gap="24px" mb="40px" align="flex-start">
           {/* Avatar */}

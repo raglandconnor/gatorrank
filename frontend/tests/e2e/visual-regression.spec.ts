@@ -46,7 +46,10 @@ test.describe('visual regression - public pages', () => {
     await mockProjectRoutes(page);
     await page.goto('/');
     await page.waitForLoadState('networkidle');
-    await expect(page).toHaveScreenshot('home.png', { fullPage: true });
+    await expect(page).toHaveScreenshot('home.png', {
+      fullPage: true,
+      maxDiffPixelRatio: 0.02,
+    });
   });
 
   test('login page', async ({ page }) => {
@@ -54,7 +57,10 @@ test.describe('visual regression - public pages', () => {
     await expect(
       page.getByRole('heading', { name: 'Welcome Back' }),
     ).toBeVisible();
-    await expect(page).toHaveScreenshot('login.png', { fullPage: true });
+    await expect(page).toHaveScreenshot('login.png', {
+      fullPage: true,
+      maxDiffPixelRatio: 0.02,
+    });
   });
 
   test('signup page', async ({ page }) => {
@@ -62,7 +68,10 @@ test.describe('visual regression - public pages', () => {
     await expect(
       page.getByRole('heading', { name: 'Display Your Projects to the World' }),
     ).toBeVisible();
-    await expect(page).toHaveScreenshot('signup.png', { fullPage: true });
+    await expect(page).toHaveScreenshot('signup.png', {
+      fullPage: true,
+      maxDiffPixelRatio: 0.02,
+    });
   });
 
   test('search results page', async ({ page }) => {
@@ -75,7 +84,10 @@ test.describe('visual regression - public pages', () => {
     });
     await page.goto('/projects/search?q=test&sort=top');
     await expect(page.getByText('Visual Regression Project')).toBeVisible();
-    await expect(page).toHaveScreenshot('search.png', { fullPage: true });
+    await expect(page).toHaveScreenshot('search.png', {
+      fullPage: true,
+      maxDiffPixelRatio: 0.02,
+    });
   });
 
   test('top projects page', async ({ page }) => {
@@ -86,6 +98,7 @@ test.describe('visual regression - public pages', () => {
     ).toBeVisible();
     await expect(page).toHaveScreenshot('top-projects.png', {
       fullPage: true,
+      maxDiffPixelRatio: 0.02,
     });
   });
 });

@@ -84,7 +84,11 @@ export default function Home() {
   return (
     <Box minH="100vh" bg="transparent">
       <Navbar />
-      <Container maxW="1280px" px="212px" py="50px">
+      <Container
+        maxW="1280px"
+        px={{ base: '16px', md: '24px', lg: '36px' }}
+        py={{ base: '32px', lg: '50px' }}
+      >
         {state.error ? (
           <VStack
             minH="40vh"
@@ -101,7 +105,12 @@ export default function Home() {
             </Text>
           </VStack>
         ) : (
-          <VStack gap="96px" align="start">
+          <VStack
+            gap={{ base: '48px', lg: '96px' }}
+            align="start"
+            maxW="860px"
+            mx="auto"
+          >
             <ProjectSection
               title="Top Overall UF Projects"
               projects={state.topOverall}

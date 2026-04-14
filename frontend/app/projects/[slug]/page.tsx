@@ -221,7 +221,13 @@ export default function ProjectDetailPage() {
     return (
       <Box minH="100vh" bg="gray.50">
         <Navbar />
-        <Box px="36px" pt="32px" pb="64px" maxW="1280px" mx="auto">
+        <Box
+          px={{ base: '16px', md: '24px', lg: '36px' }}
+          pt="32px"
+          pb="64px"
+          maxW="1280px"
+          mx="auto"
+        >
           <Flex
             minH="50vh"
             align="center"
@@ -256,7 +262,13 @@ export default function ProjectDetailPage() {
     return (
       <Box minH="100vh" bg="gray.50">
         <Navbar />
-        <Box px="36px" pt="32px" pb="64px" maxW="1280px" mx="auto">
+        <Box
+          px={{ base: '16px', md: '24px', lg: '36px' }}
+          pt="32px"
+          pb="64px"
+          maxW="1280px"
+          mx="auto"
+        >
           <Flex
             minH="50vh"
             align="center"

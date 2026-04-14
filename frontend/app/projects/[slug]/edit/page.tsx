@@ -266,7 +266,13 @@ export default function EditProjectPage() {
   return (
     <Box minH="100vh" bg="transparent">
       <Navbar />
-      <Box px="36px" pt="32px" pb="64px" maxW="1280px" mx="auto">
+      <Box
+        px={{ base: '16px', md: '24px', lg: '36px' }}
+        pt="32px"
+        pb="64px"
+        maxW="1280px"
+        mx="auto"
+      >
         <Flex align="flex-start" justify="space-between" mb="32px" gap="16px">
           <VStack align="start" gap="6px">
             <Text
