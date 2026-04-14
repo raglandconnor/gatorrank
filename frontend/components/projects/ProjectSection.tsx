@@ -22,7 +22,7 @@ export function ProjectSection({
   loading = false,
 }: ProjectSectionProps) {
   return (
-    <VStack gap="30px" align="center" w="100%">
+    <VStack gap={{ base: '20px', md: '30px' }} align="center" w="100%">
       {/* Section heading */}
       <motion.div
         initial={{ opacity: 0, y: -8 }}
