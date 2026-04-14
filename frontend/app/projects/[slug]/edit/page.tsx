@@ -198,6 +198,54 @@ export default function EditProjectPage() {
     }
   };
 
+  const actionButtons = (
+    <HStack gap="12px" flexShrink={0}>
+      <Button
+        type="button"
+        variant="outline"
+        border="1px solid"
+        borderColor="orange.400"
+        borderRadius="14px"
+        h="44px"
+        px="20px"
+        fontSize="sm"
+        color="gray.900"
+        bg="white"
+        _hover={{ bg: 'orange.50' }}
+        transition="background 0.15s"
+        onClick={handleCancel}
+        disabled={isSubmitting}
+      >
+        <HStack gap="6px">
+          <LuX size={16} />
+          <Text>Cancel</Text>
+        </HStack>
+      </Button>
+      <Button
+        type="submit"
+        form="project-form"
+        bg={isSubmitDisabled || isSubmitting ? 'gray.300' : 'orange.400'}
+        color="white"
+        borderRadius="14px"
+        h="44px"
+        px="20px"
+        fontSize="sm"
+        fontWeight="normal"
+        _hover={{
+          bg: isSubmitDisabled || isSubmitting ? 'gray.300' : 'orange.500',
+        }}
+        transition="background 0.15s"
+        disabled={isSubmitDisabled || isSubmitting}
+        cursor={isSubmitDisabled || isSubmitting ? 'not-allowed' : 'pointer'}
+      >
+        <HStack gap="6px">
+          <LuSave size={16} />
+          <Text>{isSubmitting ? 'Saving...' : 'Save Changes'}</Text>
+        </HStack>
+      </Button>
+    </HStack>
+  );
+
   if (state.status === 'loading') {
     return (
       <Box minH="100vh" bg="transparent">
@@ -282,54 +330,7 @@ export default function EditProjectPage() {
             </Text>
           </VStack>
 
-          <HStack gap="12px" flexShrink={0}>
-            <Button
-              type="button"
-              variant="outline"
-              border="1px solid"
-              borderColor="orange.400"
-              borderRadius="14px"
-              h="44px"
-              px="20px"
-              fontSize="sm"
-              color="gray.900"
-              bg="white"
-              _hover={{ bg: 'orange.50' }}
-              transition="background 0.15s"
-              onClick={handleCancel}
-              disabled={isSubmitting}
-            >
-              <HStack gap="6px">
-                <LuX size={16} />
-                <Text>Cancel</Text>
-              </HStack>
-            </Button>
-            <Button
-              type="submit"
-              form="project-form"
-              bg={isSubmitDisabled || isSubmitting ? 'gray.300' : 'orange.400'}
-              color="white"
-              borderRadius="14px"
-              h="44px"
-              px="20px"
-              fontSize="sm"
-              fontWeight="normal"
-              _hover={{
-                bg:
-                  isSubmitDisabled || isSubmitting ? 'gray.300' : 'orange.500',
-              }}
-              transition="background 0.15s"
-              disabled={isSubmitDisabled || isSubmitting}
-              cursor={
-                isSubmitDisabled || isSubmitting ? 'not-allowed' : 'pointer'
-              }
-            >
-              <HStack gap="6px">
-                <LuSave size={16} />
-                <Text>{isSubmitting ? 'Saving...' : 'Save Changes'}</Text>
-              </HStack>
-            </Button>
-          </HStack>
+          {actionButtons}
         </Flex>
 
         <ProjectForm
@@ -378,6 +379,10 @@ export default function EditProjectPage() {
             }
           }}
         />
+
+        <Flex justify="flex-end" mt="32px">
+          {actionButtons}
+        </Flex>
 
         <Box
           mt="36px"

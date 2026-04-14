@@ -136,6 +136,18 @@ describe('EditProjectPage delete flow', () => {
     expect(deleteButton).toBeEnabled();
   });
 
+  test('renders top and bottom action rows with cancel and save buttons', async () => {
+    renderWithChakra(<EditProjectPage />);
+
+    await screen.findByText('Delete project');
+
+    const cancelButtons = screen.getAllByRole('button', { name: 'Cancel' });
+    const saveButtons = screen.getAllByRole('button', { name: 'Save Changes' });
+
+    expect(cancelButtons).toHaveLength(2);
+    expect(saveButtons).toHaveLength(2);
+  });
+
   test('deletes project, shows success toast, and redirects to profile', async () => {
     deleteProjectMock.mockResolvedValue(undefined);
     renderWithChakra(<EditProjectPage />);
