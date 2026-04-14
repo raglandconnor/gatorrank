@@ -3,8 +3,8 @@ import pytest_asyncio
 from uuid import uuid4
 from httpx import ASGITransport, AsyncClient
 import sqlalchemy as sa
-import jwt
 from datetime import UTC, datetime, timedelta
+from sqlmodel import select
 
 from app.main import app
 from app.db.database import get_db
@@ -15,6 +15,7 @@ from app.core.config import get_settings
 from app.services.vote import VoteService
 
 settings = get_settings()
+_TOKEN_PAYLOADS: dict[str, dict[str, object]] = {}
 
 
 @pytest_asyncio.fixture
@@ -25,18 +26,44 @@ async def api_client():
 
 
 def generate_token(user_id, email, jwt_secret):
+    _ = jwt_secret
     now = datetime.now(UTC)
-    return jwt.encode(
-        {
-            "sub": str(user_id),
-            "email": email,
-            "aud": "authenticated",
-            "iat": int(now.timestamp()),
-            "exp": now + timedelta(minutes=5),
-        },
-        jwt_secret,
-        algorithm="HS256",
+    token = f"test-token-{uuid4()}"
+    _TOKEN_PAYLOADS[token] = {
+        "sub": str(user_id),
+        "email": email,
+        "aud": "authenticated",
+        "iss": "https://issuer.example/auth/v1",
+        "iat": int(now.timestamp()),
+        "exp": int((now + timedelta(minutes=5)).timestamp()),
+        "user_metadata": {"username": f"user_{str(user_id).replace('-', '')[:10]}"},
+        "email_confirmed_at": "2026-01-01T00:00:00Z",
+    }
+    return token
+
+
+@pytest.fixture(autouse=True)
+def _mock_supabase_jwt(monkeypatch):
+    def fake_decode(token: str) -> dict[str, object]:
+        payload = _TOKEN_PAYLOADS.get(token)
+        if payload is None:
+            raise ValueError("Invalid token")
+        return payload
+
+    def fake_admin_get_user(self, auth_user_id):
+        return {
+            "id": str(auth_user_id),
+            "email_confirmed_at": "2026-01-01T00:00:00Z",
+            "user_metadata": {
+                "username": f"user_{str(auth_user_id).replace('-', '')[:10]}"
+            },
+        }
+
+    monkeypatch.setattr("app.api.deps.auth._decode_supabase_jwt", fake_decode)
+    monkeypatch.setattr(
+        "app.services.auth_bootstrap.SupabaseAdminClient.get_user", fake_admin_get_user
     )
+    _TOKEN_PAYLOADS.clear()
 
 
 async def seed_auth_user(
@@ -45,9 +72,9 @@ async def seed_auth_user(
     resolved_username = username or f"user_{uuid4().hex[:10]}"
     user = User(  # pyright: ignore[reportCallIssue]
         id=user_id,
+        auth_user_id=user_id,
         email=email,
         username=resolved_username,
-        password_hash="integration-password-hash",
         role="student",
     )
     db_session.add(user)
@@ -316,7 +343,7 @@ async def test_patch_current_user_profile_rejects_username_update(
 
 
 @pytest.mark.asyncio
-async def test_get_current_user_profile_unknown_user_returns_401(
+async def test_get_current_user_profile_bootstraps_missing_user(
     api_client, db_session, monkeypatch
 ):
     jwt_secret = "integration-test-jwt-secret-at-least-32b"
@@ -335,8 +362,20 @@ async def test_get_current_user_profile_unknown_user_returns_401(
             "/api/v1/users/me",
             headers={"Authorization": f"Bearer {token}"},
         )
-        assert response.status_code == 401
-        assert response.json()["detail"] == "Invalid token"
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["id"] != str(user_id)
+        assert payload["email"] == email
+        assert payload["role"] == "student"
+        assert payload["full_name"] is None
+        assert payload["profile_picture_url"] is None
+
+        created_result = await db_session.exec(
+            select(User).where(User.auth_user_id == user_id)
+        )
+        created_user = created_result.first()
+        assert created_user is not None
+        assert created_user.email == email
     finally:
         app.dependency_overrides.clear()
 
@@ -351,7 +390,6 @@ async def test_get_user_profile(api_client, db_session, monkeypatch):
         id=user_id,
         email=email,
         username="public_user",
-        password_hash="integration-password-hash",
         full_name="Public User",
         role="student",
     )
@@ -384,7 +422,6 @@ async def test_get_user_profile_by_username_case_insensitive(api_client, db_sess
         id=user_id,
         email=email,
         username=username,
-        password_hash="integration-password-hash",
         full_name="Public User",
         role="student",
     )
@@ -415,7 +452,6 @@ async def test_list_user_projects(api_client, db_session):
         id=user_id,
         email=email,
         username="author_user",
-        password_hash="integration-password-hash",
         full_name="Author",
         role="student",
     )
@@ -584,7 +620,6 @@ async def test_list_user_projects_by_username(api_client, db_session):
         id=user_id,
         email=email,
         username=username,
-        password_hash="integration-password-hash",
         full_name="Author",
         role="student",
     )

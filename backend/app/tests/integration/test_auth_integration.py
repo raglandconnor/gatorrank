@@ -1,32 +1,33 @@
-from datetime import UTC, datetime, timedelta
 import asyncio
 from types import SimpleNamespace
 from typing import cast
 from uuid import uuid4
 
-import jwt
 import pytest
 import pytest_asyncio
 import sqlalchemy as sa
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from fastapi import Request
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy.ext.asyncio import AsyncEngine
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from app.api.deps.auth import _resolve_authenticated_user, get_current_user
-from app.core.config import get_settings
+from app.api.deps.auth import _resolve_authenticated_user
+from app.api.deps.auth import get_current_user
 from app.db.database import get_db
 from app.main import app
 from app.models.user import User
 
 router = APIRouter()
-settings = get_settings()
 
 
 @router.get("/test-auth-integration")
 async def check_auth_integration(current_user: User = Depends(get_current_user)):
-    return {"id": str(current_user.id), "email": current_user.email}
+    return {
+        "id": str(current_user.id),
+        "auth_user_id": str(current_user.auth_user_id),
+        "email": current_user.email,
+        "username": current_user.username,
+    }
 
 
 app.include_router(router)
@@ -43,31 +44,40 @@ async def api_client():
 async def test_get_current_user_returns_existing_user(
     api_client, db_session, monkeypatch
 ):
-    jwt_secret = "integration-test-jwt-secret-at-least-32b"
-    monkeypatch.setattr(settings, "DATABASE_JWT_SECRET", jwt_secret)
-
-    user_id = uuid4()
-    email = f"auth-int-{uuid4().hex[:8]}@ufl.edu"
+    auth_user_id = uuid4()
     existing_user = User(  # pyright: ignore[reportCallIssue]
-        id=user_id,
-        email=email,
-        username=f"user_{uuid4().hex[:10]}",
-        password_hash="integration-password-hash",
+        auth_user_id=auth_user_id,
+        email="existing@ufl.edu",
+        username="existing_user",
         role="student",
     )
     db_session.add(existing_user)
     await db_session.commit()
+    await db_session.refresh(existing_user)
 
-    token = jwt.encode(
-        {
-            "sub": str(user_id),
-            "email": email,
+    monkeypatch.setattr(
+        "app.api.deps.auth._decode_supabase_jwt",
+        lambda _token: {
+            "sub": str(auth_user_id),
+            "email": "existing@ufl.edu",
             "aud": "authenticated",
-            "iat": int(datetime.now(UTC).timestamp()),
-            "exp": datetime.now(UTC) + timedelta(minutes=5),
+            "iss": "https://issuer.example/auth/v1",
+            "iat": 1,
+            "exp": 9999999999,
+            "user_metadata": {"username": "existing_user"},
+            "email_confirmed_at": "2026-01-01T00:00:00Z",
         },
-        jwt_secret,
-        algorithm="HS256",
+    )
+
+    def fake_admin_get_user(self, _auth_user_id):
+        return {
+            "id": str(auth_user_id),
+            "email_confirmed_at": "2026-01-01T00:00:00Z",
+            "user_metadata": {"username": "existing_user"},
+        }
+
+    monkeypatch.setattr(
+        "app.services.auth_bootstrap.SupabaseAdminClient.get_user", fake_admin_get_user
     )
 
     async def override_get_db():
@@ -77,33 +87,54 @@ async def test_get_current_user_returns_existing_user(
     try:
         response = await api_client.get(
             "/test-auth-integration",
-            headers={"Authorization": f"Bearer {token}"},
+            headers={"Authorization": "Bearer valid"},
         )
         assert response.status_code == 200
-        assert response.json() == {"id": str(user_id), "email": email}
+        assert response.json() == {
+            "id": str(existing_user.id),
+            "auth_user_id": str(auth_user_id),
+            "email": "existing@ufl.edu",
+            "username": "existing_user",
+        }
     finally:
         app.dependency_overrides.clear()
 
 
 @pytest.mark.asyncio
-async def test_get_current_user_rejects_unknown_user(
+async def test_get_current_user_bootstraps_missing_user(
     api_client, db_session, monkeypatch
 ):
-    jwt_secret = "integration-test-jwt-secret-at-least-32b"
-    monkeypatch.setattr(settings, "DATABASE_JWT_SECRET", jwt_secret)
+    auth_user_id = uuid4()
 
-    user_id = uuid4()
-    email = f"auth-int-{uuid4().hex[:8]}@ufl.edu"
-    token = jwt.encode(
-        {
-            "sub": str(user_id),
-            "email": email,
+    monkeypatch.setattr(
+        "app.api.deps.auth._decode_supabase_jwt",
+        lambda _token: {
+            "sub": str(auth_user_id),
+            "email": "bootstrap@ufl.edu",
             "aud": "authenticated",
-            "iat": int(datetime.now(UTC).timestamp()),
-            "exp": datetime.now(UTC) + timedelta(minutes=5),
+            "iss": "https://issuer.example/auth/v1",
+            "iat": 1,
+            "exp": 9999999999,
+            "user_metadata": {
+                "username": "bootstrap_user",
+                "full_name": "Bootstrap User",
+            },
+            "email_confirmed_at": "2026-01-01T00:00:00Z",
         },
-        jwt_secret,
-        algorithm="HS256",
+    )
+
+    def fake_admin_get_user(self, _auth_user_id):
+        return {
+            "id": str(auth_user_id),
+            "email_confirmed_at": "2026-01-01T00:00:00Z",
+            "user_metadata": {
+                "username": "bootstrap_user",
+                "full_name": "Bootstrap User",
+            },
+        }
+
+    monkeypatch.setattr(
+        "app.services.auth_bootstrap.SupabaseAdminClient.get_user", fake_admin_get_user
     )
 
     async def override_get_db():
@@ -113,50 +144,156 @@ async def test_get_current_user_rejects_unknown_user(
     try:
         response = await api_client.get(
             "/test-auth-integration",
-            headers={"Authorization": f"Bearer {token}"},
+            headers={"Authorization": "Bearer valid"},
         )
-        assert response.status_code == 401
-        assert response.json()["detail"] == "Invalid token"
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["auth_user_id"] == str(auth_user_id)
+        assert payload["email"] == "bootstrap@ufl.edu"
+        assert payload["username"] == "bootstrap_user"
+
+        result = await db_session.execute(
+            sa.select(sa.func.count())
+            .select_from(User)
+            .where(User.auth_user_id == auth_user_id)  # pyright: ignore[reportArgumentType]
+        )
+        assert result.scalar_one() == 1
     finally:
         app.dependency_overrides.clear()
 
 
 @pytest.mark.asyncio
-async def test_get_current_user_concurrent_unknown_user_requests_are_rejected(
-    async_engine: AsyncEngine, monkeypatch
+async def test_get_current_user_rejects_non_ufl_email(
+    api_client, db_session, monkeypatch
 ):
-    jwt_secret = "integration-test-jwt-secret-at-least-32b"
-    monkeypatch.setattr(settings, "DATABASE_JWT_SECRET", jwt_secret)
+    auth_user_id = uuid4()
 
-    user_id = uuid4()
-    email = f"auth-race-{uuid4().hex[:8]}@ufl.edu"
-    token = jwt.encode(
-        {
-            "sub": str(user_id),
-            "email": email,
+    monkeypatch.setattr(
+        "app.api.deps.auth._decode_supabase_jwt",
+        lambda _token: {
+            "sub": str(auth_user_id),
+            "email": "person@example.com",
             "aud": "authenticated",
-            "iat": int(datetime.now(UTC).timestamp()),
-            "exp": datetime.now(UTC) + timedelta(minutes=5),
+            "iss": "https://issuer.example/auth/v1",
+            "iat": 1,
+            "exp": 9999999999,
+            "user_metadata": {"username": "outside_user"},
+            "email_confirmed_at": "2026-01-01T00:00:00Z",
         },
-        jwt_secret,
-        algorithm="HS256",
     )
 
-    async def authenticate_once() -> User:
+    monkeypatch.setattr(
+        "app.services.auth_bootstrap.SupabaseAdminClient.get_user",
+        lambda self, _auth_user_id: {
+            "id": str(auth_user_id),
+            "email_confirmed_at": "2026-01-01T00:00:00Z",
+            "user_metadata": {"username": "outside_user"},
+        },
+    )
+
+    async def override_get_db():
+        yield db_session
+
+    app.dependency_overrides[get_db] = override_get_db
+    try:
+        response = await api_client.get(
+            "/test-auth-integration",
+            headers={"Authorization": "Bearer valid"},
+        )
+        assert response.status_code == 403
+        assert response.json()["detail"] == "Only @ufl.edu accounts are allowed"
+    finally:
+        app.dependency_overrides.clear()
+
+
+@pytest.mark.asyncio
+async def test_get_current_user_rejects_unconfirmed_email(
+    api_client, db_session, monkeypatch
+):
+    auth_user_id = uuid4()
+
+    monkeypatch.setattr(
+        "app.api.deps.auth._decode_supabase_jwt",
+        lambda _token: {
+            "sub": str(auth_user_id),
+            "email": "pending@ufl.edu",
+            "aud": "authenticated",
+            "iss": "https://issuer.example/auth/v1",
+            "iat": 1,
+            "exp": 9999999999,
+            "user_metadata": {"username": "pending_user"},
+            "email_confirmed_at": None,
+        },
+    )
+
+    monkeypatch.setattr(
+        "app.services.auth_bootstrap.SupabaseAdminClient.get_user",
+        lambda self, _auth_user_id: {
+            "id": str(auth_user_id),
+            "email_confirmed_at": None,
+            "user_metadata": {"username": "pending_user"},
+        },
+    )
+
+    async def override_get_db():
+        yield db_session
+
+    app.dependency_overrides[get_db] = override_get_db
+    try:
+        response = await api_client.get(
+            "/test-auth-integration",
+            headers={"Authorization": "Bearer valid"},
+        )
+        assert response.status_code == 403
+        assert response.json()["detail"] == "Email confirmation required"
+    finally:
+        app.dependency_overrides.clear()
+
+
+@pytest.mark.asyncio
+async def test_get_current_user_concurrent_bootstrap_is_idempotent(
+    async_engine, monkeypatch
+):
+    auth_user_id = uuid4()
+
+    payload = {
+        "sub": str(auth_user_id),
+        "email": "race@ufl.edu",
+        "aud": "authenticated",
+        "iss": "https://issuer.example/auth/v1",
+        "iat": 1,
+        "exp": 9999999999,
+        "user_metadata": {"username": "race_user"},
+        "email_confirmed_at": "2026-01-01T00:00:00Z",
+    }
+
+    monkeypatch.setattr(
+        "app.api.deps.auth._decode_supabase_jwt",
+        lambda _token: payload,
+    )
+
+    monkeypatch.setattr(
+        "app.services.auth_bootstrap.SupabaseAdminClient.get_user",
+        lambda self, _auth_user_id: {
+            "id": str(auth_user_id),
+            "email_confirmed_at": "2026-01-01T00:00:00Z",
+            "user_metadata": {"username": "race_user"},
+        },
+    )
+
+    async def authenticate_once():
         request = cast(Request, SimpleNamespace(state=SimpleNamespace()))
         async with AsyncSession(async_engine, expire_on_commit=False) as session:
-            return await _resolve_authenticated_user(request, token, session)
+            return await _resolve_authenticated_user(request, "race-token", session)
 
-    first_response, second_response = await asyncio.gather(
-        authenticate_once(), authenticate_once(), return_exceptions=True
-    )
-    assert isinstance(first_response, HTTPException)
-    assert isinstance(second_response, HTTPException)
-    assert first_response.status_code == 401
-    assert second_response.status_code == 401
+    first, second = await asyncio.gather(authenticate_once(), authenticate_once())
+    assert first.auth_user_id == auth_user_id
+    assert second.auth_user_id == auth_user_id
 
     async with AsyncSession(async_engine, expire_on_commit=False) as verify_session:
-        count_result = await verify_session.exec(  # pyright: ignore[reportCallIssue]
-            sa.select(sa.func.count()).select_from(User).where(User.id == user_id)  # pyright: ignore[reportArgumentType]
+        result = await verify_session.execute(
+            sa.select(sa.func.count())
+            .select_from(User)
+            .where(User.auth_user_id == auth_user_id)  # pyright: ignore[reportArgumentType]
         )
-        assert count_result.scalar_one() == 0
+        assert result.scalar_one() == 1

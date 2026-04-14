@@ -19,7 +19,6 @@ def mock_user():
         id=uuid4(),
         email="test@ufl.edu",
         username="test_user",
-        password_hash="test-password-hash",
         role="student",
     )
 

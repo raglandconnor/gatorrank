@@ -25,7 +25,6 @@ def create_app() -> FastAPI:
     settings = load_settings_or_exit()
 
     # Import routes after config validation so missing env vars fail with a concise message.
-    from app.api.v1.auth import router as auth_router
     from app.api.v1.health import router as health_router
     from app.api.v1.projects import router as projects_router
     from app.api.v1.taxonomy import router as taxonomy_router
@@ -55,7 +54,6 @@ def create_app() -> FastAPI:
         """
         return {"Hello": "World"}
 
-    app.include_router(auth_router, prefix="/api/v1", tags=["auth"])
     app.include_router(health_router, prefix="/api/v1", tags=["health"])
     app.include_router(projects_router, prefix="/api/v1", tags=["projects"])
     app.include_router(taxonomy_router, prefix="/api/v1", tags=["taxonomy"])

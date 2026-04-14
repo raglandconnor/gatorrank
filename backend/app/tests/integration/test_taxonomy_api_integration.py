@@ -25,7 +25,6 @@ async def _seed_user(db_session, *, email: str, role: str) -> User:
     user = User(
         email=email,
         username=f"user_{uuid4().hex[:10]}",
-        password_hash="integration-password-hash",
         role=role,
         created_at=now,
         updated_at=now,
