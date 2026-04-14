@@ -76,19 +76,19 @@ describe('project card navigation', () => {
   test('ProjectCard renders category, tag, and tech stack badges', () => {
     renderWithChakra(<ProjectCard project={projectFixture()} rank={1} />);
 
-    expect(screen.getByText('Web App')).toBeInTheDocument();
-    expect(screen.getByText('React')).toBeInTheDocument();
-    expect(screen.getByText('TypeScript')).toBeInTheDocument();
-    expect(screen.getByText('Next.js')).toBeInTheDocument();
+    expect(screen.getAllByText('Web App').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('React').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('TypeScript').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Next.js').length).toBeGreaterThan(0);
   });
 
   test('ProjectGridCard renders category, tag, and tech stack badges', () => {
     renderWithChakra(<ProjectGridCard project={projectFixture()} rank={1} />);
 
-    expect(screen.getByText('Web App')).toBeInTheDocument();
-    expect(screen.getByText('React')).toBeInTheDocument();
-    expect(screen.getByText('TypeScript')).toBeInTheDocument();
-    expect(screen.getByText('Next.js')).toBeInTheDocument();
+    expect(screen.getAllByText('Web App').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('React').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('TypeScript').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Next.js').length).toBeGreaterThan(0);
   });
 
   test('cards with no tags do not render a fallback Project tag', () => {

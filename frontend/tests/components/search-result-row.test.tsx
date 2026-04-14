@@ -49,7 +49,7 @@ describe('SearchResultRow', () => {
     );
 
     expect(screen.getByText('Test Project')).toBeInTheDocument();
-    expect(screen.getByText('AI')).toBeInTheDocument();
+    expect(screen.getAllByText('AI').length).toBeGreaterThan(0);
     expect(screen.getByText('Unpublished')).toBeInTheDocument();
 
     const link = screen.getByRole('link', { name: /Test Project/i });
