@@ -18,7 +18,7 @@ import {
   CommentPill,
   VotePill,
 } from '@/components/projects/ProjectActionPills';
-import { ProjectInlineTags } from '@/components/projects/ProjectInlineTags';
+import { ProjectTaxonomyBadges } from '@/components/projects/ProjectTaxonomyBadges';
 
 interface ProjectGridCardProps {
   project: Project;
@@ -113,7 +113,11 @@ export function ProjectGridCard({ project, rank }: ProjectGridCardProps) {
                 <LuArrowRight size={13} />
               </Box>
             </HStack>
-            <ProjectInlineTags tags={project.tags} maxRows={2} />
+            <ProjectTaxonomyBadges
+              categories={project.categories}
+              tags={project.tags}
+              techStack={project.tech_stack}
+            />
           </VStack>
         </HStack>
 

@@ -16,7 +16,7 @@ import { LuMessageSquare, LuChevronUp, LuArrowRight } from 'react-icons/lu';
 import type { Project } from '@/types/project';
 import { useProjectVote } from '@/hooks/useProjectVote';
 import { projectPath } from '@/lib/routes';
-import { ProjectInlineTags } from '@/components/projects/ProjectInlineTags';
+import { ProjectTaxonomyBadges } from '@/components/projects/ProjectTaxonomyBadges';
 
 interface ProjectCardProps {
   project: Project;
@@ -110,7 +110,11 @@ export function ProjectCard({ project, rank }: ProjectCardProps) {
           </Text>
         </VStack>
 
-        <ProjectInlineTags tags={project.tags} maxRows={1} />
+        <ProjectTaxonomyBadges
+          categories={project.categories}
+          tags={project.tags}
+          techStack={project.tech_stack}
+        />
       </VStack>
 
       <HStack gap={{ base: '10px', md: '18px' }} pt="6px" flexShrink={0}>
