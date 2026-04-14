@@ -1,6 +1,7 @@
 'use client';
 
-import { Badge, Wrap } from '@chakra-ui/react';
+import { Badge, HStack, Wrap } from '@chakra-ui/react';
+import { LuLayoutGrid, LuHash, LuCodeXml } from 'react-icons/lu';
 
 interface ProjectTaxonomyBadgesProps {
   categories: string[];
@@ -33,7 +34,10 @@ export function ProjectTaxonomyBadges({
           textTransform="none"
           letterSpacing="0.01em"
         >
-          {name}
+          <HStack gap="4px" display="inline-flex" align="center">
+            <LuLayoutGrid size={10} />
+            {name}
+          </HStack>
         </Badge>
       ))}
       {tags.map((name) => (
@@ -51,7 +55,10 @@ export function ProjectTaxonomyBadges({
           textTransform="none"
           letterSpacing="0.01em"
         >
-          {name}
+          <HStack gap="4px" display="inline-flex" align="center">
+            <LuHash size={10} />
+            {name}
+          </HStack>
         </Badge>
       ))}
       {techStack.map((name) => (
@@ -69,7 +76,10 @@ export function ProjectTaxonomyBadges({
           textTransform="none"
           fontFamily="mono"
         >
-          {name}
+          <HStack gap="4px" display="inline-flex" align="center">
+            <LuCodeXml size={10} />
+            {name}
+          </HStack>
         </Badge>
       ))}
     </Wrap>
