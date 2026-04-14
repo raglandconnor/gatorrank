@@ -325,8 +325,18 @@ export default function ProjectDetailPage() {
             pt={{ base: '20px', md: '28px' }}
             pb={{ base: '20px', md: '26px' }}
           >
-            <Flex align="flex-start" justify="space-between" gap="24px">
-              <HStack align="flex-start" gap="20px" flex="1" minW={0}>
+            <Flex
+              align="flex-start"
+              justify="space-between"
+              gap={{ base: '16px', md: '24px' }}
+              direction={{ base: 'column', md: 'row' }}
+            >
+              <HStack
+                align="flex-start"
+                gap={{ base: '12px', md: '20px' }}
+                flex="1"
+                minW={0}
+              >
                 <Box
                   w={{ base: '104px', md: '128px' }}
                   h={{ base: '104px', md: '128px' }}

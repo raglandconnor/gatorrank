@@ -273,7 +273,13 @@ export default function EditProjectPage() {
         maxW="1280px"
         mx="auto"
       >
-        <Flex align="flex-start" justify="space-between" mb="32px" gap="16px">
+        <Flex
+          align="flex-start"
+          justify="space-between"
+          mb="32px"
+          gap="16px"
+          flexWrap="wrap"
+        >
           <VStack align="start" gap="6px">
             <Text
               fontSize="xl"
