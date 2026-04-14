@@ -163,7 +163,7 @@ async def test_get_current_user_bootstraps_missing_user(
 
 
 @pytest.mark.asyncio
-async def test_get_current_user_rejects_non_ufl_email(
+async def test_get_current_user_allows_non_ufl_email(
     api_client, db_session, monkeypatch
 ):
     auth_user_id = uuid4()
@@ -200,8 +200,11 @@ async def test_get_current_user_rejects_non_ufl_email(
             "/test-auth-integration",
             headers={"Authorization": "Bearer valid"},
         )
-        assert response.status_code == 403
-        assert response.json()["detail"] == "Only @ufl.edu accounts are allowed"
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["auth_user_id"] == str(auth_user_id)
+        assert payload["email"] == "person@example.com"
+        assert payload["username"] == "outside_user"
     finally:
         app.dependency_overrides.clear()
 

@@ -100,7 +100,6 @@ class AuthBootstrapService:
     async def get_or_create_user(self, identity: AuthIdentity) -> User:
         """Resolve app user by Supabase auth id; bootstrap row on first authenticated call."""
         email = identity.email.strip().lower()
-        self._enforce_ufl_email(email)
 
         existing = await self._get_by_auth_user_id(identity.auth_user_id)
         if existing is not None:
@@ -191,11 +190,6 @@ class AuthBootstrapService:
         if self._is_email_confirmed(admin_user):
             return
         raise EmailPolicyError("Email confirmation required")
-
-    @staticmethod
-    def _enforce_ufl_email(email: str) -> None:
-        if not email.endswith("@ufl.edu"):
-            raise EmailPolicyError("Only @ufl.edu accounts are allowed")
 
     @staticmethod
     def _classify_unique_integrity_error(

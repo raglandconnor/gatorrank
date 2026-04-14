@@ -19,7 +19,7 @@ import {
 } from '@chakra-ui/react';
 import { HiEye, HiEyeSlash } from 'react-icons/hi2';
 import NextLink from 'next/link';
-import { isValidEduEmail } from '@/lib/validation';
+import { isValidEmail } from '@/lib/validation';
 
 type LoginFormPanelProps = {
   returnTo?: string | null;
@@ -45,8 +45,8 @@ export function LoginFormPanel({ returnTo }: LoginFormPanelProps) {
 
     if (!email.trim()) {
       newErrors.email = 'Email is required';
-    } else if (!isValidEduEmail(email)) {
-      newErrors.email = 'Please enter a valid .edu email address';
+    } else if (!isValidEmail(email)) {
+      newErrors.email = 'Please enter a valid email address';
     }
 
     if (!password) {

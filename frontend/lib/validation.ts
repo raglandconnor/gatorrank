@@ -1,9 +1,9 @@
-const EDU_EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.edu$/i;
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/i;
 const NAME_REGEX = /^[a-zA-Z\s\-'']+$/;
 
-export function isValidEduEmail(email: string): boolean {
+export function isValidEmail(email: string): boolean {
   if (!email.trim()) return false;
-  return EDU_EMAIL_REGEX.test(email.trim());
+  return EMAIL_REGEX.test(email.trim());
 }
 
 export function isValidName(name: string): boolean {

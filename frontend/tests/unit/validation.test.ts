@@ -1,16 +1,13 @@
 import { describe, expect, test } from 'vitest';
-import {
-  isValidEduEmail,
-  isValidName,
-  isValidPassword,
-} from '@/lib/validation';
+import { isValidEmail, isValidName, isValidPassword } from '@/lib/validation';
 
 describe('validation utilities', () => {
-  test('validates .edu emails', () => {
-    expect(isValidEduEmail('student@ufl.edu')).toBe(true);
-    expect(isValidEduEmail(' student@ufl.edu ')).toBe(true);
-    expect(isValidEduEmail('student@gmail.com')).toBe(false);
-    expect(isValidEduEmail('')).toBe(false);
+  test('validates email addresses', () => {
+    expect(isValidEmail('student@ufl.edu')).toBe(true);
+    expect(isValidEmail('student@gmail.com')).toBe(true);
+    expect(isValidEmail(' student@gmail.com ')).toBe(true);
+    expect(isValidEmail('not-an-email')).toBe(false);
+    expect(isValidEmail('')).toBe(false);
   });
 
   test('validates user names', () => {

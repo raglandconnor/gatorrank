@@ -34,10 +34,7 @@ const SIGNUP_PATTERNS: Array<[RegExp, string]> = [
     /password.*too short|at least.*character/i,
     'Your password needs to be at least 12 characters long.',
   ],
-  [
-    /email.*invalid|not.*edu/i,
-    'Please use a valid .edu email address to register.',
-  ],
+  [/email.*invalid|not.*edu/i, 'Please use a valid email address to register.'],
   [
     /network|fetch|connect|unreachable/i,
     'Could not reach the server. Check your connection and try again.',
