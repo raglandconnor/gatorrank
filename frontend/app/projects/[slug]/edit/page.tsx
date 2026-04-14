@@ -27,6 +27,7 @@ import {
   publishProject,
   removeProjectMember,
   unpublishProject,
+  updateProjectMember,
   updateProject,
 } from '@/lib/api/projects';
 import type { ProjectDetail, ProjectMemberInfo } from '@/lib/api/types/project';
@@ -359,10 +360,11 @@ export default function EditProjectPage() {
           members={members}
           pendingMemberEmails={[]}
           isBusy={isSubmitting}
-          onAddMember={async (email) => {
+          onAddMember={async (email, role = 'contributor') => {
             try {
               const member = await addProjectMember(state.project.id, {
                 email,
+                role,
               });
               setMembers((prev) => [...prev, member]);
               return { ok: true as const };
@@ -390,6 +392,53 @@ export default function EditProjectPage() {
                   error instanceof Error
                     ? error.message
                     : 'Could not remove project member.',
+              };
+            }
+          }}
+          onUpdateMemberRole={async (userId, role) => {
+            const currentMember = members.find(
+              (member) => member.user_id === userId,
+            );
+            if (!currentMember) {
+              return {
+                ok: false as const,
+                message: 'Member not found.',
+              };
+            }
+            const previousRole = currentMember.role;
+
+            setMembers((prev) =>
+              prev.map((member) =>
+                member.user_id === userId ? { ...member, role } : member,
+              ),
+            );
+
+            try {
+              const updatedMember = await updateProjectMember(
+                state.project.id,
+                userId,
+                { role },
+              );
+              setMembers((prev) =>
+                prev.map((member) =>
+                  member.user_id === userId ? updatedMember : member,
+                ),
+              );
+              return { ok: true as const };
+            } catch (error) {
+              setMembers((prev) =>
+                prev.map((member) =>
+                  member.user_id === userId
+                    ? { ...member, role: previousRole }
+                    : member,
+                ),
+              );
+              return {
+                ok: false as const,
+                message:
+                  error instanceof Error
+                    ? error.message
+                    : 'Could not update member role.',
               };
             }
           }}

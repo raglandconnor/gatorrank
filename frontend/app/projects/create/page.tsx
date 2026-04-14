@@ -6,6 +6,7 @@ import { Box, Flex, HStack, VStack, Text, Button } from '@chakra-ui/react';
 import { LuImage, LuX } from 'react-icons/lu';
 import { Navbar } from '@/components/layout/Navbar';
 import {
+  PendingProjectMember,
   ProjectForm,
   ProjectFormValues,
   ProjectPayload,
@@ -22,7 +23,9 @@ export default function CreateProjectPage() {
   const router = useRouter();
   const [isSubmitDisabled, setIsSubmitDisabled] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [pendingMemberEmails, setPendingMemberEmails] = useState<string[]>([]);
+  const [pendingMembers, setPendingMembers] = useState<PendingProjectMember[]>(
+    [],
+  );
   const [shouldPublish, setShouldPublish] = useState(true);
 
   const initialValues = useMemo<ProjectFormValues>(
@@ -50,13 +53,16 @@ export default function CreateProjectPage() {
       }
 
       const memberResults = await Promise.all(
-        pendingMemberEmails.map(async (email) => {
+        pendingMembers.map(async (pendingMember) => {
           try {
-            await addProjectMember(project.id, { email });
-            return { email, ok: true as const };
+            await addProjectMember(project.id, {
+              email: pendingMember.email,
+              role: pendingMember.role,
+            });
+            return { email: pendingMember.email, ok: true as const };
           } catch (error) {
             return {
-              email,
+              email: pendingMember.email,
               ok: false as const,
               message:
                 error instanceof Error
@@ -195,20 +201,33 @@ export default function CreateProjectPage() {
           publishChecked={shouldPublish}
           onPublishCheckedChange={setShouldPublish}
           members={[]}
-          pendingMemberEmails={pendingMemberEmails}
+          pendingMembers={pendingMembers}
           isBusy={isSubmitting}
-          onAddMember={async (email) => {
-            if (pendingMemberEmails.includes(email)) {
+          onAddMember={async (email, role = 'contributor') => {
+            if (
+              pendingMembers.some(
+                (pendingMember) => pendingMember.email === email,
+              )
+            ) {
               return { ok: false as const, message: 'Member already added.' };
             }
-            setPendingMemberEmails((prev) => [...prev, email]);
+            setPendingMembers((prev) => [...prev, { email, role }]);
             return { ok: true as const };
           }}
           onRemoveMember={async (email) => {
-            setPendingMemberEmails((prev) =>
-              prev.filter((memberEmail) => memberEmail !== email),
+            setPendingMembers((prev) =>
+              prev.filter((pendingMember) => pendingMember.email !== email),
             );
             return { ok: true as const };
+          }}
+          onUpdatePendingMemberRole={(email, role) => {
+            setPendingMembers((prev) =>
+              prev.map((pendingMember) =>
+                pendingMember.email === email
+                  ? { ...pendingMember, role }
+                  : pendingMember,
+              ),
+            );
           }}
         />
       </Box>
