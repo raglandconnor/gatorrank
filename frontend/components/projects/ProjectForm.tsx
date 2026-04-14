@@ -20,6 +20,7 @@ import type {
   ProjectMemberWritableRole,
   TaxonomyTerm,
 } from '@/lib/api/types/project';
+import { isValidEmail } from '@/lib/validation';
 import { toast } from '@/lib/ui/toast';
 
 const PROJECT_NAME_MAX = 50;
@@ -63,13 +64,6 @@ function isValidGithubUrl(s: string): boolean {
   } catch {
     return false;
   }
-}
-
-function isValidUflEmail(s: string): boolean {
-  const trimmed = s.trim().toLowerCase();
-  if (!trimmed.endsWith('@ufl.edu')) return false;
-  const local = trimmed.slice(0, -'@ufl.edu'.length);
-  return local.length > 0 && !local.includes('@');
 }
 
 function FieldLabel({ children }: { children: React.ReactNode }) {
@@ -681,10 +675,10 @@ export function ProjectForm({
     const normalized = memberInput.trim().toLowerCase();
     if (!normalized) return;
 
-    if (!isValidUflEmail(normalized)) {
+    if (!isValidEmail(normalized)) {
       toast.error({
         title: 'Invalid email',
-        description: 'Team members must use a valid @ufl.edu email address.',
+        description: 'Please enter a valid email address.',
       });
       return;
     }
@@ -1187,9 +1181,7 @@ export function ProjectForm({
               >
                 Team Members
               </Text>
-              <FieldLabel>
-                List teammates by their @ufl.edu email address.
-              </FieldLabel>
+              <FieldLabel>List teammates by their email address.</FieldLabel>
               <HStack gap="8px" w="100%">
                 <Input
                   value={memberInput}
@@ -1202,7 +1194,7 @@ export function ProjectForm({
                       void handleAddMember();
                     }
                   }}
-                  placeholder="name@ufl.edu"
+                  placeholder="name@example.com"
                   {...inputBase}
                   h="40px"
                   flex={1}

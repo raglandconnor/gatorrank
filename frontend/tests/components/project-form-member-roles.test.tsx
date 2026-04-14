@@ -1,10 +1,11 @@
-import { fireEvent, screen } from '@testing-library/react';
+import { fireEvent, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 import {
   PendingProjectMember,
   ProjectForm,
 } from '@/components/projects/ProjectForm';
 import type { ProjectMemberInfo } from '@/lib/api/types/project';
+import { toast } from '@/lib/ui/toast';
 import { renderWithChakra } from '@/tests/utils/render';
 
 vi.mock('@/lib/api/taxonomy', () => ({
@@ -150,5 +151,86 @@ describe('ProjectForm member roles', () => {
       'pending@ufl.edu',
       'maintainer',
     );
+  });
+
+  test('accepts non-ufl valid emails when adding pending members', async () => {
+    const onAddMember = vi.fn().mockResolvedValue({ ok: true });
+
+    renderWithChakra(
+      <ProjectForm
+        mode="create"
+        initialValues={{
+          title: 'Project One',
+          shortDescription: 'Summary',
+          fullDescription: '',
+          imageUrl: null,
+          categories: [],
+          tags: [],
+          techStack: [],
+          websiteUrl: 'https://example.com',
+          githubUrl: '',
+          demoVideoUrl: '',
+        }}
+        onSubmit={vi.fn()}
+        publishChecked
+        onPublishCheckedChange={vi.fn()}
+        members={baseMembers}
+        pendingMembers={basePendingMembers}
+        onAddMember={onAddMember}
+        onRemoveMember={vi.fn().mockResolvedValue({ ok: true })}
+      />,
+    );
+
+    fireEvent.change(screen.getByPlaceholderText('name@example.com'), {
+      target: { value: 'teammate@gmail.com' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Add team member' }));
+
+    await waitFor(() => {
+      expect(onAddMember).toHaveBeenCalledWith(
+        'teammate@gmail.com',
+        'contributor',
+      );
+    });
+  });
+
+  test('rejects malformed member emails before calling add callback', () => {
+    const onAddMember = vi.fn().mockResolvedValue({ ok: true });
+
+    renderWithChakra(
+      <ProjectForm
+        mode="create"
+        initialValues={{
+          title: 'Project One',
+          shortDescription: 'Summary',
+          fullDescription: '',
+          imageUrl: null,
+          categories: [],
+          tags: [],
+          techStack: [],
+          websiteUrl: 'https://example.com',
+          githubUrl: '',
+          demoVideoUrl: '',
+        }}
+        onSubmit={vi.fn()}
+        publishChecked
+        onPublishCheckedChange={vi.fn()}
+        members={baseMembers}
+        pendingMembers={basePendingMembers}
+        onAddMember={onAddMember}
+        onRemoveMember={vi.fn().mockResolvedValue({ ok: true })}
+      />,
+    );
+
+    fireEvent.change(screen.getByPlaceholderText('name@example.com'), {
+      target: { value: 'not-an-email' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Add team member' }));
+
+    expect(onAddMember).not.toHaveBeenCalled();
+    expect(toast.error).toHaveBeenCalledWith({
+      title: 'Invalid email',
+      description: 'Please enter a valid email address.',
+    });
   });
 });
