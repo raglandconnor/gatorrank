@@ -300,7 +300,13 @@ export default function ProjectDetailPage() {
 
   const youtubeEmbedUrl = getYouTubeEmbedUrl(project.video_url ?? '');
   const hasDemoVideo = Boolean(youtubeEmbedUrl);
+  const displayCategories = project.categories;
   const displayTags = project.tags;
+  const displayTechStack = project.tech_stack;
+  const hasTaxonomy =
+    displayCategories.length > 0 ||
+    displayTags.length > 0 ||
+    displayTechStack.length > 0;
 
   return (
     <Box minH="100vh" bg="gray.50">
@@ -393,26 +399,71 @@ export default function ProjectDetailPage() {
                     {project.short_description}
                   </Text>
 
-                  {displayTags.length > 0 && (
-                    <Wrap gap="10px">
-                      {displayTags.map((tag) => (
-                        <Badge
-                          key={tag.id}
-                          bg="white"
-                          border="1px solid"
-                          borderColor="orange.200"
-                          color="gray.700"
-                          borderRadius="10px"
-                          px="14px"
-                          py="7px"
-                          fontSize="sm"
-                          fontWeight="medium"
-                          textTransform="none"
-                        >
-                          {tag.name}
-                        </Badge>
-                      ))}
-                    </Wrap>
+                  {hasTaxonomy && (
+                    <VStack align="start" gap="8px">
+                      {displayCategories.length > 0 && (
+                        <Wrap gap="8px">
+                          {displayCategories.map((cat) => (
+                            <Badge
+                              key={cat.id}
+                              bg="orange.100"
+                              color="orange.800"
+                              borderRadius="full"
+                              px="14px"
+                              py="6px"
+                              fontSize="sm"
+                              fontWeight="semibold"
+                              textTransform="none"
+                              letterSpacing="0.01em"
+                            >
+                              {cat.name}
+                            </Badge>
+                          ))}
+                        </Wrap>
+                      )}
+                      {displayTags.length > 0 && (
+                        <Wrap gap="8px">
+                          {displayTags.map((tag) => (
+                            <Badge
+                              key={tag.id}
+                              bg="white"
+                              border="1px solid"
+                              borderColor="orange.200"
+                              color="gray.700"
+                              borderRadius="10px"
+                              px="14px"
+                              py="7px"
+                              fontSize="sm"
+                              fontWeight="medium"
+                              textTransform="none"
+                            >
+                              {tag.name}
+                            </Badge>
+                          ))}
+                        </Wrap>
+                      )}
+                      {displayTechStack.length > 0 && (
+                        <Wrap gap="8px">
+                          {displayTechStack.map((tech) => (
+                            <Badge
+                              key={tech.id}
+                              bg="gray.900"
+                              color="gray.100"
+                              borderRadius="8px"
+                              px="12px"
+                              py="6px"
+                              fontSize="xs"
+                              fontWeight="medium"
+                              fontFamily="mono"
+                              textTransform="none"
+                              letterSpacing="0.02em"
+                            >
+                              {tech.name}
+                            </Badge>
+                          ))}
+                        </Wrap>
+                      )}
+                    </VStack>
                   )}
 
                   <HStack
