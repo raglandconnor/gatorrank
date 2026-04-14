@@ -10,6 +10,7 @@ import {
   Text,
   Button,
   Spinner,
+  Input,
 } from '@chakra-ui/react';
 import { LuSave, LuX } from 'react-icons/lu';
 import { Navbar } from '@/components/layout/Navbar';
@@ -20,6 +21,7 @@ import {
 } from '@/components/projects/ProjectForm';
 import {
   addProjectMember,
+  deleteProject,
   getProject,
   getProjectBySlug,
   publishProject,
@@ -58,6 +60,8 @@ export default function EditProjectPage() {
   const [state, setState] = useState<LoadState>({ status: 'loading' });
   const [isSubmitDisabled, setIsSubmitDisabled] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteTitleInput, setDeleteTitleInput] = useState('');
   const [members, setMembers] = useState<ProjectMemberInfo[]>([]);
   const [shouldPublish, setShouldPublish] = useState(true);
 
@@ -148,6 +152,35 @@ export default function EditProjectPage() {
   const handleCancel = () => {
     if (state.status === 'ready') {
       router.push(projectPath(state.project.slug));
+    }
+  };
+
+  const expectedDeleteTitle =
+    state.status === 'ready' ? state.project.title.trim() : '';
+  const isDeleteTitleMatch =
+    deleteTitleInput.trim().toLowerCase() ===
+      expectedDeleteTitle.toLowerCase() && expectedDeleteTitle.length > 0;
+
+  const handleDeleteProject = async () => {
+    if (state.status !== 'ready') return;
+    if (isSubmitting || isDeleting || !isDeleteTitleMatch) return;
+
+    setIsDeleting(true);
+    try {
+      await deleteProject(state.project.id);
+      toast.success({
+        title: 'Project deleted',
+        description: 'Your project has been deleted.',
+      });
+      router.push('/profile');
+    } catch (error) {
+      toast.error({
+        title: 'Could not delete project',
+        description:
+          error instanceof Error ? error.message : 'Please try again.',
+      });
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -331,6 +364,49 @@ export default function EditProjectPage() {
             }
           }}
         />
+
+        <Box
+          mt="36px"
+          p="20px"
+          borderRadius="14px"
+          border="1px solid"
+          borderColor="red.200"
+          bg="red.50"
+        >
+          <VStack align="start" gap="10px">
+            <Text fontSize="md" fontWeight="bold" color="red.700">
+              Delete project
+            </Text>
+            <Text fontSize="sm" color="red.700">
+              This action cannot be undone. Type{' '}
+              <Text as="span" fontWeight="bold">
+                {state.project.title}
+              </Text>{' '}
+              to confirm.
+            </Text>
+            <HStack align="center" gap="10px" w="100%">
+              <Input
+                value={deleteTitleInput}
+                onChange={(event) => setDeleteTitleInput(event.target.value)}
+                placeholder={state.project.title}
+                aria-label="Type project title to confirm deletion"
+                bg="white"
+                borderColor="red.200"
+                disabled={isSubmitting || isDeleting}
+              />
+              <Button
+                type="button"
+                bg="red.600"
+                color="white"
+                _hover={{ bg: 'red.700' }}
+                disabled={!isDeleteTitleMatch || isSubmitting || isDeleting}
+                onClick={() => void handleDeleteProject()}
+              >
+                {isDeleting ? 'Deleting...' : 'Delete Project'}
+              </Button>
+            </HStack>
+          </VStack>
+        </Box>
       </Box>
     </Box>
   );
