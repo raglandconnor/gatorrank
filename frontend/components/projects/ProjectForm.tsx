@@ -164,16 +164,8 @@ function ProjectTermField({
       return unselectedTerms.slice(0, 8);
     }
 
-    return [...unselectedTerms]
+    return unselectedTerms
       .filter((term) => term.name.toLowerCase().includes(normalizedInput))
-      .sort((a, b) => {
-        const aLower = a.name.toLowerCase();
-        const bLower = b.name.toLowerCase();
-        const aStarts = aLower.startsWith(normalizedInput) ? 0 : 1;
-        const bStarts = bLower.startsWith(normalizedInput) ? 0 : 1;
-        if (aStarts !== bStarts) return aStarts - bStarts;
-        return aLower.localeCompare(bLower);
-      })
       .slice(0, 8);
   }, [availableTerms, isFocused, normalizedInput, values]);
 
@@ -223,19 +215,15 @@ function ProjectTermField({
   };
 
   const handleAddValue = () => {
-    const normalized = inputValue.trim().toLowerCase();
-    if (!normalized) return;
+    const trimmed = inputValue.trim();
+    if (!trimmed) return;
 
-    const exact = availableTerms.find(
-      (term) => term.name.toLowerCase() === normalized,
-    );
-
-    if (exact) {
-      addValue(exact.name);
+    if (filteredSuggestions.length > 0) {
+      addValue(filteredSuggestions[0].name);
       return;
     }
 
-    addValue(inputValue);
+    addValue(trimmed);
   };
 
   return (
@@ -304,28 +292,55 @@ function ProjectTermField({
             {loadTermsError} You can still add your own {title.toLowerCase()}{' '}
             manually.
           </Text>
-        ) : filteredSuggestions.length > 0 ? (
-          <Wrap gap="8px">
-            {filteredSuggestions.map((term) => (
+        ) : isFocused ? (
+          <VStack align="start" gap="8px" w="100%">
+            {normalizedInput && filteredSuggestions.length > 0 ? (
+              <Text fontSize="xs" color="gray.500">
+                Press Enter to use &quot;{filteredSuggestions[0].name}&quot;.
+              </Text>
+            ) : null}
+            {filteredSuggestions.length > 0 ? (
+              <Wrap gap="8px">
+                {filteredSuggestions.map((term) => (
+                  <Button
+                    key={term.id}
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    borderColor="orange.200"
+                    bg="white"
+                    color="gray.700"
+                    _hover={{ bg: 'orange.50' }}
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={() => addValue(term.name)}
+                  >
+                    <HStack gap="6px">
+                      <LuTag size={13} />
+                      <Text>{term.name}</Text>
+                    </HStack>
+                  </Button>
+                ))}
+              </Wrap>
+            ) : null}
+            {normalizedInput ? (
               <Button
-                key={term.id}
                 type="button"
                 size="sm"
                 variant="outline"
-                borderColor="orange.200"
+                borderColor="gray.300"
                 bg="white"
                 color="gray.700"
-                _hover={{ bg: 'orange.50' }}
+                _hover={{ bg: 'gray.50' }}
                 onMouseDown={(event) => event.preventDefault()}
-                onClick={() => addValue(term.name)}
+                onClick={() => addValue(inputValue)}
               >
                 <HStack gap="6px">
-                  <LuTag size={13} />
-                  <Text>{term.name}</Text>
+                  <LuPlus size={13} />
+                  <Text>Create &quot;{inputValue.trim()}&quot;</Text>
                 </HStack>
               </Button>
-            ))}
-          </Wrap>
+            ) : null}
+          </VStack>
         ) : null}
 
         {values.length > 0 && (
