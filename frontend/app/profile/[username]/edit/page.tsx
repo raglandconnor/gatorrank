@@ -327,6 +327,55 @@ export default function EditProfilePage() {
 
   const displayName = apiUser.full_name ?? apiUser.email;
 
+  const actionButtons = (
+    <HStack
+      gap={{ base: '8px', md: '12px' }}
+      flexShrink={0}
+      align="flex-start"
+      flexWrap="wrap"
+    >
+      <Button
+        onClick={() => router.push(profilePath(apiUser.username))}
+        variant="outline"
+        border="1px solid"
+        borderColor="orange.400"
+        borderRadius={{ base: '10px', md: '14px' }}
+        h={{ base: '36px', md: '44px' }}
+        px={{ base: '14px', md: '20px' }}
+        fontSize={{ base: 'xs', md: 'sm' }}
+        color="gray.900"
+        bg="white"
+        _hover={{ bg: 'orange.50' }}
+        transition="background 0.15s"
+        disabled={saving}
+      >
+        <HStack gap="6px">
+          <LuX size={14} />
+          <Text>Cancel</Text>
+        </HStack>
+      </Button>
+
+      <Button
+        onClick={handleSave}
+        bg="orange.400"
+        color="white"
+        borderRadius={{ base: '10px', md: '14px' }}
+        h={{ base: '36px', md: '44px' }}
+        px={{ base: '14px', md: '20px' }}
+        fontSize={{ base: 'xs', md: 'sm' }}
+        fontWeight="normal"
+        _hover={{ bg: 'orange.500' }}
+        transition="background 0.15s"
+        loading={saving}
+      >
+        <HStack gap="6px">
+          <LuSave size={14} />
+          <Text>Save Changes</Text>
+        </HStack>
+      </Button>
+    </HStack>
+  );
+
   return (
     <Box minH="100vh" bg="transparent">
       <Navbar />
@@ -466,52 +515,7 @@ export default function EditProfilePage() {
           </VStack>
 
           {/* Buttons */}
-          <HStack
-            gap={{ base: '8px', md: '12px' }}
-            flexShrink={0}
-            align="flex-start"
-            flexWrap="wrap"
-          >
-            <Button
-              onClick={() => router.push(profilePath(apiUser.username))}
-              variant="outline"
-              border="1px solid"
-              borderColor="orange.400"
-              borderRadius={{ base: '10px', md: '14px' }}
-              h={{ base: '36px', md: '44px' }}
-              px={{ base: '14px', md: '20px' }}
-              fontSize={{ base: 'xs', md: 'sm' }}
-              color="gray.900"
-              bg="white"
-              _hover={{ bg: 'orange.50' }}
-              transition="background 0.15s"
-              disabled={saving}
-            >
-              <HStack gap="6px">
-                <LuX size={14} />
-                <Text>Cancel</Text>
-              </HStack>
-            </Button>
-
-            <Button
-              onClick={handleSave}
-              bg="orange.400"
-              color="white"
-              borderRadius={{ base: '10px', md: '14px' }}
-              h={{ base: '36px', md: '44px' }}
-              px={{ base: '14px', md: '20px' }}
-              fontSize={{ base: 'xs', md: 'sm' }}
-              fontWeight="normal"
-              _hover={{ bg: 'orange.500' }}
-              transition="background 0.15s"
-              loading={saving}
-            >
-              <HStack gap="6px">
-                <LuSave size={14} />
-                <Text>Save Changes</Text>
-              </HStack>
-            </Button>
-          </HStack>
+          {actionButtons}
         </Flex>
 
         <Flex
@@ -861,6 +865,10 @@ export default function EditProfilePage() {
               </Text>
             </VStack>
           </VStack>
+        </Flex>
+
+        <Flex justify="flex-end" mt="32px">
+          {actionButtons}
         </Flex>
       </Box>
     </Box>
