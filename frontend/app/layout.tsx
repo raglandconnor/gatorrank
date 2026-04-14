@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { Mona_Sans } from 'next/font/google';
+import { Analytics } from '@vercel/analytics/next';
 import { AuthProvider } from '@/components/domain/AuthProvider';
 import { Provider } from '@/components/ui/provider';
 import { Toaster } from '@/components/ui/toaster';
@@ -30,6 +31,7 @@ export default function RootLayout({
             <Toaster />
           </AuthProvider>
         </Provider>
+        <Analytics />
       </body>
     </html>
   );
