@@ -17,15 +17,9 @@ import {
 import {
   LuGithub,
   LuVideo,
-  LuPlay,
   LuExternalLink,
   LuPencil,
   LuFileText,
-  LuSkipBack,
-  LuSkipForward,
-  LuVolume2,
-  LuSettings2,
-  LuExpand,
 } from 'react-icons/lu';
 import { Navbar } from '@/components/layout/Navbar';
 import { useAuth } from '@/components/domain/AuthProvider';
@@ -570,33 +564,33 @@ export default function ProjectDetailPage() {
           </Box>
         </Box>
 
-        <Box
-          mt="26px"
-          bg="gray.100"
-          borderRadius="16px"
-          border="1px solid"
-          borderColor="gray.200"
-          overflow="hidden"
-        >
+        {hasDemoVideo && (
           <Box
-            px={{ base: '18px', md: '24px' }}
-            py={{ base: '22px', md: '28px' }}
+            mt="26px"
+            bg="gray.100"
+            borderRadius="16px"
+            border="1px solid"
+            borderColor="gray.200"
+            overflow="hidden"
           >
-            <HStack mb="14px" gap="10px" align="center">
-              <Box color="gray.800">
-                <LuVideo size={22} />
-              </Box>
-              <Text
-                fontSize={{ base: 'xl', md: '2xl' }}
-                fontWeight="bold"
-                color="gray.900"
-                lineHeight={{ base: '28px', md: '34px' }}
-              >
-                Project Video
-              </Text>
-            </HStack>
+            <Box
+              px={{ base: '18px', md: '24px' }}
+              py={{ base: '22px', md: '28px' }}
+            >
+              <HStack mb="14px" gap="10px" align="center">
+                <Box color="gray.800">
+                  <LuVideo size={22} />
+                </Box>
+                <Text
+                  fontSize={{ base: 'xl', md: '2xl' }}
+                  fontWeight="bold"
+                  color="gray.900"
+                  lineHeight={{ base: '28px', md: '34px' }}
+                >
+                  Project Video
+                </Text>
+              </HStack>
 
-            {hasDemoVideo ? (
               <Box
                 borderRadius="14px"
                 overflow="hidden"
@@ -618,181 +612,9 @@ export default function ProjectDetailPage() {
                   allowFullScreen
                 />
               </Box>
-            ) : (
-              <Box
-                position="relative"
-                aspectRatio="16 / 9"
-                border="1px solid"
-                borderColor="gray.300"
-                borderRadius="14px"
-                bg="#1f1f1f"
-                overflow="hidden"
-                w="100%"
-              >
-                <Box
-                  position="absolute"
-                  inset={0}
-                  bg="linear-gradient(180deg, rgba(255,255,255,0.03), transparent 28%)"
-                  pointerEvents="none"
-                />
-                <Box
-                  position="absolute"
-                  inset={0}
-                  bg="radial-gradient(circle at center, rgba(255,255,255,0.03), transparent 42%)"
-                  pointerEvents="none"
-                />
-
-                <Flex
-                  position="absolute"
-                  insetX={0}
-                  top="0"
-                  bottom="70px"
-                  align="center"
-                  justify="center"
-                  zIndex={1}
-                  direction="column"
-                  gap="14px"
-                >
-                  <Flex
-                    w={{ base: '88px', md: '104px' }}
-                    h={{ base: '88px', md: '104px' }}
-                    borderRadius="full"
-                    align="center"
-                    justify="center"
-                    bg="rgba(28, 28, 28, 0.74)"
-                    border="4px solid"
-                    borderColor="whiteAlpha.300"
-                    boxShadow="0 20px 60px rgba(0,0,0,0.3)"
-                  >
-                    <Box color="white" ml="5px">
-                      <LuPlay size={42} fill="currentColor" />
-                    </Box>
-                  </Flex>
-                  <Text
-                    fontSize={{ base: 'sm', md: 'md' }}
-                    fontWeight="medium"
-                    color="whiteAlpha.900"
-                    textAlign="center"
-                    px="20px"
-                  >
-                    No video has been added yet.
-                  </Text>
-                </Flex>
-
-                <Box
-                  position="absolute"
-                  left="0"
-                  right="0"
-                  bottom="0"
-                  zIndex={1}
-                  bg="rgba(12, 12, 12, 0.96)"
-                  borderTop="1px solid"
-                  borderColor="whiteAlpha.100"
-                  px={{ base: '14px', md: '18px' }}
-                  py={{ base: '10px', md: '12px' }}
-                >
-                  <VStack align="stretch" gap="10px">
-                    <Box
-                      w="100%"
-                      h="4px"
-                      borderRadius="full"
-                      bg="whiteAlpha.300"
-                      overflow="hidden"
-                    >
-                      <Box
-                        w={project.video_url?.trim() ? '36%' : '0%'}
-                        h="100%"
-                        borderRadius="full"
-                        bg="rgba(239, 68, 68, 0.95)"
-                      />
-                      <Box
-                        position="relative"
-                        top="-6px"
-                        left={project.video_url?.trim() ? '36%' : '0%'}
-                        transform="translateX(-50%)"
-                        w="14px"
-                        h="14px"
-                        borderRadius="full"
-                        bg="white"
-                        border="2px solid"
-                        borderColor="rgba(239, 68, 68, 0.95)"
-                      />
-                    </Box>
-
-                    <HStack justify="space-between" gap="12px" align="center">
-                      <HStack gap={{ base: '10px', md: '12px' }} color="white">
-                        <Box
-                          display="flex"
-                          alignItems="center"
-                          justifyContent="center"
-                        >
-                          <LuPlay size={18} fill="currentColor" />
-                        </Box>
-                        <Box
-                          display="flex"
-                          alignItems="center"
-                          justifyContent="center"
-                        >
-                          <LuSkipBack size={18} />
-                        </Box>
-                        <Box
-                          display="flex"
-                          alignItems="center"
-                          justifyContent="center"
-                        >
-                          <LuSkipForward size={18} />
-                        </Box>
-                        <Box
-                          display="flex"
-                          alignItems="center"
-                          justifyContent="center"
-                        >
-                          <LuVolume2 size={18} />
-                        </Box>
-                        <Box
-                          display={{ base: 'none', md: 'block' }}
-                          w="140px"
-                          h="3px"
-                          borderRadius="full"
-                          bg="whiteAlpha.400"
-                          overflow="hidden"
-                          ml="4px"
-                        >
-                          <Box w="46%" h="100%" bg="whiteAlpha.900" />
-                        </Box>
-                      </HStack>
-
-                      <HStack gap={{ base: '12px', md: '14px' }} color="white">
-                        <Text
-                          fontSize={{ base: 'xs', md: 'sm' }}
-                          fontWeight="semibold"
-                          letterSpacing="0.02em"
-                          color="whiteAlpha.900"
-                        >
-                          00:00 / 10:00
-                        </Text>
-                        <Box
-                          display="flex"
-                          alignItems="center"
-                          justifyContent="center"
-                        >
-                          <LuSettings2 size={18} />
-                        </Box>
-                        <Box
-                          display="flex"
-                          alignItems="center"
-                          justifyContent="center"
-                        >
-                          <LuExpand size={18} />
-                        </Box>
-                      </HStack>
-                    </HStack>
-                  </VStack>
-                </Box>
-              </Box>
-            )}
+            </Box>
           </Box>
-        </Box>
+        )}
       </Box>
     </Box>
   );
