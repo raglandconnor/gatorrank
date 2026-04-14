@@ -10,6 +10,7 @@ import {
   Text,
   Button,
   Spinner,
+  Input,
 } from '@chakra-ui/react';
 import { LuSave, LuX } from 'react-icons/lu';
 import { Navbar } from '@/components/layout/Navbar';
@@ -20,6 +21,7 @@ import {
 } from '@/components/projects/ProjectForm';
 import {
   addProjectMember,
+  deleteProject,
   getProject,
   getProjectBySlug,
   publishProject,
@@ -58,6 +60,9 @@ export default function EditProjectPage() {
   const [state, setState] = useState<LoadState>({ status: 'loading' });
   const [isSubmitDisabled, setIsSubmitDisabled] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [deleteTitleInput, setDeleteTitleInput] = useState('');
   const [members, setMembers] = useState<ProjectMemberInfo[]>([]);
   const [shouldPublish, setShouldPublish] = useState(true);
 
@@ -148,6 +153,48 @@ export default function EditProjectPage() {
   const handleCancel = () => {
     if (state.status === 'ready') {
       router.push(projectPath(state.project.slug));
+    }
+  };
+
+  const expectedDeleteTitle =
+    state.status === 'ready' ? state.project.title.trim() : '';
+  const isDeleteTitleMatch =
+    deleteTitleInput.trim().toLowerCase() ===
+      expectedDeleteTitle.toLowerCase() && expectedDeleteTitle.length > 0;
+
+  const openDeleteModal = () => {
+    if (isSubmitting || isDeleting) return;
+    setDeleteTitleInput('');
+    setIsDeleteModalOpen(true);
+  };
+
+  const closeDeleteModal = () => {
+    if (isDeleting) return;
+    setDeleteTitleInput('');
+    setIsDeleteModalOpen(false);
+  };
+
+  const handleDeleteProject = async () => {
+    if (state.status !== 'ready') return;
+    if (isSubmitting || isDeleting || !isDeleteTitleMatch) return;
+
+    setIsDeleting(true);
+    try {
+      await deleteProject(state.project.id);
+      toast.success({
+        title: 'Project deleted',
+        description: 'Your project has been deleted.',
+      });
+      setIsDeleteModalOpen(false);
+      router.push('/profile');
+    } catch (error) {
+      toast.error({
+        title: 'Could not delete project',
+        description:
+          error instanceof Error ? error.message : 'Please try again.',
+      });
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -331,6 +378,99 @@ export default function EditProjectPage() {
             }
           }}
         />
+
+        <Box
+          mt="36px"
+          p="20px"
+          borderRadius="14px"
+          border="1px solid"
+          borderColor="red.200"
+          bg="red.50"
+        >
+          <VStack align="start" gap="10px">
+            <Text fontSize="md" fontWeight="bold" color="red.700">
+              Delete project
+            </Text>
+            <Text fontSize="sm" color="red.700">
+              This action cannot be undone.
+            </Text>
+            <Button
+              type="button"
+              bg="red.600"
+              color="white"
+              _hover={{ bg: 'red.700' }}
+              disabled={isSubmitting || isDeleting}
+              onClick={openDeleteModal}
+            >
+              Delete Project
+            </Button>
+          </VStack>
+        </Box>
+
+        {isDeleteModalOpen && (
+          <Box
+            position="fixed"
+            inset={0}
+            bg="blackAlpha.600"
+            zIndex={1500}
+            display="flex"
+            alignItems="center"
+            justifyContent="center"
+            px="16px"
+          >
+            <Box
+              role="dialog"
+              aria-modal="true"
+              bg="white"
+              borderRadius="16px"
+              border="1px solid"
+              borderColor="gray.200"
+              p="20px"
+              w="100%"
+              maxW="520px"
+            >
+              <VStack align="start" gap="12px">
+                <Text fontSize="lg" fontWeight="bold" color="gray.900">
+                  Delete project
+                </Text>
+                <Text fontSize="sm" color="gray.700">
+                  Type{' '}
+                  <Text as="span" fontWeight="bold">
+                    {state.project.title}
+                  </Text>{' '}
+                  to confirm. This action cannot be undone.
+                </Text>
+                <Input
+                  value={deleteTitleInput}
+                  onChange={(event) => setDeleteTitleInput(event.target.value)}
+                  placeholder={state.project.title}
+                  aria-label="Type project title to confirm deletion"
+                  disabled={isDeleting}
+                />
+                <HStack justify="flex-end" w="100%" gap="10px">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={closeDeleteModal}
+                    disabled={isDeleting}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    type="button"
+                    bg="red.600"
+                    color="white"
+                    _hover={{ bg: 'red.700' }}
+                    disabled={!isDeleteTitleMatch || isDeleting}
+                    onClick={() => void handleDeleteProject()}
+                  >
+                    {isDeleting ? 'Deleting...' : 'Delete Project'}
+                  </Button>
+                </HStack>
+              </VStack>
+            </Box>
+          </Box>
+        )}
       </Box>
     </Box>
   );
