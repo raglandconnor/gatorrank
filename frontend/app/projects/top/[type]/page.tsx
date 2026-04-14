@@ -135,7 +135,14 @@ export default function TopProjectsPage() {
     <Box minH="100vh" bg="gray.50">
       <Navbar />
 
-      <Box px="36px" pt="32px" pb="64px" maxW="1280px" mx="auto" w="100%">
+      <Box
+        px={{ base: '16px', md: '24px', lg: '36px' }}
+        pt="32px"
+        pb="64px"
+        maxW="1280px"
+        mx="auto"
+        w="100%"
+      >
         <VStack align="start" gap="30px" w="100%">
           <Text
             fontSize="xl"

@@ -339,14 +339,24 @@ export default function EditProfilePage() {
         onChange={handleAvatarChange}
       />
 
-      <Box px="36px" pt="32px" pb="64px" maxW="1280px" mx="auto">
-        {/* Profile hero */}
-        <HStack gap="24px" mb="40px" align="flex-start">
-          {/* Avatar */}
+      <Box
+        px={{ base: '16px', md: '24px', lg: '36px' }}
+        pt="32px"
+        pb="64px"
+        maxW="1280px"
+        mx="auto"
+      >
+        <Flex
+          gap={{ base: '16px', md: '24px' }}
+          mb="40px"
+          align="flex-start"
+          direction={{ base: 'column', md: 'row' }}
+          flexWrap="wrap"
+        >
           <Box
             position="relative"
-            w="96px"
-            h="96px"
+            w={{ base: '72px', md: '96px' }}
+            h={{ base: '72px', md: '96px' }}
             flexShrink={0}
             cursor="pointer"
             onClick={() => fileInputRef.current?.click()}
@@ -354,8 +364,8 @@ export default function EditProfilePage() {
             <UserAvatar
               name={displayName}
               imageUrl={avatarPreview}
-              size="96px"
-              fontSize="2xl"
+              size={{ base: '72px', md: '96px' }}
+              fontSize={{ base: 'xl', md: '2xl' }}
             />
             <Box
               position="absolute"
@@ -365,7 +375,7 @@ export default function EditProfilePage() {
               display="flex"
               alignItems="center"
               justifyContent="center"
-              opacity={0}
+              opacity={{ base: 0.6, md: 0 }}
               _hover={{ opacity: 1 }}
               transition="opacity 0.15s"
               color="white"
@@ -456,16 +466,21 @@ export default function EditProfilePage() {
           </VStack>
 
           {/* Buttons */}
-          <HStack gap="12px" flexShrink={0} align="flex-start">
+          <HStack
+            gap={{ base: '8px', md: '12px' }}
+            flexShrink={0}
+            align="flex-start"
+            flexWrap="wrap"
+          >
             <Button
               onClick={() => router.push(profilePath(apiUser.username))}
               variant="outline"
               border="1px solid"
               borderColor="orange.400"
-              borderRadius="14px"
-              h="44px"
-              px="20px"
-              fontSize="sm"
+              borderRadius={{ base: '10px', md: '14px' }}
+              h={{ base: '36px', md: '44px' }}
+              px={{ base: '14px', md: '20px' }}
+              fontSize={{ base: 'xs', md: 'sm' }}
               color="gray.900"
               bg="white"
               _hover={{ bg: 'orange.50' }}
@@ -473,7 +488,7 @@ export default function EditProfilePage() {
               disabled={saving}
             >
               <HStack gap="6px">
-                <LuX size={16} />
+                <LuX size={14} />
                 <Text>Cancel</Text>
               </HStack>
             </Button>
@@ -482,29 +497,41 @@ export default function EditProfilePage() {
               onClick={handleSave}
               bg="orange.400"
               color="white"
-              borderRadius="14px"
-              h="44px"
-              px="20px"
-              fontSize="sm"
+              borderRadius={{ base: '10px', md: '14px' }}
+              h={{ base: '36px', md: '44px' }}
+              px={{ base: '14px', md: '20px' }}
+              fontSize={{ base: 'xs', md: 'sm' }}
               fontWeight="normal"
               _hover={{ bg: 'orange.500' }}
               transition="background 0.15s"
               loading={saving}
             >
               <HStack gap="6px">
-                <LuSave size={16} />
+                <LuSave size={14} />
                 <Text>Save Changes</Text>
               </HStack>
             </Button>
           </HStack>
-        </HStack>
+        </Flex>
 
-        {/* Two-column lower section */}
-        <Flex gap="24px" align="start">
-          {/* Left column */}
-          <VStack w="344px" flexShrink={0} gap="16px" align="start">
+        <Flex
+          gap="24px"
+          align="start"
+          direction={{ base: 'column', md: 'row' }}
+        >
+          <VStack
+            w={{ base: '100%', md: '344px' }}
+            flexShrink={0}
+            gap="16px"
+            align="start"
+          >
             {/* Academic Information */}
-            <Box bg="gray.100" borderRadius="13px" p="24px" w="100%">
+            <Box
+              bg="gray.100"
+              borderRadius="13px"
+              p={{ base: '16px', md: '24px' }}
+              w="100%"
+            >
               <VStack align="start" gap="16px" w="100%">
                 <Text
                   fontSize="md"
@@ -615,7 +642,12 @@ export default function EditProfilePage() {
             </Box>
 
             {/* Account Settings */}
-            <Box bg="gray.100" borderRadius="13px" p="24px" w="100%">
+            <Box
+              bg="gray.100"
+              borderRadius="13px"
+              p={{ base: '16px', md: '24px' }}
+              w="100%"
+            >
               <VStack align="start" gap="16px" w="100%">
                 <Text
                   fontSize="md"

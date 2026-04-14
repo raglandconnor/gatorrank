@@ -217,19 +217,28 @@ export default function ProfileUserPage() {
     <Box minH="100vh" bg="transparent">
       <Navbar />
 
-      <Box px="36px" pt="32px" pb="64px" maxW="1280px" mx="auto">
+      <Box
+        px={{ base: '16px', md: '24px', lg: '36px' }}
+        pt="32px"
+        pb="64px"
+        maxW="1280px"
+        mx="auto"
+      >
         {/* Profile hero */}
-        <HStack gap="24px" mb="40px" align="flex-start">
-          {/* Avatar */}
+        <Flex
+          gap={{ base: '16px', md: '24px' }}
+          mb="40px"
+          align="flex-start"
+          direction={{ base: 'column', md: 'row' }}
+        >
           <UserAvatar
             name={displayName}
             imageUrl={publicUser.profile_picture_url}
-            size="96px"
-            fontSize="2xl"
+            size={{ base: '72px', md: '96px' }}
+            fontSize={{ base: 'xl', md: '2xl' }}
           />
 
-          {/* Info */}
-          <VStack align="start" gap="8px" flex={1}>
+          <VStack align="start" gap="8px" flex={1} minW={0}>
             <HStack gap="12px" align="center" flexWrap="wrap">
               <Text
                 fontSize="xl"
@@ -291,9 +300,13 @@ export default function ProfileUserPage() {
             </HStack>
           </VStack>
 
-          {/* Action buttons — only for own profile */}
           {isOwn && (
-            <HStack gap="12px" flexShrink={0} align="flex-start">
+            <HStack
+              gap={{ base: '8px', md: '12px' }}
+              flexShrink={0}
+              align="flex-start"
+              flexWrap="wrap"
+            >
               <Button
                 onClick={() =>
                   router.push(profileEditPath(publicUser.username))
@@ -301,17 +314,17 @@ export default function ProfileUserPage() {
                 variant="outline"
                 border="1px solid"
                 borderColor="orange.400"
-                borderRadius="14px"
-                h="44px"
-                px="20px"
-                fontSize="sm"
+                borderRadius={{ base: '10px', md: '14px' }}
+                h={{ base: '36px', md: '44px' }}
+                px={{ base: '14px', md: '20px' }}
+                fontSize={{ base: 'xs', md: 'sm' }}
                 color="gray.900"
                 bg="white"
                 _hover={{ bg: 'orange.50' }}
                 transition="background 0.15s"
               >
                 <HStack gap="6px">
-                  <LuPencil size={16} />
+                  <LuPencil size={14} />
                   <Text>Edit Profile</Text>
                 </HStack>
               </Button>
@@ -319,23 +332,23 @@ export default function ProfileUserPage() {
               <Button
                 bg="orange.400"
                 color="white"
-                borderRadius="14px"
-                h="44px"
-                px="20px"
-                fontSize="sm"
+                borderRadius={{ base: '10px', md: '14px' }}
+                h={{ base: '36px', md: '44px' }}
+                px={{ base: '14px', md: '20px' }}
+                fontSize={{ base: 'xs', md: 'sm' }}
                 fontWeight="normal"
                 _hover={{ bg: 'orange.500' }}
                 transition="background 0.15s"
                 onClick={() => router.push('/projects/create')}
               >
                 <HStack gap="6px">
-                  <LuPlus size={16} />
+                  <LuPlus size={14} />
                   <Text>Add Project</Text>
                 </HStack>
               </Button>
             </HStack>
           )}
-        </HStack>
+        </Flex>
 
         {/* Owner: complete-your-profile banner */}
         {showOwnerBanner && (
@@ -368,9 +381,14 @@ export default function ProfileUserPage() {
           </Box>
         )}
 
-        {/* Two-column body */}
-        <Flex gap="24px" align="start">
-          <AcademicInfoCard profile={academicProfile} />
+        <Flex
+          gap="24px"
+          align="start"
+          direction={{ base: 'column', md: 'row' }}
+        >
+          <Box w={{ base: '100%', md: '344px' }} flexShrink={0}>
+            <AcademicInfoCard profile={academicProfile} />
+          </Box>
 
           <VStack flex={1} align="start" gap="32px" minW={0}>
             {/* Skills: always shown */}

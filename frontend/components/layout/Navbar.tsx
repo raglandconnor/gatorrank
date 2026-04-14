@@ -38,7 +38,7 @@ function NavbarSearch({
     pathname === '/projects/search' ? (searchParams.get('q') ?? '') : '';
 
   return (
-    <Box flex="1" maxW="520px" key={`${pathname}-${navSearchDefault}`}>
+    <Box key={`${pathname}-${navSearchDefault}`}>
       <form onSubmit={onSubmit}>
         <HStack gap="8px" align="center">
           <Input
@@ -48,17 +48,17 @@ function NavbarSearch({
             bg="white"
             border="1px solid"
             borderColor="gray.300"
-            borderRadius="12px"
-            h="42px"
+            borderRadius={{ base: '10px', lg: '12px' }}
+            h={{ base: '36px', lg: '42px' }}
             minW="0"
           />
           <Button
             type="submit"
             aria-label="Search projects"
-            h="42px"
-            minW="42px"
+            h={{ base: '36px', lg: '42px' }}
+            minW={{ base: '36px', lg: '42px' }}
             px="12px"
-            borderRadius="12px"
+            borderRadius={{ base: '10px', lg: '12px' }}
             bg="gray.900"
             color="white"
             _hover={{ bg: 'gray.700' }}
@@ -106,30 +106,36 @@ export function Navbar() {
     <Box
       as="nav"
       w="100%"
-      h="95px"
+      h={{ lg: '95px' }}
       borderBottom="0.8px solid"
       borderColor="black"
     >
-      <Box maxW="1280px" mx="auto" px="36px" h="100%">
-        <Flex h="100%" align="center" justify="space-between" gap="20px">
-          {/* Left side: logo + nav links */}
+      <Box
+        maxW="1280px"
+        mx="auto"
+        px={{ base: '16px', md: '24px', lg: '36px' }}
+      >
+        <Flex
+          h="100%"
+          align="center"
+          justify="space-between"
+          gap={{ base: '8px', lg: '20px' }}
+          flexWrap="wrap"
+          py={{ base: '8px', lg: '0' }}
+        >
           <HStack gap="32px" align="center">
             <GatorRankLogo size="sm" />
           </HStack>
 
-          {showSearch ? (
-            <Suspense fallback={<Box flex="1" maxW="520px" />}>
-              <NavbarSearch pathname={pathname} onSubmit={handleSearchSubmit} />
-            </Suspense>
-          ) : (
-            <Box flex="1" />
-          )}
-
-          {/* Right side: auth-aware controls */}
-          <HStack gap="16px" align="center" minH="44px">
+          {/* Auth controls — same row as logo on mobile, end of row on desktop */}
+          <HStack
+            gap="16px"
+            align="center"
+            minH={{ base: '36px', lg: '44px' }}
+            order={{ base: 0, lg: 2 }}
+          >
             {!isReady ? (
-              /* Placeholder to prevent layout shift during hydration */
-              <Box w="120px" />
+              <Box w={{ base: '80px', lg: '120px' }} />
             ) : user ? (
               /* Authenticated: avatar dropdown */
               <Menu.Root>
@@ -261,10 +267,10 @@ export function Navbar() {
                   justifyContent="center"
                   bg="orange.400"
                   color="white"
-                  borderRadius="16px"
-                  px="20px"
-                  h="44px"
-                  fontSize="md"
+                  borderRadius={{ base: '12px', lg: '16px' }}
+                  px={{ base: '14px', lg: '20px' }}
+                  h={{ base: '36px', lg: '44px' }}
+                  fontSize={{ base: 'sm', lg: 'md' }}
                   fontWeight="normal"
                   _hover={{ bg: 'orange.500' }}
                   transition="background 0.15s"
@@ -275,6 +281,25 @@ export function Navbar() {
               </>
             )}
           </HStack>
+
+          {/* Search — full-width row on mobile, inline between logo and auth on desktop */}
+          {showSearch ? (
+            <Box
+              order={{ base: 1, lg: 1 }}
+              w={{ base: '100%', lg: 'auto' }}
+              flex={{ base: 'none', lg: '1' }}
+              maxW={{ lg: '520px' }}
+            >
+              <Suspense fallback={null}>
+                <NavbarSearch
+                  pathname={pathname}
+                  onSubmit={handleSearchSubmit}
+                />
+              </Suspense>
+            </Box>
+          ) : (
+            <Box flex="1" order={1} display={{ base: 'none', lg: 'block' }} />
+          )}
         </Flex>
       </Box>
     </Box>

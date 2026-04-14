@@ -113,7 +113,7 @@ export function ProjectCard({ project, rank }: ProjectCardProps) {
         <ProjectInlineTags tags={project.tags} maxRows={1} />
       </VStack>
 
-      <HStack gap="18px" pt="6px" flexShrink={0}>
+      <HStack gap={{ base: '10px', md: '18px' }} pt="6px" flexShrink={0}>
         <motion.div whileTap={{ scale: 1.1 }} style={{ display: 'contents' }}>
           <Button
             data-project-card-action="true"

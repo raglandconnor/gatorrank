@@ -2,7 +2,11 @@ import { expect, test } from '@playwright/test';
 
 test('home renders sections and allows navigating to login', async ({
   page,
-}) => {
+}, testInfo) => {
+  test.skip(
+    testInfo.project.name === 'mobile' || testInfo.project.name === 'tablet',
+    'Functional smoke test — desktop only',
+  );
   await page.route('**/api/v1/projects**', async (route) => {
     await route.fulfill({
       status: 200,

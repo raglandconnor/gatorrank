@@ -34,9 +34,9 @@ export function UpvoteBox({
         justifyContent="center"
         p="0"
         gap="8px"
-        w="108px"
-        minW="108px"
-        h="108px"
+        w={{ base: '88px', md: '108px' }}
+        minW={{ base: '88px', md: '108px' }}
+        h={{ base: '88px', md: '108px' }}
         overflow="hidden"
         bg={isVoted ? 'orange.50' : 'white'}
         border="2px solid"

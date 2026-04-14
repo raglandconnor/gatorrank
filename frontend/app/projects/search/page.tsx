@@ -168,7 +168,11 @@ function ProjectSearchPageContent() {
     <Box minH="100vh" bg="transparent">
       <Navbar />
 
-      <Container maxW="1080px" px={{ base: '20px', md: '36px' }} py="32px">
+      <Container
+        maxW="1080px"
+        px={{ base: '16px', md: '24px', lg: '36px' }}
+        py="32px"
+      >
         <VStack align="stretch" gap="20px">
           <HStack
             ml={{ base: 0, md: 'auto' }}
@@ -177,6 +181,7 @@ function ProjectSearchPageContent() {
             p="4px"
             gap="4px"
             w="fit-content"
+            flexWrap="wrap"
           >
             <Button
               type="button"

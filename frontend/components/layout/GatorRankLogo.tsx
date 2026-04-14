@@ -34,7 +34,7 @@ export function GatorRankLogo({
     imageSizes ??
     (isSm
       ? '100px'
-      : '(max-width: 640px) 80px, (max-width: 768px) 100px, 120px');
+      : '(max-width: 480px) 80px, (max-width: 768px) 96px, 120px');
 
   return (
     <Link

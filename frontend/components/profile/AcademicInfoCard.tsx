@@ -12,7 +12,12 @@ interface AcademicInfoCardProps {
 
 export function AcademicInfoCard({ profile }: AcademicInfoCardProps) {
   return (
-    <Box bg="gray.100" borderRadius="13px" p="24px" w="344px" flexShrink={0}>
+    <Box
+      bg="gray.100"
+      borderRadius="13px"
+      p={{ base: '16px', md: '24px' }}
+      w="100%"
+    >
       <VStack align="start" gap="16px">
         <Text
           fontSize="md"
