@@ -7,6 +7,15 @@ vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: vi.fn() }),
 }));
 
+vi.mock('@/hooks/useProjectVote', () => ({
+  useProjectVote: () => ({
+    isVoted: false,
+    voteCount: 4,
+    isPending: false,
+    toggleVote: vi.fn(),
+  }),
+}));
+
 describe('SearchResultRow', () => {
   test('renders fallback taxonomy/date and project link', () => {
     renderWithChakra(

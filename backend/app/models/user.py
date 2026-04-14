@@ -11,14 +11,15 @@ class User(SQLModel, table=True):
     __tablename__ = "users"  # pyright: ignore[reportAssignmentType]
 
     id: UUID = Field(default_factory=uuid4, primary_key=True, nullable=False)
+    auth_user_id: UUID = Field(
+        default_factory=uuid4,
+        sa_column=sa.Column(sa.Uuid, nullable=False, unique=True, index=True),
+    )
     email: str = Field(unique=True, nullable=False, max_length=320)
     username: str = Field(
         sa_column=sa.Column(
             sa.String(length=32), nullable=False, unique=True, index=True
         )
-    )
-    password_hash: str = Field(
-        sa_column=sa.Column(sa.String(length=255), nullable=False)
     )
     role: str = Field(default=USER_ROLE_STUDENT, nullable=False, max_length=32)
     full_name: str | None = Field(default=None, max_length=255)

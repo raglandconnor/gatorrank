@@ -6,14 +6,14 @@ const {
   pushMock,
   addProjectVoteMock,
   removeProjectVoteMock,
-  getStoredAccessTokenMock,
+  useAuthMock,
   toastInfoMock,
   toastErrorMock,
 } = vi.hoisted(() => ({
   pushMock: vi.fn(),
   addProjectVoteMock: vi.fn(),
   removeProjectVoteMock: vi.fn(),
-  getStoredAccessTokenMock: vi.fn(),
+  useAuthMock: vi.fn(),
   toastInfoMock: vi.fn(),
   toastErrorMock: vi.fn(),
 }));
@@ -27,8 +27,8 @@ vi.mock('@/lib/api/projects', () => ({
   removeProjectVote: removeProjectVoteMock,
 }));
 
-vi.mock('@/lib/auth/storage', () => ({
-  getStoredAccessToken: getStoredAccessTokenMock,
+vi.mock('@/components/domain/AuthProvider', () => ({
+  useAuth: useAuthMock,
 }));
 
 vi.mock('@/lib/ui/toast', () => ({
@@ -43,10 +43,10 @@ describe('useProjectVote', () => {
     pushMock.mockReset();
     addProjectVoteMock.mockReset();
     removeProjectVoteMock.mockReset();
-    getStoredAccessTokenMock.mockReset();
+    useAuthMock.mockReset();
     toastInfoMock.mockReset();
     toastErrorMock.mockReset();
-    getStoredAccessTokenMock.mockReturnValue('token');
+    useAuthMock.mockReturnValue({ accessToken: 'token' });
     addProjectVoteMock.mockResolvedValue(undefined);
     removeProjectVoteMock.mockResolvedValue(undefined);
     window.history.replaceState({}, '', '/projects/p1?sort=top');
@@ -99,7 +99,7 @@ describe('useProjectVote', () => {
   });
 
   test('redirects unauthenticated users to login and preserves return path', async () => {
-    getStoredAccessTokenMock.mockReturnValueOnce(null);
+    useAuthMock.mockReturnValueOnce({ accessToken: null });
 
     const { result } = renderHook(() =>
       useProjectVote({

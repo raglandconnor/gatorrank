@@ -22,7 +22,6 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.core.config import get_settings
 from app.db.database import AsyncSessionLocal
-from app.models.auth import RefreshSession
 from app.models.project import Project, ProjectMember, Vote
 from app.models.taxonomy import ProjectCategory, ProjectTag, ProjectTechStack
 from app.models.user import User
@@ -36,7 +35,6 @@ class CleanupCounts:
     project_tags: int = 0
     project_tech_stacks: int = 0
     projects: int = 0
-    refresh_sessions: int = 0
     users: int = 0
 
 
@@ -125,7 +123,6 @@ async def cleanup_mock_data(*, email_domain: str) -> CleanupCounts:
         vote_cols = getattr(Vote, "__table__").c
         project_member_cols = getattr(ProjectMember, "__table__").c
         project_cols = getattr(Project, "__table__").c
-        refresh_session_cols = getattr(RefreshSession, "__table__").c
         user_cols = getattr(User, "__table__").c
         project_category_cols = getattr(ProjectCategory, "__table__").c
         project_tag_cols = getattr(ProjectTag, "__table__").c
@@ -179,11 +176,6 @@ async def cleanup_mock_data(*, email_domain: str) -> CleanupCounts:
             counts.projects = projects_result.rowcount or 0
 
         if user_ids:
-            sessions_result = await session.exec(
-                delete(RefreshSession).where(refresh_session_cols.user_id.in_(user_ids))
-            )
-            counts.refresh_sessions = sessions_result.rowcount or 0
-
             users_result = await session.exec(
                 delete(User).where(user_cols.id.in_(user_ids))
             )
@@ -210,7 +202,6 @@ async def main() -> None:
     print(f"- project_tags: {counts.project_tags}")
     print(f"- project_tech_stacks: {counts.project_tech_stacks}")
     print(f"- projects: {counts.projects}")
-    print(f"- refresh_sessions: {counts.refresh_sessions}")
     print(f"- users: {counts.users}")
 
 

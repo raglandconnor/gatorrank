@@ -24,7 +24,6 @@ def _build_user() -> User:
         id=uuid4(),
         email="service-test@ufl.edu",
         username="service_test",
-        password_hash="service-test-password-hash",
         full_name="Existing Name",
         profile_picture_url="https://example.com/old.jpg",
         role="student",

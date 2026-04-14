@@ -1,36 +1,21 @@
-import { refreshAuthTokenRaw } from '@/lib/api/authRefresh';
 import { apiUrl } from '@/lib/api/client';
-import {
-  clearAuthSession,
-  getStoredAccessToken,
-  getStoredRefreshToken,
-  updateTokens,
-} from '@/lib/auth/storage';
+import { getSupabaseBrowserClient } from '@/lib/supabase/browser';
 
 export interface FetchWithAuthOptions extends Omit<RequestInit, 'headers'> {
   headers?: HeadersInit;
 }
 
-/**
- * Single in-flight refresh so parallel 401s (e.g. profile + projects) do not
- * both POST /auth/refresh — the second would use a token already rotated by the first.
- */
-let refreshAccessTokenPromise: Promise<string> | null = null;
-
-async function refreshAccessToken(): Promise<string> {
-  const refresh = getStoredRefreshToken();
-  if (!refresh) {
-    throw new Error('Missing refresh token');
+async function getAccessToken(): Promise<string | null> {
+  const supabase = getSupabaseBrowserClient();
+  const { data, error } = await supabase.auth.getSession();
+  if (error) {
+    return null;
   }
-  const tokens = await refreshAuthTokenRaw({ refresh_token: refresh });
-  updateTokens(tokens.access_token, tokens.refresh_token);
-  return tokens.access_token;
+  return data.session?.access_token ?? null;
 }
 
 /**
- * GET/POST/etc. to `/api/v1/...` with Bearer access token.
- * On 401, tries one refresh via stored refresh_token, then retries once.
- * If still unauthorized, clears session and returns the 401 response.
+ * GET/POST/etc. to `/api/v1/...` with Bearer access token from Supabase session.
  *
  * This helper is transport-only and intentionally does not perform navigation.
  * Route redirects/login UX are handled by higher-level auth/UI layers.
@@ -54,33 +39,6 @@ export async function fetchWithAuth(
     return fetch(url, { ...init, headers });
   };
 
-  let access = getStoredAccessToken();
-  let res = await doFetch(access);
-
-  if (res.status !== 401) {
-    return res;
-  }
-
-  const refresh = getStoredRefreshToken();
-  if (!refresh) {
-    clearAuthSession();
-    return res;
-  }
-
-  try {
-    if (!refreshAccessTokenPromise) {
-      refreshAccessTokenPromise = refreshAccessToken().finally(() => {
-        refreshAccessTokenPromise = null;
-      });
-    }
-    access = await refreshAccessTokenPromise;
-    res = await doFetch(access);
-    if (res.status === 401) {
-      clearAuthSession();
-    }
-  } catch {
-    clearAuthSession();
-  }
-
-  return res;
+  const access = await getAccessToken();
+  return doFetch(access);
 }
