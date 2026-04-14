@@ -125,7 +125,7 @@ export function ProjectCollectionLoading({
           ))}
         </VStack>
       ) : (
-        <SimpleGrid columns={{ base: 1, md: 2, lg: 3 }} gap="16px" w="100%">
+        <SimpleGrid columns={{ base: 1, md: 2, xl: 3 }} gap="16px" w="100%">
           {Array.from({ length: count }, (_, index) => (
             <ProjectGridSkeleton
               key={index}

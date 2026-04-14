@@ -4,18 +4,24 @@ import { useState } from 'react';
 import { Flex, Image } from '@chakra-ui/react';
 import { getInitials } from '@/lib/profile/profileShared';
 
+type ResponsiveValue = string | Partial<Record<string, string>>;
+
 interface UserAvatarProps {
   name: string;
   imageUrl?: string | null;
-  size?: string;
-  fontSize?: string;
+  size?: ResponsiveValue;
+  fontSize?: ResponsiveValue;
 }
 
 function AvatarFallback({
   name,
   size,
   fontSize,
-}: Required<Pick<UserAvatarProps, 'name' | 'size' | 'fontSize'>>) {
+}: {
+  name: string;
+  size: ResponsiveValue;
+  fontSize: ResponsiveValue;
+}) {
   return (
     <Flex
       role="img"
@@ -43,8 +49,8 @@ function AvatarImage({
 }: {
   name: string;
   imageUrl: string;
-  size: string;
-  fontSize: string;
+  size: ResponsiveValue;
+  fontSize: ResponsiveValue;
 }) {
   const [hasFailed, setHasFailed] = useState(false);
 

@@ -294,16 +294,20 @@ export default function EditProjectPage() {
             </Text>
           </VStack>
 
-          <HStack gap="12px" flexShrink={0}>
+          <HStack
+            gap={{ base: '8px', md: '12px' }}
+            flexShrink={0}
+            flexWrap="wrap"
+          >
             <Button
               type="button"
               variant="outline"
               border="1px solid"
               borderColor="orange.400"
-              borderRadius="14px"
-              h="44px"
-              px="20px"
-              fontSize="sm"
+              borderRadius={{ base: '10px', md: '14px' }}
+              h={{ base: '36px', md: '44px' }}
+              px={{ base: '14px', md: '20px' }}
+              fontSize={{ base: 'xs', md: 'sm' }}
               color="gray.900"
               bg="white"
               _hover={{ bg: 'orange.50' }}
@@ -312,7 +316,7 @@ export default function EditProjectPage() {
               disabled={isSubmitting}
             >
               <HStack gap="6px">
-                <LuX size={16} />
+                <LuX size={14} />
                 <Text>Cancel</Text>
               </HStack>
             </Button>
@@ -321,10 +325,10 @@ export default function EditProjectPage() {
               form="project-form"
               bg={isSubmitDisabled || isSubmitting ? 'gray.300' : 'orange.400'}
               color="white"
-              borderRadius="14px"
-              h="44px"
-              px="20px"
-              fontSize="sm"
+              borderRadius={{ base: '10px', md: '14px' }}
+              h={{ base: '36px', md: '44px' }}
+              px={{ base: '14px', md: '20px' }}
+              fontSize={{ base: 'xs', md: 'sm' }}
               fontWeight="normal"
               _hover={{
                 bg:
@@ -337,7 +341,7 @@ export default function EditProjectPage() {
               }
             >
               <HStack gap="6px">
-                <LuSave size={16} />
+                <LuSave size={14} />
                 <Text>{isSubmitting ? 'Saving...' : 'Save Changes'}</Text>
               </HStack>
             </Button>
@@ -393,7 +397,7 @@ export default function EditProjectPage() {
 
         <Box
           mt="36px"
-          p="20px"
+          p={{ base: '16px', md: '20px' }}
           borderRadius="14px"
           border="1px solid"
           borderColor="red.200"

@@ -80,12 +80,12 @@ function MemberMetaBlock({
         textDecoration: 'none',
       }}
     >
-      <HStack gap="12px" minW="fit-content">
+      <HStack gap={{ base: '10px', md: '12px' }} minW="fit-content">
         <UserAvatar
           name={fullName ?? username}
           imageUrl={profilePictureUrl}
-          size="52px"
-          fontSize="md"
+          size={{ base: '40px', md: '52px' }}
+          fontSize={{ base: 'sm', md: 'md' }}
         />
         <VStack align="start" gap="2px" minW={0}>
           <Text
@@ -243,10 +243,10 @@ export default function ProjectDetailPage() {
             <Button
               bg="orange.400"
               color="white"
-              borderRadius="14px"
-              h="44px"
-              px="20px"
-              fontSize="sm"
+              borderRadius={{ base: '10px', md: '14px' }}
+              h={{ base: '36px', md: '44px' }}
+              px={{ base: '14px', md: '20px' }}
+              fontSize={{ base: 'xs', md: 'sm' }}
               _hover={{ bg: 'orange.500' }}
               onClick={() => router.push('/profile')}
             >
@@ -415,7 +415,11 @@ export default function ProjectDetailPage() {
                     </Wrap>
                   )}
 
-                  <HStack gap="12px" pt="4px" flexWrap="wrap">
+                  <HStack
+                    gap={{ base: '8px', md: '12px' }}
+                    pt="4px"
+                    flexWrap="wrap"
+                  >
                     {project.demo_url?.trim() ? (
                       <ChakraLink
                         href={project.demo_url}
@@ -426,15 +430,15 @@ export default function ProjectDetailPage() {
                         justifyContent="center"
                         bg="orange.400"
                         color="white"
-                        borderRadius="12px"
-                        h="44px"
-                        px="18px"
-                        fontSize="md"
+                        borderRadius={{ base: '10px', md: '12px' }}
+                        h={{ base: '36px', md: '44px' }}
+                        px={{ base: '14px', md: '18px' }}
+                        fontSize={{ base: 'sm', md: 'md' }}
                         fontWeight="semibold"
                         _hover={{ bg: 'orange.500', textDecoration: 'none' }}
                       >
-                        <HStack gap="8px">
-                          <LuExternalLink size={16} />
+                        <HStack gap="6px">
+                          <LuExternalLink size={14} />
                           <Text>Visit Website</Text>
                         </HStack>
                       </ChakraLink>
@@ -450,17 +454,17 @@ export default function ProjectDetailPage() {
                         justifyContent="center"
                         bg="white"
                         color="gray.800"
-                        borderRadius="12px"
-                        h="44px"
-                        px="18px"
-                        fontSize="md"
+                        borderRadius={{ base: '10px', md: '12px' }}
+                        h={{ base: '36px', md: '44px' }}
+                        px={{ base: '14px', md: '18px' }}
+                        fontSize={{ base: 'sm', md: 'md' }}
                         fontWeight="semibold"
                         border="1px solid"
                         borderColor="gray.300"
                         _hover={{ bg: 'gray.50', textDecoration: 'none' }}
                       >
-                        <HStack gap="8px">
-                          <LuGithub size={16} />
+                        <HStack gap="6px">
+                          <LuGithub size={14} />
                           <Text>GitHub</Text>
                         </HStack>
                       </ChakraLink>
@@ -471,10 +475,10 @@ export default function ProjectDetailPage() {
                         type="button"
                         bg="orange.50"
                         color="orange.800"
-                        borderRadius="12px"
-                        h="44px"
-                        px="18px"
-                        fontSize="md"
+                        borderRadius={{ base: '10px', md: '12px' }}
+                        h={{ base: '36px', md: '44px' }}
+                        px={{ base: '14px', md: '18px' }}
+                        fontSize={{ base: 'sm', md: 'md' }}
                         fontWeight="semibold"
                         _hover={{ bg: 'orange.100' }}
                         boxShadow="inset 0 0 0 1px rgba(251,146,60,0.10)"
@@ -482,8 +486,8 @@ export default function ProjectDetailPage() {
                           router.push(projectEditPath(project.slug))
                         }
                       >
-                        <HStack gap="8px">
-                          <LuPencil size={16} />
+                        <HStack gap="6px">
+                          <LuPencil size={14} />
                           <Text>Edit Project</Text>
                         </HStack>
                       </Button>
@@ -546,10 +550,10 @@ export default function ProjectDetailPage() {
                 <LuFileText size={22} />
               </Box>
               <Text
-                fontSize="2xl"
+                fontSize={{ base: 'xl', md: '2xl' }}
                 fontWeight="bold"
                 color="gray.900"
-                lineHeight="34px"
+                lineHeight={{ base: '28px', md: '34px' }}
               >
                 About This Project
               </Text>
@@ -583,10 +587,10 @@ export default function ProjectDetailPage() {
                 <LuVideo size={22} />
               </Box>
               <Text
-                fontSize="2xl"
+                fontSize={{ base: 'xl', md: '2xl' }}
                 fontWeight="bold"
                 color="gray.900"
-                lineHeight="34px"
+                lineHeight={{ base: '28px', md: '34px' }}
               >
                 Project Video
               </Text>

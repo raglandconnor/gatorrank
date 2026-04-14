@@ -48,17 +48,17 @@ function NavbarSearch({
             bg="white"
             border="1px solid"
             borderColor="gray.300"
-            borderRadius="12px"
-            h="42px"
+            borderRadius={{ base: '10px', lg: '12px' }}
+            h={{ base: '36px', lg: '42px' }}
             minW="0"
           />
           <Button
             type="submit"
             aria-label="Search projects"
-            h="42px"
-            minW="42px"
+            h={{ base: '36px', lg: '42px' }}
+            minW={{ base: '36px', lg: '42px' }}
             px="12px"
-            borderRadius="12px"
+            borderRadius={{ base: '10px', lg: '12px' }}
             bg="gray.900"
             color="white"
             _hover={{ bg: 'gray.700' }}
@@ -119,9 +119,9 @@ export function Navbar() {
           h="100%"
           align="center"
           justify="space-between"
-          gap={{ base: '12px', lg: '20px' }}
+          gap={{ base: '8px', lg: '20px' }}
           flexWrap="wrap"
-          py={{ base: '12px', lg: '0' }}
+          py={{ base: '8px', lg: '0' }}
         >
           <HStack gap="32px" align="center">
             <GatorRankLogo size="sm" />
@@ -131,7 +131,7 @@ export function Navbar() {
           <HStack
             gap="16px"
             align="center"
-            minH="44px"
+            minH={{ base: '36px', lg: '44px' }}
             order={{ base: 0, lg: 2 }}
           >
             {!isReady ? (
@@ -267,10 +267,10 @@ export function Navbar() {
                   justifyContent="center"
                   bg="orange.400"
                   color="white"
-                  borderRadius="16px"
-                  px="20px"
-                  h="44px"
-                  fontSize="md"
+                  borderRadius={{ base: '12px', lg: '16px' }}
+                  px={{ base: '14px', lg: '20px' }}
+                  h={{ base: '36px', lg: '44px' }}
+                  fontSize={{ base: 'sm', lg: 'md' }}
                   fontWeight="normal"
                   _hover={{ bg: 'orange.500' }}
                   transition="background 0.15s"

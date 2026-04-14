@@ -526,7 +526,7 @@ export function ProjectForm({
           <Box
             bg="gray.100"
             borderRadius="13px"
-            p="24px"
+            p={{ base: '16px', md: '24px' }}
             w="100%"
             flex={1}
             minH={0}
@@ -738,7 +738,12 @@ export function ProjectForm({
         </VStack>
 
         <VStack flex={1} align="start" gap="16px" minW={0}>
-          <Box bg="gray.100" borderRadius="13px" p="24px" w="100%">
+          <Box
+            bg="gray.100"
+            borderRadius="13px"
+            p={{ base: '16px', md: '24px' }}
+            w="100%"
+          >
             <VStack align="start" gap="10px" w="100%">
               <Text
                 fontSize="md"
@@ -770,7 +775,12 @@ export function ProjectForm({
             </VStack>
           </Box>
 
-          <Box bg="gray.100" borderRadius="13px" p="24px" w="100%">
+          <Box
+            bg="gray.100"
+            borderRadius="13px"
+            p={{ base: '16px', md: '24px' }}
+            w="100%"
+          >
             <VStack align="start" gap="12px" w="100%">
               <Text
                 fontSize="md"
@@ -890,7 +900,12 @@ export function ProjectForm({
             </VStack>
           </Box>
 
-          <Box bg="gray.100" borderRadius="13px" p="24px" w="100%">
+          <Box
+            bg="gray.100"
+            borderRadius="13px"
+            p={{ base: '16px', md: '24px' }}
+            w="100%"
+          >
             <VStack align="start" gap="12px" w="100%">
               <Text
                 fontSize="md"
@@ -948,7 +963,12 @@ export function ProjectForm({
             </VStack>
           </Box>
 
-          <Box bg="gray.100" borderRadius="13px" p="24px" w="100%">
+          <Box
+            bg="gray.100"
+            borderRadius="13px"
+            p={{ base: '16px', md: '24px' }}
+            w="100%"
+          >
             <VStack align="start" gap="12px" w="100%">
               <Text
                 fontSize="md"
