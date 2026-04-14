@@ -346,9 +346,13 @@ export default function EditProfilePage() {
         maxW="1280px"
         mx="auto"
       >
-        {/* Profile hero */}
-        <HStack gap="24px" mb="40px" align="flex-start">
-          {/* Avatar */}
+        <Flex
+          gap={{ base: '16px', md: '24px' }}
+          mb="40px"
+          align="flex-start"
+          direction={{ base: 'column', md: 'row' }}
+          flexWrap="wrap"
+        >
           <Box
             position="relative"
             w="96px"
@@ -503,12 +507,19 @@ export default function EditProfilePage() {
               </HStack>
             </Button>
           </HStack>
-        </HStack>
+        </Flex>
 
-        {/* Two-column lower section */}
-        <Flex gap="24px" align="start">
-          {/* Left column */}
-          <VStack w="344px" flexShrink={0} gap="16px" align="start">
+        <Flex
+          gap="24px"
+          align="start"
+          direction={{ base: 'column', md: 'row' }}
+        >
+          <VStack
+            w={{ base: '100%', md: '344px' }}
+            flexShrink={0}
+            gap="16px"
+            align="start"
+          >
             {/* Academic Information */}
             <Box bg="gray.100" borderRadius="13px" p="24px" w="100%">
               <VStack align="start" gap="16px" w="100%">
