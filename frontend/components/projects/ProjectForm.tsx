@@ -14,7 +14,7 @@ import {
   Spinner,
 } from '@chakra-ui/react';
 import { LuPlus, LuX, LuGlobe, LuGithub, LuPlay, LuTag } from 'react-icons/lu';
-import { listTags } from '@/lib/api/taxonomy';
+import { listCategories, listTags, listTechStacks } from '@/lib/api/taxonomy';
 import type {
   ProjectMemberInfo,
   ProjectMemberWritableRole,
@@ -26,7 +26,9 @@ const PROJECT_NAME_MAX = 50;
 const SHORT_DESCRIPTION_MAX = 280;
 const FULL_DESCRIPTION_MAX = 5000;
 const URL_MAX = 2048;
+const CATEGORY_LIMIT = 3;
 const TAG_LIMIT = 10;
+const TECH_STACK_LIMIT = 15;
 
 const inputBase = {
   border: '1px solid',
@@ -75,6 +77,310 @@ function FieldLabel({ children }: { children: React.ReactNode }) {
     <Text fontSize="sm" color="gray.500" lineHeight="24px">
       {children}
     </Text>
+  );
+}
+
+function normalizeTermName(value: string): string {
+  return value.trim().toLowerCase();
+}
+
+function containsControlChars(value: string): boolean {
+  return /[\u0000-\u001F\u007F-\u009F]/.test(value);
+}
+
+interface ProjectTermFieldProps {
+  title: string;
+  singularLabel: string;
+  placeholder: string;
+  helperText: string;
+  values: string[];
+  limit: number;
+  loadTerms: () => Promise<TaxonomyTerm[]>;
+  loadingText: string;
+  loadErrorText: string;
+  onChange: (nextValues: string[]) => void;
+}
+
+function ProjectTermField({
+  title,
+  singularLabel,
+  placeholder,
+  helperText,
+  values,
+  limit,
+  loadTerms,
+  loadingText,
+  loadErrorText,
+  onChange,
+}: ProjectTermFieldProps) {
+  const [inputValue, setInputValue] = useState('');
+  const [availableTerms, setAvailableTerms] = useState<TaxonomyTerm[]>([]);
+  const [isLoadingTerms, setIsLoadingTerms] = useState(true);
+  const [loadTermsError, setLoadTermsError] = useState<string | null>(null);
+  const [isFocused, setIsFocused] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function fetchTerms() {
+      try {
+        setIsLoadingTerms(true);
+        const terms = await loadTerms();
+        if (cancelled) return;
+        setAvailableTerms(terms);
+        setLoadTermsError(null);
+      } catch (error) {
+        if (cancelled) return;
+        setLoadTermsError(
+          error instanceof Error ? error.message : loadErrorText,
+        );
+      } finally {
+        if (!cancelled) {
+          setIsLoadingTerms(false);
+        }
+      }
+    }
+
+    void fetchTerms();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [loadErrorText, loadTerms]);
+
+  const normalizedInput = inputValue.trim().toLowerCase();
+  const filteredSuggestions = useMemo(() => {
+    if (!isFocused) return [];
+
+    const unselectedTerms = availableTerms.filter(
+      (term) =>
+        !values.some(
+          (selected) =>
+            normalizeTermName(selected) === normalizeTermName(term.name),
+        ),
+    );
+
+    if (!normalizedInput) {
+      return unselectedTerms.slice(0, 8);
+    }
+
+    return unselectedTerms
+      .filter((term) => term.name.toLowerCase().includes(normalizedInput))
+      .slice(0, 8);
+  }, [availableTerms, isFocused, normalizedInput, values]);
+
+  const addValue = (rawValue: string) => {
+    const trimmed = rawValue.trim();
+    if (!trimmed) return;
+
+    if (
+      values.some(
+        (existingValue) =>
+          normalizeTermName(existingValue) === normalizeTermName(trimmed),
+      )
+    ) {
+      toast.error({
+        title: `Duplicate ${singularLabel}`,
+        description: `That ${singularLabel} has already been added to this project.`,
+      });
+      return;
+    }
+
+    if (values.length >= limit) {
+      toast.error({
+        title: `${title} limit reached`,
+        description: `You can add up to ${limit} ${title.toLowerCase()} to a project.`,
+      });
+      return;
+    }
+
+    if (trimmed.length < 2 || trimmed.length > 64) {
+      toast.error({
+        title: `Invalid ${singularLabel}`,
+        description: `${title} must be between 2 and 64 characters long.`,
+      });
+      return;
+    }
+
+    if (containsControlChars(trimmed)) {
+      toast.error({
+        title: `Invalid ${singularLabel}`,
+        description: `${title} cannot include control characters.`,
+      });
+      return;
+    }
+
+    onChange([...values, trimmed]);
+    setInputValue('');
+  };
+
+  const handleAddValue = () => {
+    const trimmed = inputValue.trim();
+    if (!trimmed) return;
+
+    if (filteredSuggestions.length > 0) {
+      addValue(filteredSuggestions[0].name);
+      return;
+    }
+
+    addValue(trimmed);
+  };
+
+  return (
+    <Box
+      bg="gray.100"
+      borderRadius="13px"
+      p={{ base: '16px', md: '24px' }}
+      w="100%"
+    >
+      <VStack align="start" gap="12px" w="100%">
+        <Text
+          fontSize="md"
+          fontWeight="bold"
+          color="gray.900"
+          lineHeight="30px"
+        >
+          {title}
+        </Text>
+        <FieldLabel>{helperText}</FieldLabel>
+
+        {values.length > 0 && (
+          <Wrap gap="8px">
+            {values.map((value, index) => (
+              <HStack
+                key={`${value}-${index}`}
+                gap="4px"
+                bg="white"
+                border="1px solid"
+                borderColor="orange.200"
+                borderRadius="10px"
+                px="10px"
+                py="4px"
+              >
+                <Text fontSize="sm" color="gray.700" lineHeight="20px">
+                  {value}
+                </Text>
+                <Button
+                  type="button"
+                  aria-label={`Remove ${value}`}
+                  variant="ghost"
+                  size="xs"
+                  minW="auto"
+                  h="auto"
+                  p={0}
+                  onClick={() =>
+                    onChange(
+                      values.filter((_, valueIndex) => valueIndex !== index),
+                    )
+                  }
+                >
+                  <LuX size={12} />
+                </Button>
+              </HStack>
+            ))}
+          </Wrap>
+        )}
+
+        <HStack gap="8px" w="100%">
+          <Input
+            value={inputValue}
+            onFocus={() => setIsFocused(true)}
+            onBlur={() => {
+              setTimeout(() => setIsFocused(false), 120);
+            }}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+              setInputValue(e.target.value)
+            }
+            onKeyDown={(e: React.KeyboardEvent) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                handleAddValue();
+              }
+            }}
+            placeholder={placeholder}
+            {...inputBase}
+            h="40px"
+            flex={1}
+          />
+          <Button
+            type="button"
+            aria-label={`Add ${singularLabel}`}
+            bg="orange.400"
+            color="white"
+            borderRadius="10px"
+            h="40px"
+            px="10px"
+            _hover={{ bg: 'orange.500' }}
+            onClick={handleAddValue}
+          >
+            <LuPlus size={16} />
+          </Button>
+        </HStack>
+
+        {isLoadingTerms ? (
+          <HStack gap="8px">
+            <Spinner size="sm" color="orange.400" />
+            <Text fontSize="sm" color="gray.500">
+              {loadingText}
+            </Text>
+          </HStack>
+        ) : loadTermsError ? (
+          <Text fontSize="sm" color="orange.600">
+            {loadTermsError} You can still add your own {title.toLowerCase()}{' '}
+            manually.
+          </Text>
+        ) : isFocused ? (
+          <VStack align="start" gap="8px" w="100%">
+            {normalizedInput && filteredSuggestions.length > 0 ? (
+              <Text fontSize="xs" color="gray.500">
+                Press Enter to use &quot;{filteredSuggestions[0].name}&quot;.
+              </Text>
+            ) : null}
+            {filteredSuggestions.length > 0 ? (
+              <Wrap gap="8px">
+                {filteredSuggestions.map((term) => (
+                  <Button
+                    key={term.id}
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    borderColor="orange.200"
+                    bg="white"
+                    color="gray.700"
+                    _hover={{ bg: 'orange.50' }}
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={() => addValue(term.name)}
+                  >
+                    <HStack gap="6px">
+                      <LuTag size={13} />
+                      <Text>{term.name}</Text>
+                    </HStack>
+                  </Button>
+                ))}
+              </Wrap>
+            ) : null}
+            {normalizedInput ? (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                borderColor="gray.300"
+                bg="white"
+                color="gray.700"
+                _hover={{ bg: 'gray.50' }}
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={() => addValue(inputValue)}
+              >
+                <HStack gap="6px">
+                  <LuPlus size={13} />
+                  <Text>Create &quot;{inputValue.trim()}&quot;</Text>
+                </HStack>
+              </Button>
+            ) : null}
+          </VStack>
+        ) : null}
+      </VStack>
+    </Box>
   );
 }
 
@@ -231,7 +537,9 @@ export interface ProjectFormValues {
   shortDescription: string;
   fullDescription: string;
   imageUrl?: string | null;
+  categories: string[];
   tags: string[];
+  techStack: string[];
   websiteUrl: string;
   githubUrl: string;
   demoVideoUrl: string;
@@ -244,7 +552,9 @@ export interface ProjectPayload {
   demo_url?: string | null;
   github_url?: string | null;
   video_url?: string | null;
+  categories?: string[];
   tags?: string[];
+  tech_stack?: string[];
 }
 
 export interface PendingProjectMember {
@@ -303,11 +613,11 @@ export function ProjectForm({
   const [fullDescription, setFullDescription] = useState(
     initialValues.fullDescription,
   );
+  const [categories, setCategories] = useState<string[]>(
+    initialValues.categories,
+  );
   const [tags, setTags] = useState<string[]>(initialValues.tags);
-  const [tagInput, setTagInput] = useState('');
-  const [availableTags, setAvailableTags] = useState<TaxonomyTerm[]>([]);
-  const [tagsLoading, setTagsLoading] = useState(true);
-  const [tagsError, setTagsError] = useState<string | null>(null);
+  const [techStack, setTechStack] = useState<string[]>(initialValues.techStack);
 
   const [memberInput, setMemberInput] = useState('');
   const [memberSubmitting, setMemberSubmitting] = useState(false);
@@ -330,49 +640,13 @@ export function ProjectForm({
     urls?: string;
   }>({});
 
-  function normalizeTagName(value: string): string {
-    return value.trim().toLowerCase();
-  }
-
-  function containsControlChars(value: string): boolean {
-    return /[\u0000-\u001F\u007F-\u009F]/.test(value);
-  }
-
-  useEffect(() => {
-    let cancelled = false;
-
-    async function loadAvailableTags() {
-      try {
-        setTagsLoading(true);
-        const terms = await listTags();
-        if (cancelled) return;
-        setAvailableTags(terms);
-        setTagsError(null);
-      } catch (error) {
-        if (cancelled) return;
-        setTagsError(
-          error instanceof Error ? error.message : 'Could not load tags.',
-        );
-      } finally {
-        if (!cancelled) {
-          setTagsLoading(false);
-        }
-      }
-    }
-
-    void loadAvailableTags();
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
   useEffect(() => {
     setProjectName(initialValues.title);
     setShortDescription(initialValues.shortDescription);
     setFullDescription(initialValues.fullDescription);
+    setCategories(initialValues.categories);
     setTags(initialValues.tags);
-    setTagInput('');
+    setTechStack(initialValues.techStack);
     setWebsiteUrl(initialValues.websiteUrl);
     setGithubUrl(initialValues.githubUrl);
     setDemoVideoUrl(initialValues.demoVideoUrl);
@@ -396,88 +670,12 @@ export function ProjectForm({
     trimmedWebsite || trimmedGithub || trimmedDemo,
   );
 
-  const normalizedTagInput = tagInput.trim().toLowerCase();
-  const filteredTags = useMemo(
-    () =>
-      availableTags
-        .filter(
-          (term) =>
-            !tags.some(
-              (selected) =>
-                normalizeTagName(selected) === normalizeTagName(term.name),
-            ) &&
-            (!normalizedTagInput ||
-              term.name.toLowerCase().includes(normalizedTagInput)),
-        )
-        .slice(0, 8),
-    [availableTags, normalizedTagInput, tags],
-  );
-
   const isSubmitDisabled =
     !projectName.trim() || !shortDescription.trim() || !hasAtLeastOneUrl;
 
   useEffect(() => {
     onValidityChange?.(isSubmitDisabled);
   }, [isSubmitDisabled, onValidityChange]);
-
-  const addTag = (name: string) => {
-    const trimmed = name.trim();
-    if (!trimmed) return;
-    if (
-      tags.some(
-        (existingTag) =>
-          normalizeTagName(existingTag) === normalizeTagName(trimmed),
-      )
-    ) {
-      toast.error({
-        title: 'Duplicate tag',
-        description: 'That tag has already been added to this project.',
-      });
-      return;
-    }
-    if (tags.length >= TAG_LIMIT) {
-      toast.error({
-        title: 'Tag limit reached',
-        description: `You can add up to ${TAG_LIMIT} tags to a project.`,
-      });
-      return;
-    }
-
-    if (trimmed.length < 2 || trimmed.length > 64) {
-      toast.error({
-        title: 'Invalid tag',
-        description: 'Tags must be between 2 and 64 characters long.',
-      });
-      return;
-    }
-
-    if (containsControlChars(trimmed)) {
-      toast.error({
-        title: 'Invalid tag',
-        description: 'Tags cannot include control characters.',
-      });
-      return;
-    }
-
-    setTags((prev) => [...prev, trimmed]);
-    setTagInput('');
-  };
-
-  const handleAddTag = () => {
-    const normalized = tagInput.trim().toLowerCase();
-    if (!normalized) return;
-
-    const exact = availableTags.find(
-      (term) => term.name.toLowerCase() === normalized,
-    );
-
-    if (exact) {
-      addTag(exact.name);
-      return;
-    }
-
-    addTag(tagInput);
-  };
 
   const handleAddMember = async () => {
     const normalized = memberInput.trim().toLowerCase();
@@ -650,7 +848,19 @@ export function ProjectForm({
         mode === 'edit' ? trimmedGithub || null : trimmedGithub || undefined,
       video_url:
         mode === 'edit' ? trimmedDemo || null : trimmedDemo || undefined,
+      categories:
+        mode === 'edit'
+          ? categories
+          : categories.length > 0
+            ? categories
+            : undefined,
       tags: mode === 'edit' ? tags : tags.length > 0 ? tags : undefined,
+      tech_stack:
+        mode === 'edit'
+          ? techStack
+          : techStack.length > 0
+            ? techStack
+            : undefined,
     };
 
     onSubmit(payload, {
@@ -658,7 +868,9 @@ export function ProjectForm({
       shortDescription,
       fullDescription,
       imageUrl: initialValues.imageUrl ?? null,
+      categories,
       tags,
+      techStack,
       websiteUrl,
       githubUrl,
       demoVideoUrl,
@@ -921,130 +1133,44 @@ export function ProjectForm({
             </VStack>
           </Box>
 
-          <Box
-            bg="gray.100"
-            borderRadius="13px"
-            p={{ base: '16px', md: '24px' }}
-            w="100%"
-          >
-            <VStack align="start" gap="12px" w="100%">
-              <Text
-                fontSize="md"
-                fontWeight="bold"
-                color="gray.900"
-                lineHeight="30px"
-              >
-                Tags
-              </Text>
-              <FieldLabel>
-                Type your own tags or pick from suggestions. You can add up to{' '}
-                {TAG_LIMIT} tags to help others discover your project.
-              </FieldLabel>
+          <ProjectTermField
+            title="Categories"
+            singularLabel="category"
+            placeholder="Start typing a category"
+            helperText={`Type your own categories or pick from suggestions. You can add up to ${CATEGORY_LIMIT} categories.`}
+            values={categories}
+            limit={CATEGORY_LIMIT}
+            loadTerms={listCategories}
+            loadingText="Loading category suggestions..."
+            loadErrorText="Could not load categories."
+            onChange={setCategories}
+          />
 
-              <HStack gap="8px" w="100%">
-                <Input
-                  value={tagInput}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                    setTagInput(e.target.value)
-                  }
-                  onKeyDown={(e: React.KeyboardEvent) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault();
-                      handleAddTag();
-                    }
-                  }}
-                  placeholder="Start typing a tag"
-                  {...inputBase}
-                  h="40px"
-                  flex={1}
-                />
-                <Button
-                  type="button"
-                  aria-label="Add tag"
-                  bg="orange.400"
-                  color="white"
-                  borderRadius="10px"
-                  h="40px"
-                  px="10px"
-                  _hover={{ bg: 'orange.500' }}
-                  onClick={handleAddTag}
-                >
-                  <LuPlus size={16} />
-                </Button>
-              </HStack>
+          <ProjectTermField
+            title="Tags"
+            singularLabel="tag"
+            placeholder="Start typing a tag"
+            helperText={`Type your own tags or pick from suggestions. You can add up to ${TAG_LIMIT} tags to help others discover your project.`}
+            values={tags}
+            limit={TAG_LIMIT}
+            loadTerms={listTags}
+            loadingText="Loading tag suggestions..."
+            loadErrorText="Could not load tags."
+            onChange={setTags}
+          />
 
-              {tagsLoading ? (
-                <HStack gap="8px">
-                  <Spinner size="sm" color="orange.400" />
-                  <Text fontSize="sm" color="gray.500">
-                    Loading tag suggestions...
-                  </Text>
-                </HStack>
-              ) : tagsError ? (
-                <Text fontSize="sm" color="orange.600">
-                  {tagsError} You can still add your own tags manually.
-                </Text>
-              ) : normalizedTagInput && filteredTags.length > 0 ? (
-                <Wrap gap="8px">
-                  {filteredTags.map((term) => (
-                    <Button
-                      key={term.id}
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      borderColor="orange.200"
-                      bg="white"
-                      color="gray.700"
-                      _hover={{ bg: 'orange.50' }}
-                      onClick={() => addTag(term.name)}
-                    >
-                      <HStack gap="6px">
-                        <LuTag size={13} />
-                        <Text>{term.name}</Text>
-                      </HStack>
-                    </Button>
-                  ))}
-                </Wrap>
-              ) : null}
-
-              {tags.length > 0 && (
-                <Wrap gap="8px">
-                  {tags.map((tag) => (
-                    <HStack
-                      key={tag}
-                      gap="4px"
-                      bg="white"
-                      border="1px solid"
-                      borderColor="orange.200"
-                      borderRadius="10px"
-                      px="10px"
-                      py="4px"
-                    >
-                      <Text fontSize="sm" color="gray.700" lineHeight="20px">
-                        {tag}
-                      </Text>
-                      <Button
-                        type="button"
-                        aria-label={`Remove ${tag}`}
-                        variant="ghost"
-                        size="xs"
-                        minW="auto"
-                        h="auto"
-                        p={0}
-                        onClick={() =>
-                          setTags((prev) =>
-                            prev.filter((value) => value !== tag),
-                          )
-                        }
-                      >
-                        <LuX size={12} />
-                      </Button>
-                    </HStack>
-                  ))}
-                </Wrap>
-              )}
-            </VStack>
-          </Box>
+          <ProjectTermField
+            title="Tech Stack"
+            singularLabel="tech stack term"
+            placeholder="Start typing a tech stack term"
+            helperText={`Type your own tech stack terms or pick from suggestions. You can add up to ${TECH_STACK_LIMIT} tech stack terms.`}
+            values={techStack}
+            limit={TECH_STACK_LIMIT}
+            loadTerms={listTechStacks}
+            loadingText="Loading tech stack suggestions..."
+            loadErrorText="Could not load tech stack terms."
+            onChange={setTechStack}
+          />
 
           <Box
             bg="gray.100"

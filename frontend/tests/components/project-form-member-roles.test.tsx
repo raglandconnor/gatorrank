@@ -8,7 +8,9 @@ import type { ProjectMemberInfo } from '@/lib/api/types/project';
 import { renderWithChakra } from '@/tests/utils/render';
 
 vi.mock('@/lib/api/taxonomy', () => ({
+  listCategories: vi.fn().mockResolvedValue([]),
   listTags: vi.fn().mockResolvedValue([]),
+  listTechStacks: vi.fn().mockResolvedValue([]),
 }));
 
 vi.mock('@/lib/ui/toast', () => ({
@@ -54,7 +56,9 @@ describe('ProjectForm member roles', () => {
           shortDescription: 'Summary',
           fullDescription: '',
           imageUrl: null,
+          categories: [],
           tags: [],
+          techStack: [],
           websiteUrl: 'https://example.com',
           githubUrl: '',
           demoVideoUrl: '',
@@ -84,7 +88,9 @@ describe('ProjectForm member roles', () => {
           shortDescription: 'Summary',
           fullDescription: '',
           imageUrl: null,
+          categories: [],
           tags: [],
+          techStack: [],
           websiteUrl: 'https://example.com',
           githubUrl: '',
           demoVideoUrl: '',
@@ -118,7 +124,9 @@ describe('ProjectForm member roles', () => {
           shortDescription: 'Summary',
           fullDescription: '',
           imageUrl: null,
+          categories: [],
           tags: [],
+          techStack: [],
           websiteUrl: 'https://example.com',
           githubUrl: '',
           demoVideoUrl: '',
