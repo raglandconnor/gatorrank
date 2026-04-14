@@ -447,11 +447,13 @@ export default function ProjectDetailPage() {
                           {displayTechStack.map((tech) => (
                             <Badge
                               key={tech.id}
-                              bg="gray.900"
-                              color="gray.100"
+                              bg="blue.50"
+                              color="blue.700"
+                              border="1px solid"
+                              borderColor="blue.200"
                               borderRadius="8px"
-                              px="12px"
-                              py="6px"
+                              px="10px"
+                              py="4px"
                               fontSize="xs"
                               fontWeight="medium"
                               fontFamily="mono"
