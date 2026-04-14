@@ -2,7 +2,11 @@ import { expect, test } from '@playwright/test';
 
 test('navbar search routes to results, supports sort, and opens a result', async ({
   page,
-}) => {
+}, testInfo) => {
+  test.skip(
+    testInfo.project.name === 'mobile' || testInfo.project.name === 'tablet',
+    'Functional search test — desktop only',
+  );
   await page.route('**/api/v1/projects/search**', async (route) => {
     const url = new URL(route.request().url());
     const sort = url.searchParams.get('sort') ?? 'top';
