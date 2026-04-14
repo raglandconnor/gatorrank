@@ -146,7 +146,7 @@ function VotePill({
   );
 }
 
-function UserProjectCard({ project }: { project: ProjectListItem }) {
+export function UserProjectCard({ project }: { project: ProjectListItem }) {
   const [isHovered, setIsHovered] = useState(false);
   const [isPressed, setIsPressed] = useState(false);
   const { isVoted, voteCount, isPending, toggleVote } = useProjectVote({

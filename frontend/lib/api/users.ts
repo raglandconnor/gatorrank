@@ -94,3 +94,13 @@ export async function getMyProjects(
     fallbackErrorMessage: 'Failed to fetch your projects',
   });
 }
+
+export async function getMyVotedProjects(
+  query: ProjectListQuery = { limit: 20 },
+): Promise<ProjectListResponse> {
+  const qs = buildQueryString({ limit: query.limit, cursor: query.cursor });
+  return requestJson<ProjectListResponse>(`/api/v1/users/me/votes${qs}`, {
+    auth: 'required',
+    fallbackErrorMessage: 'Failed to fetch your voted projects',
+  });
+}
