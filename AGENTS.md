@@ -46,3 +46,14 @@ Note: Never edit a previously generated migration file. Only make edits to the a
 - Run `pre-commit run --all-files` before finalizing.
 - Run local tests, then after passing run full test suite before finalizing.
 - For every FastAPI endpoint and schema change, write/update clear docstrings plus summary/description metadata so Swagger/OpenAPI (/docs) stays accurate and complete.
+
+## Learned Rules (self-learning)
+
+- This section captures concrete preferences learned from user corrections or explicit feedback in this repository.
+- When the user corrects behavior (e.g., formatting, tooling choices, tone, testing strategy), distill that into a short, actionable bullet here.
+- Each bullet should be:
+  - **Specific**: describes the preference or rule clearly.
+  - **Actionable**: something the agent can consistently apply.
+  - **Scoped**: assumed to apply to this project unless stated otherwise.
+- Prefer updating or consolidating existing bullets over adding near-duplicates.
+- When a new learned rule conflicts with an older one, add a short note to the older bullet marking it as superseded, and keep both for traceability.
